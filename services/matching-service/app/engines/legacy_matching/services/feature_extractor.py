@@ -40,7 +40,10 @@ def _infer_degree_rank(value: Any, education_params: dict[str, Any] | None = Non
     text = str(value).strip().upper()
     if text in code_rank_map:
         return code_rank_map[text]
-
+    
+    if text.isdigit():
+        return int(text)
+    
     lowered = str(value).strip().lower()
     for keyword, rank in sorted(keyword_rank_map.items(), key=lambda item: len(item[0]), reverse=True):
         if keyword and keyword in lowered:
@@ -155,6 +158,19 @@ def extract_cv_features(
         ]
         languages = normalize_list(languages)
 
+    language_levels = scoring_features.get("language_levels")
+    if not isinstance(language_levels, dict):
+        language_levels = {}
+
+    if not language_levels:
+        language_levels = {
+            str(item.get("code") or item.get("language_code")).strip(): str(item.get("level")).strip()
+            for item in parsed_cv.get("languages", [])
+            if isinstance(item, dict)
+            and str(item.get("code") or item.get("language_code") or "").strip()
+            and str(item.get("level") or "").strip()
+        }
+
     education_field_codes = normalize_list(scoring_features.get("education_field_codes"))
     speciality_codes = normalize_list(scoring_features.get("speciality_codes") or education_field_codes)
     location_codes = _normalize_scalar_list(
@@ -191,6 +207,7 @@ def extract_cv_features(
         "awards": normalize_list(scoring_features.get("awards") or parsed_cv.get("awards")),
         "additional_info": normalize_list(scoring_features.get("additional_info") or parsed_cv.get("additional_info")),
         "languages": languages,
+        "language_levels": language_levels,
     }
 
     merged_scoring_features = {
@@ -217,6 +234,7 @@ def extract_cv_features(
         "awards": features["awards"],
         "additional_info": features["additional_info"],
         "languages": features["languages"],
+        "language_levels": features["language_levels"],
     }
     mapped_cv["scoring_features"] = merged_scoring_features
     return features
@@ -270,6 +288,21 @@ def extract_offer_features(
                 if isinstance(item, dict)
             ]
         )
+
+    required_language_levels = scoring_features.get("required_language_levels")
+    if not isinstance(required_language_levels, dict):
+        required_language_levels = {}
+
+    if not required_language_levels:
+        required_language_levels = {
+            str(item.get("code") or item.get("language_code")).strip(): str(
+                item.get("min_level") or item.get("level")
+            ).strip()
+            for item in parsed_requirements.get("languages", [])
+            if isinstance(item, dict)
+            and str(item.get("code") or item.get("language_code") or "").strip()
+            and str(item.get("min_level") or item.get("level") or "").strip()
+        }
 
     target_field_codes = normalize_list(scoring_features.get("target_field_codes"))
     contract_types = _normalize_scalar_list(
@@ -329,6 +362,7 @@ def extract_offer_features(
         "mobility_required": mobility_required,
         "location_flexible": location_flexible,
         "strict_must_have": bool(scoring_features.get("strict_must_have") or False),
+        "required_language_levels": required_language_levels,
     }
 
     merged_scoring_features = {
@@ -356,6 +390,7 @@ def extract_offer_features(
         "mobility_required": features["mobility_required"],
         "location_flexible": features["location_flexible"],
         "strict_must_have": features["strict_must_have"],
+        "required_language_levels": required_language_levels,
     }
     mapped_offer["scoring_features"] = merged_scoring_features
     return features

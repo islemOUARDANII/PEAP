@@ -75,9 +75,53 @@ def load_offer_payload(db: Session, offer_id: UUID) -> dict[str, Any]:
 
     required_experience_years = 0.0
     for row in requirements:
-        if row["criterion_type"] == "EXPERIENCE_YEARS" and row["min_years"] is not None:
-            required_experience_years = float(row["min_years"])
-            break
+            if row["criterion_type"] == "EXPERIENCE_YEARS" and row["min_years"] is not None:
+                required_experience_years = float(row["min_years"])
+                break
+            language_requirements = [
+        row for row in requirements
+        if str(row["criterion_type"]).upper() == "LANGUAGE"
+    ]
+
+    required_languages = [
+        str(row["raw_value"]).strip()
+        for row in language_requirements
+        if row["raw_value"] and str(row["raw_value"]).strip()
+    ]
+
+    required_language_levels = {
+        str(row["raw_value"]).strip(): str(row["min_level"]).strip()
+        for row in language_requirements
+        if row["raw_value"]
+        and str(row["raw_value"]).strip()
+        and row["min_level"]
+        and str(row["min_level"]).strip()
+    }
+
+    diploma_requirements = [
+        row for row in requirements
+        if str(row["criterion_type"]).upper() == "DIPLOMA"
+    ]
+
+    required_education_levels = [
+        str(row["min_level"]).strip()
+        for row in diploma_requirements
+        if row["min_level"] and str(row["min_level"]).strip()
+    ]
+
+    minimum_degree_rank = None
+    numeric_education_levels = []
+
+    for level in required_education_levels:
+        try:
+            numeric_education_levels.append(int(level))
+        except ValueError:
+            continue
+
+    if numeric_education_levels:
+        # Plusieurs diplômes peuvent être des alternatives : Master / Ingénieur.
+        # Pour un minimum requis, on garde le niveau le plus bas acceptable.
+        minimum_degree_rank = min(numeric_education_levels)
     return {
         "id": str(offer["id"]),
         "offer_id": str(offer["id"]),
@@ -119,7 +163,15 @@ def load_offer_payload(db: Session, offer_id: UUID) -> dict[str, Any]:
             },
             "requirements": {
                 "required_experience_years": required_experience_years,
-                "languages": [],
+                "languages": [
+                    {
+                        "code": row["raw_value"],
+                        "min_level": row["min_level"],
+                        "evidence": row["raw_value"],
+                    }
+                    for row in language_requirements
+                    if row["raw_value"]
+                ],
             },
             "contract_type": offer["contract_type"],
             "location": offer["governorate_code"],
@@ -168,5 +220,10 @@ def load_offer_payload(db: Session, offer_id: UUID) -> dict[str, Any]:
             "contract_types": [offer["contract_type"]] if offer["contract_type"] else [],
             "work_mode": offer["work_mode"],
             "location_flexible": str(offer["work_mode"] or "").upper() in {"REMOTE", "HYBRID"},
+            "required_languages": required_languages,
+            "languages": required_languages,
+            "required_language_levels": required_language_levels,
+            "required_education_levels": required_education_levels,
+            "minimum_degree_rank": minimum_degree_rank,
         },
     }

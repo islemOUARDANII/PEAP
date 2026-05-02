@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SkillTag } from '@/components/common/SkillTag';
 import { StatusPill } from '@/components/common/StatusPill';
@@ -14,21 +15,63 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import {
   useCreateOfferMutation,
-  useParseOfferMutation,
 } from '@/services/api/queries';
+import { gatewayApi } from '@/services/api/gateway';
 import type { OfferParsedOutput } from '@/models';
 import {
   ArrowLeft,
   CheckCircle2,
   FileSearch,
   Loader2,
+  Plus,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 type OfferInputMode = 'smart' | 'manual';
+
+interface OfferLanguageDraft {
+  languageCode: string;
+  level: string;
+  evidence: string;
+}
+
+type ReferentialOption = {
+  code: string;
+  label: string;
+};
+
+type ParsedOfferResult = Partial<OfferParsedOutput> & {
+  parsingStatus?: string;
+  parsing_status?: string;
+  parsedPayload?: Record<string, unknown>;
+  parsed_payload?: Record<string, unknown>;
+  mappedPayload?: Record<string, unknown>;
+  mapped_payload?: Record<string, unknown>;
+  extractedRequirements?: Array<Record<string, unknown>>;
+  extracted_requirements?: Array<Record<string, unknown>>;
+  draft?: Record<string, unknown>;
+  warnings?: string[];
+  parserVersion?: string | null;
+};
+
+const EMPLOYMENT_TYPE_OPTIONS = [
+  'full_time',
+  'part_time',
+  'contract',
+  'internship',
+];
+
+const SENIORITY_LEVEL_OPTIONS = ['junior', 'mid', 'senior', 'lead'];
+
+const emptyOfferLanguage = (): OfferLanguageDraft => ({
+  languageCode: '',
+  level: '',
+  evidence: '',
+});
 
 interface StructuredOfferForm {
   title: string;
@@ -42,7 +85,7 @@ interface StructuredOfferForm {
   minYearsExperience: string;
   educationMin: string;
   certificationsPreferred: string;
-  languages: string;
+  languages: OfferLanguageDraft[];
 }
 
 const EMPTY_FORM: StructuredOfferForm = {
@@ -57,22 +100,35 @@ const EMPTY_FORM: StructuredOfferForm = {
   minYearsExperience: '',
   educationMin: '',
   certificationsPreferred: '',
-  languages: '',
+  languages: [],
 };
 
 const SAMPLE_OFFER = `Senior Data Engineer at Atlas Analytics. We are looking for a senior data engineer in Tunis or remote hybrid to design robust data pipelines using Python, SQL, PostgreSQL, Airflow and Docker. Kafka experience is a plus. Minimum 4 years of experience, English B2 required, French appreciated. Full-time role in the IT services industry.`;
 
 export default function CreateOffer() {
   const navigate = useNavigate();
-  const parseOffer = useParseOfferMutation();
   const createOffer = useCreateOfferMutation();
+  const languagesQuery = useQuery({
+    queryKey: ['referentials', 'languages'],
+    queryFn: () => gatewayApi.referentials.languages(),
+    staleTime: 5 * 60_000,
+  });
+  const languageLevelsQuery = useQuery({
+    queryKey: ['referentials', 'language-levels'],
+    queryFn: () => gatewayApi.referentials.languageLevels(),
+    staleTime: 5 * 60_000,
+  });
   const [inputMode, setInputMode] = useState<OfferInputMode>('smart');
   const [step, setStep] = useState<'raw' | 'structured'>('raw');
+  const [isParsing, setIsParsing] = useState(false);
   const [rawText, setRawText] = useState('');
-  const [parsed, setParsed] = useState<OfferParsedOutput | null>(null);
+  const [parsed, setParsed] = useState<ParsedOfferResult | null>(null);
   const [form, setForm] = useState<StructuredOfferForm>(EMPTY_FORM);
 
-  const updateField = (field: keyof StructuredOfferForm, value: string) => {
+  const updateField = (
+    field: Exclude<keyof StructuredOfferForm, 'languages'>,
+    value: string,
+  ) => {
     setForm((current) => ({ ...current, [field]: value }));
   };
 
@@ -85,16 +141,22 @@ export default function CreateOffer() {
   };
 
   const analyze = async () => {
+    setIsParsing(true);
     try {
-      const parsedOutput = await parseOffer.mutateAsync({ rawText });
+      const parsedOutput = (await gatewayApi.employer.parseOfferDraft({
+        raw_text: rawText,
+        title: null,
+      })) as ParsedOfferResult;
       setParsed(parsedOutput);
-      setForm(formFromParsed(parsedOutput));
+      setForm((current) => formFromParsed(parsedOutput, current));
       setStep('structured');
       toast.success('Offer parsed and form prefilled');
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : 'Offer parsing failed',
       );
+    } finally {
+      setIsParsing(false);
     }
   };
 
@@ -110,7 +172,13 @@ export default function CreateOffer() {
       return;
     }
 
-    const normalizedRawText = rawText.trim() || buildRawTextFromForm(form);
+    const languageOptions = languagesQuery.data ?? [];
+    const languageStrings = form.languages
+      .map((item) => languageDraftToText(item, languageOptions))
+      .filter(Boolean);
+
+    const normalizedRawText =
+      rawText.trim() || buildRawTextFromForm(form, languageOptions);
     if (normalizedRawText.trim().length < 20) {
       toast.error(
         'Add a bit more detail before submission so the backend keeps a usable offer trace',
@@ -134,8 +202,10 @@ export default function CreateOffer() {
           : '',
         educationMin: form.educationMin.trim(),
         certificationsPreferred: splitList(form.certificationsPreferred),
-        languages: splitList(form.languages),
-        parsedOffer: inputMode === 'smart' ? (parsed ?? undefined) : undefined,
+        languages: languageStrings,
+        parsedOffer: inputMode === 'smart'
+          ? ((parsed as unknown as OfferParsedOutput) ?? undefined)
+          : undefined,
       });
       toast.success('Offer submitted to the backend parsing pipeline');
       navigate('/provider/offers');
@@ -146,7 +216,7 @@ export default function CreateOffer() {
     }
   };
 
-  const confidence = parsed?.parsing_metadata.confidence_overall;
+  const confidence = parsed?.parsing_metadata?.confidence_overall;
   const modeLabel =
     inputMode === 'manual'
       ? 'Manual entry'
@@ -251,16 +321,16 @@ export default function CreateOffer() {
           <div className="flex items-end justify-end">
             <Button
               type="button"
-              disabled={rawText.trim().length < 20 || parseOffer.isPending}
+              disabled={rawText.trim().length < 20 || isParsing}
               onClick={analyze}
               className="bg-accent hover:bg-accent/90 text-accent-foreground"
             >
-              {parseOffer.isPending ? (
+              {isParsing ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <FileSearch className="h-4 w-4 mr-1.5" />
               )}
-              {parseOffer.isPending ? 'Analyzing...' : 'Parse / Analyze'}
+              {isParsing ? 'Analyzing...' : 'Parse / Analyze'}
             </Button>
           </div>
         </div>
@@ -390,10 +460,19 @@ export default function CreateOffer() {
                 updateField('certificationsPreferred', value)
               }
             />
-            <ListField
-              label="Languages"
+            <LanguageRequirementsField
               value={form.languages}
-              onChange={(value) => updateField('languages', value)}
+              onChange={(languages) =>
+                setForm((current) => ({
+                  ...current,
+                  languages,
+                }))
+              }
+              languageOptions={languagesQuery.data ?? []}
+              levelOptions={languageLevelsQuery.data ?? []}
+              isLoading={
+                languagesQuery.isLoading || languageLevelsQuery.isLoading
+              }
             />
           </div>
 
@@ -424,6 +503,193 @@ export default function CreateOffer() {
 
         </div>
       )}
+    </div>
+  );
+}
+
+function LanguageRequirementsField({
+  value,
+  onChange,
+  languageOptions,
+  levelOptions,
+  isLoading = false,
+}: {
+  value: OfferLanguageDraft[];
+  onChange: (value: OfferLanguageDraft[]) => void;
+  languageOptions: ReferentialOption[];
+  levelOptions: ReferentialOption[];
+  isLoading?: boolean;
+}) {
+  const updateItem = (
+    index: number,
+    patch: Partial<OfferLanguageDraft>,
+  ) => {
+    onChange(
+      value.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, ...patch } : item,
+      ),
+    );
+  };
+
+  const removeItem = (index: number) => {
+    onChange(value.filter((_, itemIndex) => itemIndex !== index));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label className="text-xs">Languages</Label>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Select required languages and their minimum level.
+          </p>
+        </div>
+
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => onChange([...value, emptyOfferLanguage()])}
+        >
+          <Plus className="h-4 w-4 mr-1.5" />
+          Add language
+        </Button>
+      </div>
+
+      {value.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border p-4 text-xs text-muted-foreground">
+          No language requirement yet.
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {value.map((item, index) => {
+            const currentLanguageOptions =
+              item.languageCode &&
+              !languageOptions.some(
+                (option) => option.code === item.languageCode,
+              )
+                ? [
+                    {
+                      code: item.languageCode,
+                      label: item.languageCode,
+                    },
+                    ...languageOptions,
+                  ]
+                : languageOptions;
+
+            const currentLevelOptions =
+              item.level &&
+              !levelOptions.some((option) => option.code === item.level)
+                ? [
+                    {
+                      code: item.level,
+                      label: item.level,
+                    },
+                    ...levelOptions,
+                  ]
+                : levelOptions;
+
+            return (
+              <div
+                key={`${item.languageCode}-${index}`}
+                className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto]"
+              >
+                <div>
+                  <Label className="text-xs">Language</Label>
+                  <Select
+                    value={item.languageCode || undefined}
+                    onValueChange={(languageCode) =>
+                      updateItem(index, { languageCode })
+                    }
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Choose language" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {currentLanguageOptions.map((option) => (
+                        <SelectItem key={option.code} value={option.code}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs">Minimum level</Label>
+
+                    {item.level ? (
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground hover:text-foreground"
+                        onClick={() => updateItem(index, { level: '' })}
+                      >
+                        Clear
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <Select
+                    value={item.level || undefined}
+                    onValueChange={(level) => updateItem(index, { level })}
+                    disabled={isLoading}
+                  >
+                    <SelectTrigger className="mt-1.5">
+                      <SelectValue placeholder="Choose level" />
+                    </SelectTrigger>
+
+                    <SelectContent>
+                      {currentLevelOptions.map((option) => (
+                        <SelectItem key={option.code} value={option.code}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-end">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => removeItem(index)}
+                    aria-label="Remove language"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="md:col-span-3">
+                  <Field
+                    label="Evidence / note"
+                    value={item.evidence}
+                    onChange={(evidence) => updateItem(index, { evidence })}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {value.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5">
+          {value.map((item, index) => {
+            const label = languageDraftToText(item, languageOptions);
+            return label ? (
+              <SkillTag
+                key={`${label}-${index}`}
+                label={label}
+                variant="outline"
+              />
+            ) : null;
+          })}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -502,35 +768,136 @@ function TagPreview({
   );
 }
 
-function formFromParsed(parsed: OfferParsedOutput): StructuredOfferForm {
+function formFromParsed(
+  parseResult: ParsedOfferResult,
+  current: StructuredOfferForm = EMPTY_FORM,
+): StructuredOfferForm {
+  const parsedPayload = asRecord(
+    parseResult.parsedPayload ?? parseResult.parsed_payload ?? {},
+  );
+  const offer = {
+    ...asRecord(parsedPayload),
+    ...asRecord(parseResult.offer),
+    ...asRecord(parsedPayload.offer),
+  };
+  const requirements = {
+    ...asRecord(parseResult.requirements),
+    ...asRecord(parsedPayload.requirements),
+  };
+  const geo = asRecord(parsedPayload.geo_normalization);
+  const offerLocation = asRecord(geo.offer_location ?? null);
+  const extractedRequirements = asArray(
+    parseResult.extractedRequirements ??
+      parseResult.extracted_requirements ??
+      [],
+  ).map((item) => asRecord(item));
+  const diplomaRequirements = extractedRequirements.filter(
+    (item) => requirementType(item.criterion_type) === 'DIPLOMA',
+  );
+  const languageRequirements = extractedRequirements.filter(
+    (item) => requirementType(item.criterion_type) === 'LANGUAGE',
+  );
+  const extractedSkillRequirements = extractedRequirements.filter(
+    (item) => requirementType(item.criterion_type) === 'SKILL',
+  );
+  const mandatorySkillCandidates = asArray(requirements.mandatory_skills).filter(
+    (item) => !isLanguageLikeSkill(item),
+  );
+  const optionalSkillCandidates = asArray(requirements.optional_skills).filter(
+    (item) => !isLanguageLikeSkill(item),
+  );
+  const mandatorySkills = mandatorySkillCandidates.length
+    ? joinCleanList(mandatorySkillCandidates)
+    : joinCleanList(
+        extractedSkillRequirements.filter((item) => isMustRequirement(item)),
+      );
+  const optionalSkills = optionalSkillCandidates.length
+    ? joinCleanList(optionalSkillCandidates)
+    : joinCleanList(
+        extractedSkillRequirements.filter((item) => !isMustRequirement(item)),
+      );
+  const diplomaLabels = Array.from(
+    new Set(
+      diplomaRequirements
+        .map((item) => cleanParsedText(item.raw_value ?? item))
+        .filter(Boolean),
+    ),
+  ).join(', ');
+  const fallbackEducation = cleanParsedText(
+    asRecord(requirements.education_min).label ?? requirements.education_min,
+  );
+  const normalizedEmploymentType = normalizeEnumValue(offer.employment_type);
+  const employmentType = EMPLOYMENT_TYPE_OPTIONS.includes(
+    normalizedEmploymentType,
+  )
+    ? normalizedEmploymentType
+    : cleanParsedText(offer.employment_type) ||
+      current.employmentType ||
+      EMPTY_FORM.employmentType;
+  const normalizedSeniorityLevel = normalizeEnumValue(offer.seniority_level);
+  const seniorityLevel = SENIORITY_LEVEL_OPTIONS.includes(
+    normalizedSeniorityLevel,
+  )
+    ? normalizedSeniorityLevel
+    : current.seniorityLevel || EMPTY_FORM.seniorityLevel;
+  const languages = languageRequirements.length
+    ? languageRequirements
+        .map((item) => {
+          const metadata = asRecord(item.metadata);
+          return {
+            languageCode: cleanParsedText(
+              item.raw_value ?? metadata.language_code,
+            ),
+            level: cleanParsedText(item.min_level ?? metadata.level),
+            evidence: cleanParsedText(metadata.evidence || ''),
+          };
+        })
+        .filter(
+          (item) => item.languageCode || item.level || item.evidence,
+        )
+    : asArray(requirements.languages)
+        .map((item) => {
+          const languageItem = asRecord(item);
+          const level = cleanParsedText(
+            languageItem.min_level ?? languageItem.level,
+          );
+          return {
+            languageCode: cleanParsedText(
+              languageItem.code ?? languageItem.language_code,
+            ),
+            level,
+            evidence: [
+              cleanParsedText(languageItem.label ?? languageItem.code),
+              level,
+            ]
+              .filter(Boolean)
+              .join(' '),
+          };
+        })
+        .filter(
+          (item) => item.languageCode || item.level || item.evidence,
+        );
+
   return {
-    title: parsed.offer.title || '',
-    companyName: parsed.offer.company_name || '',
-    location: parsed.offer.location || '',
-    employmentType: parsed.offer.employment_type || 'full_time',
-    seniorityLevel: parsed.offer.seniority_level || 'mid',
-    targetOccupations: parsed.occupations_target
-      .map((item) => item.label || item.code)
-      .join(', '),
-    mandatorySkills: parsed.requirements.mandatory_skills
-      .map((item) => item.label || item.code)
-      .join(', '),
-    optionalSkills: parsed.requirements.optional_skills
-      .map((item) => item.label || item.code)
-      .join(', '),
-    minYearsExperience:
-      parsed.requirements.min_years_experience != null
-        ? String(parsed.requirements.min_years_experience)
-        : '',
-    educationMin: parsed.requirements.education_min?.label ?? '',
-    certificationsPreferred: (
-      parsed.requirements.certifications_preferred ?? []
-    )
-      .map((item) => item.label || item.code)
-      .join(', '),
-    languages: (parsed.requirements.languages ?? [])
-      .map((item) => `${item.label} ${item.min_level}`.trim())
-      .join(', '),
+    title: cleanParsedTitle(offer.title) || current.title || '',
+    companyName: cleanParsedText(offer.company_name),
+    location:
+      cleanParsedText(offerLocation.display_location) ||
+      cleanParsedText(offerLocation.raw_location) ||
+      cleanParsedText(offer.location),
+    employmentType,
+    seniorityLevel,
+    targetOccupations: joinCleanList(
+      asArray(parsedPayload.occupations_target ?? parseResult.occupations_target),
+    ),
+    mandatorySkills,
+    optionalSkills,
+    minYearsExperience: cleanParsedText(requirements.min_years_experience),
+    educationMin: diplomaLabels || fallbackEducation,
+    certificationsPreferred: joinCleanList(
+      asArray(requirements.certifications_preferred),
+    ),
+    languages,
   };
 }
 
@@ -541,11 +908,16 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-function buildRawTextFromForm(form: StructuredOfferForm): string {
+function buildRawTextFromForm(
+  form: StructuredOfferForm,
+  languageOptions: ReferentialOption[] = [],
+): string {
   const mandatorySkills = splitList(form.mandatorySkills);
   const optionalSkills = splitList(form.optionalSkills);
   const occupations = splitList(form.targetOccupations);
-  const languages = splitList(form.languages);
+  const languages = form.languages
+    .map((item) => languageDraftToText(item, languageOptions))
+    .filter(Boolean);
   const certifications = splitList(form.certificationsPreferred);
 
   return [
@@ -575,4 +947,135 @@ function buildRawTextFromForm(form: StructuredOfferForm): string {
   ]
     .filter(Boolean)
     .join(' ');
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object'
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function cleanParsedText(value: unknown): string {
+  if (value == null) return '';
+
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    const comparable = trimmed
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+    if (
+      comparable === 'non specifie' ||
+      comparable === 'not specified'
+    ) {
+      return '';
+    }
+    return trimmed;
+  }
+
+  if (typeof value === 'number') {
+    return String(value);
+  }
+
+  if (typeof value === 'object') {
+    const item = value as Record<string, unknown>;
+    return cleanParsedText(
+      item.label ??
+        item.name ??
+        item.title ??
+        item.raw_value ??
+        item.raw_label ??
+        item.normalized_label ??
+        item.code ??
+        '',
+    );
+  }
+
+  return String(value);
+}
+
+function cleanParsedTitle(value: unknown): string {
+  const title = cleanParsedText(value);
+  if (!title) {
+    return '';
+  }
+
+  const normalized = title.toUpperCase();
+  if (normalized === 'OCC_UNKNOWN' || /^OCC_[A-Z0-9_]+$/.test(normalized)) {
+    return '';
+  }
+
+  return title;
+}
+
+function skillToText(value: unknown): string {
+  if (!value) return '';
+
+  if (typeof value === 'string') {
+    return cleanParsedText(value);
+  }
+
+  if (typeof value === 'object') {
+    const item = value as Record<string, unknown>;
+    return cleanParsedText(
+      item.normalized_label ??
+        item.raw_label ??
+        item.label ??
+        item.name ??
+        item.raw_value ??
+        '',
+    );
+  }
+
+  return cleanParsedText(value);
+}
+
+function joinCleanList(values: unknown[]): string {
+  return Array.from(
+    new Set(values.map(skillToText).filter(Boolean)),
+  ).join(', ');
+}
+
+function requirementType(value: unknown): string {
+  return String(value ?? '').toUpperCase();
+}
+
+function languageDraftToText(
+  item: OfferLanguageDraft,
+  languageOptions: ReferentialOption[] = [],
+): string {
+  if (!item.languageCode) {
+    return '';
+  }
+
+  const languageLabel =
+    languageOptions.find((option) => option.code === item.languageCode)?.label ??
+    item.languageCode;
+
+  return [languageLabel, item.level].filter(Boolean).join(' ');
+}
+
+function normalizeEnumValue(value: unknown): string {
+  return cleanParsedText(value).toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+function isMustRequirement(value: Record<string, unknown>): boolean {
+  if (typeof value.is_must === 'boolean') {
+    return value.is_must;
+  }
+
+  return String(value.is_must ?? '').toLowerCase() === 'true';
+}
+
+function isLanguageLikeSkill(value: unknown): boolean {
+  const item = asRecord(value);
+  return (
+    requirementType(item.category) === 'LANGUAGE' ||
+    requirementType(item.type) === 'LANGUAGE' ||
+    requirementType(item.criterion_type) === 'LANGUAGE'
+  );
 }

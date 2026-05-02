@@ -1,4 +1,5 @@
 export type Locale = "en" | "fr";
+export const DEFAULT_LOCALE: Locale = "fr";
 
 const frExact: Record<string, string> = {
   "Candidate": "Candidat",

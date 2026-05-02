@@ -41,12 +41,12 @@ except ImportError:
     log.warning("spaCy package not installed - sentencizer disabled")
 else:
     try:
-        nlp = spacy.load("en_core_web_sm")
-        log.info("spaCy: en_core_web_sm loaded")
+        nlp = spacy.load("fr_core_news_sm")
+        log.info("spaCy: fr_core_news_sm loaded (fallback)")
     except OSError:
         try:
-            nlp = spacy.load("fr_core_news_sm")
-            log.info("spaCy: fr_core_news_sm loaded (fallback)")
+            nlp = spacy.load("en_core_web_sm")
+            log.info("spaCy: en_core_web_sm loaded")
         except OSError:
             log.warning("No spaCy model found - sentencizer disabled")
             nlp = None

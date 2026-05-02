@@ -156,7 +156,11 @@ interface CandidateSkillResponse {
 export interface CandidateLanguageRecord {
   id: string;
   languageCode: string;
+  languageLabelFr?: string | null;
+  languageLabelEn?: string | null;
   level?: string | null;
+  levelLabelFr?: string | null;
+  levelLabelEn?: string | null;
   evidence?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -165,7 +169,11 @@ export interface CandidateLanguageRecord {
 interface CandidateLanguageResponse {
   id: string;
   language_code: string;
+  language_label_fr?: string | null;
+  language_label_en?: string | null;
   level?: string | null;
+  level_label_fr?: string | null;
+  level_label_en?: string | null;
   evidence?: string | null;
   created_at: string;
   updated_at: string;
@@ -1000,7 +1008,11 @@ const mapCandidateSkill = (item: CandidateSkillResponse): CandidateSkillRecord =
 const mapCandidateLanguage = (item: CandidateLanguageResponse): CandidateLanguageRecord => ({
   id: item.id,
   languageCode: item.language_code,
+  languageLabelFr: item.language_label_fr ?? null,
+  languageLabelEn: item.language_label_en ?? null,
   level: item.level ?? null,
+  levelLabelFr: item.level_label_fr ?? null,
+  levelLabelEn: item.level_label_en ?? null,
   evidence: item.evidence ?? null,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
@@ -1329,6 +1341,8 @@ export const gatewayApi = {
       gatewayApi.referentials.list("/referentials/delegations", {
         governorate_code: governorateCode,
       }),
+    languages: () => gatewayApi.referentials.list("/referentials/languages"),
+    languageLevels: () => gatewayApi.referentials.list("/referentials/language-levels"),
     contractTypes: () => gatewayApi.referentials.list("/referentials/contract-types"),
     permitTypes: () => gatewayApi.referentials.list("/referentials/permit-types"),
     genders: () => gatewayApi.referentials.list("/referentials/genders"),
@@ -2201,8 +2215,19 @@ export const inferSkillLabel = (skill: CandidateSkillRecord): string =>
   skill.skillId ??
   "Skill";
 
-export const inferLanguageLabel = (language: CandidateLanguageRecord): string =>
-  [language.languageCode, language.level].filter(Boolean).join(" - ");
+export const inferLanguageLabel = (language: CandidateLanguageRecord): string => {
+  const languageLabel =
+    language.languageLabelFr ??
+    language.languageLabelEn ??
+    language.languageCode;
+
+  const levelLabel =
+    language.levelLabelFr ??
+    language.levelLabelEn ??
+    language.level;
+
+  return [languageLabel, levelLabel].filter(Boolean).join(" - ");
+};
 
 export const humanizeContractType = (value: string | null | undefined): string =>
   titleCase(value) || "Not specified";

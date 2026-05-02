@@ -55,6 +55,10 @@ import type {
   Training,
   UnresolvedCode,
 } from "@/models";
+import {
+  getCandidateMatchingOffers,
+  type CandidateMatchedOfferSummary,
+} from "@/services/candidate/candidateMatchingOffers";
 
 const candidateQueryOptions = {
   retry: false,
@@ -391,6 +395,54 @@ const mapEmployerOfferToJob = (offer: EmployerOffer): Job => {
   };
 };
 
+const mapMatchedOfferToJob = (offer: CandidateMatchedOfferSummary): Job => ({
+  id: offer.offerId,
+  title: offer.title,
+  company: offer.companyName,
+  location: offer.location,
+  contract: offer.contractType ?? "Not specified",
+  level: offer.workMode ?? "Not specified",
+  postedDays: daysSince(offer.publishedAt),
+  applicants: 0,
+  matched: 0,
+  status: mapOfferStatus(offer.status ?? "ACTIVE"),
+  required: offer.skills,
+  preferred: offer.languages,
+  score: offer.scoreGlobal,
+  matchedSkills: offer.skills.slice(0, Math.min(4, offer.skills.length)),
+  missingSkills: [],
+  scoreBreakdown: [],
+});
+
+const getCandidateMatchingJobs = async (): Promise<{
+  bundle: CandidateProfileBundle;
+  activeOffersCount: number;
+  jobs: Job[];
+}> => {
+  const bundle = await gatewayApi.candidate.getBundle();
+
+  if (!bundle.id) {
+    return {
+      bundle,
+      activeOffersCount: 0,
+      jobs: [],
+    };
+  }
+
+  const matchingData = await getCandidateMatchingOffers(bundle.id).catch(() => ({
+    matchingAvailable: false,
+    activeOffersCount: null,
+    offers: [] as CandidateMatchedOfferSummary[],
+    unavailableMessage: null,
+  }));
+
+  return {
+    bundle,
+    activeOffersCount: matchingData.activeOffersCount ?? 0,
+    jobs: matchingData.offers.map(mapMatchedOfferToJob),
+  };
+};
+
 const mapSearchCandidateToCandidate = (
   result: SearchCandidateResult,
   extras: Partial<Candidate> = {},
@@ -589,23 +641,13 @@ export function useCandidateDashboardQuery() {
   return useQuery({
     queryKey: queryKeys.candidate.dashboard(),
     queryFn: async (): Promise<CandidateDashboardData> => {
-      const [bundle, offersResponse] = await Promise.all([
-        gatewayApi.candidate.getBundle(),
-        gatewayApi.search.offers({ query: "", size: 4 }).catch(() => ({
-          total: 0,
-          mode: null,
-          query: null,
-          results: [] as SearchOfferResult[],
-          raw: {},
-        })),
-      ]);
-
+      const { bundle, activeOffersCount, jobs } = await getCandidateMatchingJobs();
       const profile = mapBundleToCandidateProfile(bundle);
-      const topMatches = offersResponse.results.map(mapSearchOfferToJob);
+      const topMatches = jobs.slice(0, 4);
 
       return {
         profileName: profile.name,
-        openOffers: offersResponse.total,
+        openOffers: activeOffersCount,
         profileCompletion:
           (bundle.identity ? 25 : 0) +
           (bundle.contact ? 25 : 0) +
@@ -670,8 +712,8 @@ export function useCandidateMatchesQuery() {
   return useQuery({
     queryKey: queryKeys.candidate.matches(),
     queryFn: async () => {
-      const response = await gatewayApi.search.offers({ query: "", size: 12 });
-      return response.results.map(mapSearchOfferToJob);
+      const { jobs } = await getCandidateMatchingJobs();
+      return jobs.slice(0, 12);
     },
     ...candidateQueryOptions,
   });
@@ -681,8 +723,16 @@ export function useCandidateMatchQuery(id?: string) {
   return useQuery({
     queryKey: queryKeys.candidate.match(id),
     queryFn: async () => {
-      const offer = await gatewayApi.search.offerDetail(id as string);
-      return mapSearchOfferToJob(offer);
+      const { jobs } = await getCandidateMatchingJobs();
+      const offer = jobs.find(
+        (item) => item.id === id,
+      );
+
+      if (!offer) {
+        throw new Error("Offer not found");
+      }
+
+      return offer;
     },
     enabled: Boolean(id),
     retry: false,
@@ -693,8 +743,8 @@ export function useCandidateJobOffersQuery() {
   return useQuery({
     queryKey: queryKeys.candidate.jobOffers(),
     queryFn: async () => {
-      const response = await gatewayApi.search.offers({ query: "", size: 24 });
-      return response.results.map(mapSearchOfferToJob);
+      const { jobs } = await getCandidateMatchingJobs();
+      return jobs.slice(0, 24);
     },
     ...candidateQueryOptions,
   });

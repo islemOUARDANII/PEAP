@@ -284,16 +284,173 @@ def calculate_location_score(cv_features: dict[str, Any], offer_features: dict[s
         "match_type": match_type,
     }
 
+_LANGUAGE_LEVEL_RANKS = {
+    "A1": 10,
+    "A2": 20,
+    "beginner": 20,
+    "B1": 30,
+    "intermediate": 30,
+    "B2": 40,
+    "advanced": 50,
+    "C1": 50,
+    "fluent": 55,
+    "C2": 60,
+    "native": 70,
+}
+
+
+def _normalize_language_code(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _normalize_language_level(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+
+    upper = raw.upper()
+    if upper in {"A1", "A2", "B1", "B2", "C1", "C2"}:
+        return upper
+
+    lowered = raw.lower()
+    aliases = {
+        "debutant": "beginner",
+        "débutant": "beginner",
+        "beginner": "beginner",
+        "intermediaire": "intermediate",
+        "intermédiaire": "intermediate",
+        "intermediate": "intermediate",
+        "courant": "fluent",
+        "fluent": "fluent",
+        "avance": "advanced",
+        "avancé": "advanced",
+        "advanced": "advanced",
+        "natif": "native",
+        "native": "native",
+        "langue maternelle": "native",
+        "maternelle": "native",
+    }
+
+    return aliases.get(lowered, lowered)
+
+
+def _language_level_rank(value: Any) -> int | None:
+    normalized = _normalize_language_level(value)
+    if not normalized:
+        return None
+
+    return _LANGUAGE_LEVEL_RANKS.get(normalized)
+
+
+def _level_is_sufficient(candidate_level: Any, required_level: Any) -> bool | None:
+    required_rank = _language_level_rank(required_level)
+
+    if required_rank is None:
+        return True
+
+    candidate_rank = _language_level_rank(candidate_level)
+
+    if candidate_rank is None:
+        return None
+
+    return candidate_rank >= required_rank
 
 def calculate_language_score(cv_features: dict[str, Any], offer_features: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
-    required_languages = _as_set(offer_features.get("required_languages"))
-    candidate_languages = _as_set(cv_features.get("languages"))
+    required_languages = {
+        _normalize_language_code(value)
+        for value in normalize_list(offer_features.get("required_languages"))
+        if _normalize_language_code(value)
+    }
+
+    candidate_languages = {
+        _normalize_language_code(value)
+        for value in normalize_list(cv_features.get("languages"))
+        if _normalize_language_code(value)
+    }
+
+    candidate_levels = {
+        _normalize_language_code(code): level
+        for code, level in (cv_features.get("language_levels") or {}).items()
+        if _normalize_language_code(code)
+    }
+
+    required_levels = {
+        _normalize_language_code(code): level
+        for code, level in (offer_features.get("required_language_levels") or {}).items()
+        if _normalize_language_code(code)
+    }
+
     if not required_languages:
         score = _param_value(params, "no_requirement_score")
-        return {"language_score": clamp(score), "coverage": None}
-    coverage = clamp(safe_divide(len(required_languages & candidate_languages), len(required_languages), default=0.0))
-    return {"language_score": coverage, "coverage": coverage}
+        return {
+            "language_score": clamp(score),
+            "coverage": None,
+            "required_languages": [],
+            "matched_languages": [],
+            "missing_languages": [],
+            "level_gaps": [],
+        }
 
+    match_score = _param_value(params, "match_score", default=1.0)
+    partial_match_score = _param_value(params, "partial_match_score", default=0.5)
+    mismatch_score = _param_value(params, "mismatch_score", default=0.0)
+
+    per_language_scores: list[float] = []
+    matched_languages: list[str] = []
+    missing_languages: list[str] = []
+    level_gaps: list[dict[str, Any]] = []
+
+    for language_code in sorted(required_languages):
+        required_level = required_levels.get(language_code)
+
+        if language_code not in candidate_languages:
+            per_language_scores.append(mismatch_score)
+            missing_languages.append(language_code)
+            continue
+
+        candidate_level = candidate_levels.get(language_code)
+        level_check = _level_is_sufficient(candidate_level, required_level)
+
+        if level_check is True:
+            per_language_scores.append(match_score)
+            matched_languages.append(language_code)
+        elif level_check is None:
+            per_language_scores.append(partial_match_score)
+            matched_languages.append(language_code)
+            level_gaps.append(
+                {
+                    "language_code": language_code,
+                    "candidate_level": candidate_level,
+                    "required_level": required_level,
+                    "reason": "candidate_level_unknown",
+                }
+            )
+        else:
+            per_language_scores.append(partial_match_score)
+            matched_languages.append(language_code)
+            level_gaps.append(
+                {
+                    "language_code": language_code,
+                    "candidate_level": candidate_level,
+                    "required_level": required_level,
+                    "reason": "candidate_level_below_requirement",
+                }
+            )
+
+    coverage = clamp(safe_divide(len(required_languages & candidate_languages), len(required_languages), default=0.0))
+    score = clamp(sum(per_language_scores) / len(per_language_scores))
+
+    return {
+        "language_score": score,
+        "coverage": coverage,
+        "required_languages": sorted(required_languages),
+        "candidate_languages": sorted(candidate_languages),
+        "matched_languages": matched_languages,
+        "missing_languages": missing_languages,
+        "required_language_levels": required_levels,
+        "candidate_language_levels": candidate_levels,
+        "level_gaps": level_gaps,
+    }
 
 def calculate_contract_score(cv_features: dict[str, Any], offer_features: dict[str, Any], params: dict[str, Any]) -> dict[str, Any]:
     required_contracts = _as_set(offer_features.get("contract_types"))

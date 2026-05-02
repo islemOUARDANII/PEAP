@@ -569,11 +569,19 @@ def list_languages(db: Session, job_seeker_id: str) -> list[dict]:
         SELECT
             l.id::text AS id,
             l.language_code,
+            rl.label_fr AS language_label_fr,
+            rl.label_en AS language_label_en,
             l.level,
+            rll.label_fr AS level_label_fr,
+            rll.label_en AS level_label_en,
             l.evidence,
             l.created_at,
             l.updated_at
         FROM aneti.job_seeker_language l
+        LEFT JOIN taxonomy.ref_language rl
+            ON rl.code = l.language_code
+        LEFT JOIN taxonomy.ref_language_level rll
+            ON rll.code = l.level
         WHERE l.job_seeker_id = CAST(:job_seeker_id AS uuid)
         ORDER BY l.created_at DESC;
         """,
@@ -835,4 +843,95 @@ def count_job_seekers(db: Session) -> dict:
             COUNT(*) FILTER (WHERE status = 'ACTIVE')::int AS active_candidates_count
         FROM aneti.job_seeker;
         """,
+    )
+
+def count_active_offers(db: Session) -> int:
+    row = _fetch_one(
+        db,
+        """
+        SELECT COUNT(*)::int AS count
+        FROM aneti.job_offer
+        WHERE status IN ('PUBLISHED', 'ACTIVE');
+        """,
+    )
+    return int(row["count"] if row else 0)
+
+
+def get_default_candidate_to_offer_model_version(db: Session) -> dict | None:
+    return _fetch_one(
+        db,
+        """
+        SELECT
+            mv.id::text AS id,
+            m.code AS model_code,
+            m.label AS model_label,
+            mv.version_number,
+            mv.status
+        FROM matching.matching_model_version mv
+        JOIN matching.matching_model m
+            ON m.id = mv.model_id
+        WHERE m.code = 'STANDARD_CANDIDATE_TO_OFFER'
+          AND m.active = true
+          AND mv.status = 'ACTIVE'
+        ORDER BY mv.version_number DESC, mv.created_at DESC
+        LIMIT 1;
+        """,
+    )
+
+
+def list_candidate_matching_results_with_offers(
+    db: Session,
+    *,
+    run_id: str,
+    min_score: float,
+) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            mr.id::text AS result_id,
+            mr.run_id::text AS run_id,
+            mr.offer_id::text AS offer_id,
+            jo.title,
+            jo.description,
+            jo.status,
+            jo.contract_type,
+            jo.work_mode,
+            jo.country,
+            jo.governorate_code,
+            g.libelle_gouvernorat AS governorate_label,
+            jo.delegation_code,
+            d.libelle_delegation AS delegation_label,
+            jo.published_at,
+            jo.deadline_at,
+            COALESCE(e.commercial_name, e.legal_name) AS employer_name,
+            mr.score_global::float8 AS score_global,
+            ROUND((mr.score_global::numeric * 100), 2)::float8 AS score_percent,
+            mr.rank,
+            mr.explanation_short,
+            COALESCE(mr.explanation_json, '{}'::jsonb) AS explanation_json,
+            EXISTS (
+                SELECT 1
+                FROM matching.matching_result_detail mrd
+                WHERE mrd.result_id = mr.id
+                  AND COALESCE(mrd.is_gap, FALSE) = TRUE
+            ) AS has_gaps
+        FROM matching.matching_result mr
+        JOIN aneti.job_offer jo
+            ON jo.id = mr.offer_id
+        LEFT JOIN aneti.employer e
+            ON e.id = jo.employer_id
+        LEFT JOIN taxonomy.ref_n_gouvern g
+            ON g.code_gouvernorat = jo.governorate_code
+        LEFT JOIN taxonomy.ref_n_delegat d
+            ON d.code_delegation = jo.delegation_code
+        WHERE mr.run_id = CAST(:run_id AS uuid)
+          AND mr.score_global >= :min_score
+          AND jo.status IN ('PUBLISHED', 'ACTIVE')
+        ORDER BY mr.score_global DESC, mr.rank ASC;
+        """,
+        {
+            "run_id": run_id,
+            "min_score": min_score,
+        },
     )

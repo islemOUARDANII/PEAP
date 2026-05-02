@@ -34,3 +34,30 @@ def list_delegations(db: Session, governorate_code: str | None = None) -> list[d
         """,
         {"governorate_code": governorate_code},
     )
+
+def list_languages(db: Session) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            code::text AS code,
+            label_fr::text AS label
+        FROM taxonomy.ref_language
+        WHERE is_active = true
+        ORDER BY label_fr ASC;
+        """,
+    )
+
+
+def list_language_levels(db: Session) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            code::text AS code,
+            label_fr::text AS label
+        FROM taxonomy.ref_language_level
+        WHERE is_active = true
+        ORDER BY rank_order ASC;
+        """,
+    )

@@ -8,6 +8,8 @@ from app.engines.legacy_parsing.parser_app.config import Settings
 from app.engines.legacy_parsing.parser_app.pipeline import CVParsingPipeline
 from app.engines.rtmc_mapper_adapter import map_cv_to_rtmc
 from app.engines.geo_normalizer_adapter import enrich_cv_locations
+from app.engines.education_normalizer_adapter import normalize_education_entries
+from app.engines.language_normalizer import split_skills_and_languages
 
 def parse_cv_file_to_payload(
     *,
@@ -33,6 +35,17 @@ def parse_cv_file_to_payload(
         parsed_payload = _parse_result_to_dict(result)
         profile_patch = _build_profile_patch(parsed_payload)
         parsed_payload = enrich_cv_locations(parsed_payload)
+
+        raw_skills = profile_patch.get("skills") or []
+        raw_languages = profile_patch.get("languages") or []
+
+        clean_skills, normalized_languages = split_skills_and_languages(
+            skills=raw_skills,
+            existing_languages=raw_languages,
+        )
+
+        profile_patch["skills"] = clean_skills
+        profile_patch["languages"] = normalized_languages
 
         parsing_status = "PARSED" if result.status in {"success", "partial"} else "FAILED"
 
@@ -111,7 +124,7 @@ def _build_profile_patch(parsed_payload: dict[str, Any]) -> dict[str, Any]:
 
     return {
         "identity": {k: v for k, v in identity.items() if v},
-        "education": education if isinstance(education, list) else [],
+        "education": normalize_education_entries(education) if isinstance(education, list) else [],
         "experience": experience if isinstance(experience, list) else [],
         "skills": skills,
         "languages": languages if isinstance(languages, list) else [],

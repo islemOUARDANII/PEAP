@@ -123,6 +123,16 @@ def load_candidate_payload(db: Session, candidate_id: UUID) -> dict[str, Any]:
         for row in languages
         if row.get("language_code") and str(row["language_code"]).strip()
     ]
+
+    language_levels = {
+        str(row["language_code"]).strip(): str(row["level"]).strip()
+        for row in languages
+        if row.get("language_code")
+        and str(row["language_code"]).strip()
+        and row.get("level")
+        and str(row["level"]).strip()
+    }
+
     return {
         "id": str(candidate["id"]),
         "candidate_id": str(candidate["id"]),
@@ -198,5 +208,6 @@ def load_candidate_payload(db: Session, candidate_id: UUID) -> dict[str, Any]:
             "contract_types": [candidate["preferred_contract_type"]] if candidate["preferred_contract_type"] else [],
             "mobility_codes": [candidate["preferred_governorate"]] if candidate["preferred_governorate"] else [],
             "languages": language_codes,
+            "language_levels": language_levels,
         },
     }

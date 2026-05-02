@@ -2,6 +2,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -197,7 +198,11 @@ class JobSeekerSkillResponse(BaseModel):
 class JobSeekerLanguageResponse(BaseModel):
     id: str
     language_code: str
+    language_label_fr: str | None = None
+    language_label_en: str | None = None
     level: str | None = None
+    level_label_fr: str | None = None
+    level_label_en: str | None = None
     evidence: str | None = None
     created_at: datetime
     updated_at: datetime
@@ -254,3 +259,41 @@ class CandidateStatusUpdateResponse(BaseModel):
     status: str
     reason: str | None = None
     warning: str | None = None
+
+class CandidateActiveOffersCountResponse(BaseModel):
+    active_offers_count: int
+
+class CandidateMatchedOfferItemResponse(BaseModel):
+    result_id: str
+    run_id: str
+    offer_id: str
+    title: str | None = None
+    employer_name: str | None = None
+    description: str | None = None
+    status: str | None = None
+    contract_type: str | None = None
+    work_mode: str | None = None
+    country: str | None = None
+    governorate_code: str | None = None
+    governorate_label: str | None = None
+    delegation_code: str | None = None
+    delegation_label: str | None = None
+    published_at: datetime | None = None
+    deadline_at: datetime | None = None
+
+    score_global: float
+    score_percent: float
+    rank: int
+    explanation_short: str | None = None
+    explanation_json: dict[str, Any] = {}
+    has_gaps: bool = False
+
+class CandidateMatchedOffersResponse(BaseModel):
+    model_code: str
+    model_version_id: str
+    run_id: str
+    min_score: float
+    active_offers_count: int
+    total_results: int
+    matched_count: int
+    offers: list[CandidateMatchedOfferItemResponse]

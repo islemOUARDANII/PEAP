@@ -2,100 +2,221 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowRight,
-  Briefcase,
+  CheckCircle2,
+  CircleAlert,
   FileText,
-  FileUp,
+  Layers3,
   Sparkles,
-  TrendingUp,
+  Target,
+  type LucideIcon,
 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
+import ErrorCard from '@/components/common/ErrorCard';
+import LoadingCard from '@/components/common/LoadingCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
 import { SkillTag } from '@/components/common/SkillTag';
-import { StatCard } from '@/components/common/StatCard';
-import { StatusPill, statusToTone } from '@/components/common/StatusPill';
-import { Button } from '@/components/ui/button';
+import { StatusPill } from '@/components/common/StatusPill';
+import { queryKeys } from '@/services/api/queryKeys';
 import {
   gatewayApi,
   inferCandidateDisplayName,
   inferCandidateLocation,
   inferSkillLabel,
+  type CandidateProfileBundle,
 } from '@/services/api/gateway';
-import LoadingCard from '@/components/common/LoadingCard';
-import ErrorCard from '@/components/common/ErrorCard';
+import {
+  getCandidateMatchingOffers,
+  candidateMatchingUnavailableMessage,
+} from '@/services/candidate/candidateMatchingOffers';
+import {
+  candidateInterestKeywords,
+  getStoredCandidateMinimumOfferScore,
+} from '@/services/candidate/candidatePortalPreferences';
 
-const formatDate = (value: string | null | undefined): string => {
+const PROFILE_COMPLETION_SECTION_ID = 'completion-profil';
+
+const formatDate = (value: string | null | undefined): string | null => {
   if (!value) {
-    return '-';
+    return null;
   }
 
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) {
-    return value;
+    return null;
   }
 
-  return parsed.toISOString().slice(0, 10);
+  return parsed.toLocaleDateString('fr-FR');
+};
+
+const unique = (values: string[]): string[] => Array.from(new Set(values));
+
+const cleanText = (value: string | null | undefined): string | null => {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  if (
+    /^(non specifie|non spécifié|not specified|null|undefined)$/i.test(
+      normalized,
+    )
+  ) {
+    return null;
+  }
+
+  return normalized;
+};
+
+type ProfileCompletionItem = {
+  label: string;
+  completed: boolean;
+  missing: string[];
+};
+
+const buildProfileCompletionItems = (
+  bundle: CandidateProfileBundle | undefined,
+): ProfileCompletionItem[] => {
+  if (!bundle) {
+    return [];
+  }
+
+  const identityMissing = [
+    !cleanText(bundle.identity?.first_name) ? 'Prénom' : null,
+    !cleanText(bundle.identity?.last_name) ? 'Nom' : null,
+    !cleanText(bundle.identity?.birth_date) ? 'Date de naissance' : null,
+    !cleanText(bundle.identity?.nationality) ? 'Nationalité' : null,
+  ].filter(Boolean) as string[];
+
+  const contactMissing = [
+    !cleanText(bundle.contact?.email) ? 'Adresse e-mail' : null,
+    !cleanText(bundle.contact?.phone) ? 'Téléphone' : null,
+    !cleanText(inferCandidateLocation(bundle)) ? 'Localisation' : null,
+  ].filter(Boolean) as string[];
+
+  return [
+    {
+      label: 'Informations personnelles',
+      completed: identityMissing.length === 0,
+      missing: identityMissing,
+    },
+    {
+      label: 'Coordonnées',
+      completed: contactMissing.length === 0,
+      missing: contactMissing,
+    },
+    {
+      label: 'Formation',
+      completed: bundle.education.length > 0,
+      missing: bundle.education.length > 0 ? [] : ['Au moins une formation'],
+    },
+    {
+      label: 'Expérience',
+      completed: bundle.experience.length > 0,
+      missing:
+        bundle.experience.length > 0 ? [] : ['Au moins une expérience'],
+    },
+    {
+      label: 'Compétences',
+      completed: bundle.skills.length > 0,
+      missing: bundle.skills.length > 0 ? [] : ['Au moins une compétence'],
+    },
+    {
+      label: 'Langues',
+      completed: bundle.languages.length > 0,
+      missing: bundle.languages.length > 0 ? [] : ['Au moins une langue'],
+    },
+    {
+      label: 'CV',
+      completed: Boolean(bundle.currentCv),
+      missing: bundle.currentCv ? [] : ['CV non importé'],
+    },
+  ];
 };
 
 export default function CandidateDashboard() {
+  const navigate = useNavigate();
+  const minimumScore = useMemo(
+    () => getStoredCandidateMinimumOfferScore(),
+    [],
+  );
+
   const bundleQuery = useQuery({
-    queryKey: ['candidate', 'bundle'],
+    queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
   });
 
-  const offersQuery = useQuery({
-    queryKey: ['search', 'offers', 'candidate-dashboard'],
-    queryFn: () => gatewayApi.search.offers({ query: '', size: 4 }),
-    staleTime: 30_000,
+  const matchingOffersQuery = useQuery({
+    queryKey: [...queryKeys.candidate.jobOffers(), bundleQuery.data?.id ?? 'none'],
+    queryFn: () => getCandidateMatchingOffers(bundleQuery.data!.id),
+    enabled: Boolean(bundleQuery.data?.id),
+    staleTime: 5 * 60_000,
   });
 
   const bundle = bundleQuery.data;
-  const offers = offersQuery.data?.results ?? [];
+  const profileCompletionItems = useMemo(
+    () => buildProfileCompletionItems(bundle),
+    [bundle],
+  );
 
   const profileCompletion = useMemo(() => {
-    if (!bundle) {
+    if (profileCompletionItems.length === 0) {
       return 0;
     }
 
-    const checkpoints = [
-      Boolean(bundle.identity),
-      Boolean(bundle.contact),
-      bundle.skills.length > 0,
-      bundle.languages.length > 0,
-      bundle.education.length > 0,
-      bundle.experience.length > 0,
-      Boolean(bundle.currentCv),
-    ];
+    const completedCount = profileCompletionItems.filter(
+      (item) => item.completed,
+    ).length;
 
-    const completed = checkpoints.filter(Boolean).length;
-    return Math.round((completed / checkpoints.length) * 100);
-  }, [bundle]);
+    return Math.round((completedCount / profileCompletionItems.length) * 100);
+  }, [profileCompletionItems]);
 
-  const displayName = bundle ? inferCandidateDisplayName(bundle) : 'Candidate';
-  const firstName = displayName.split(' ')[0] || displayName;
+  const matchingData = matchingOffersQuery.data;
+  const compatibleOffers = useMemo(
+    () =>
+      (matchingData?.offers ?? []).filter(
+        (offer) => offer.scoreGlobal >= minimumScore,
+      ),
+    [matchingData?.offers, minimumScore],
+  );
+
+  // Temporaire: cette box réutilise le même calcul que "Offres compatibles"
+  // jusqu’à ce qu’une logique dédiée distingue les recommandations.
+  const recommendedOffersCount = compatibleOffers.length;
+
+  const missingProfileItems = useMemo(
+    () =>
+      unique(
+        profileCompletionItems.flatMap((item) =>
+          item.completed
+            ? []
+            : item.missing.map((missing) => `${item.label} : ${missing}`),
+        ),
+      ),
+    [profileCompletionItems],
+  );
+
+  const newOffers = compatibleOffers.slice(0, 3);
+  const displayName = bundle ? inferCandidateDisplayName(bundle) : 'Candidat';
   const displayLocation = bundle ? inferCandidateLocation(bundle) : '';
-  const topSkills = bundle?.skills.map(inferSkillLabel) ?? [];
-  const averageScore =
-    offers.length > 0
-      ? Math.round(
-          offers.reduce(
-            (total, item) =>
-              total + (item.score <= 1 ? item.score * 100 : item.score),
-            0,
-          ) / offers.length,
-        )
-      : 0;
+  const matchingUnavailable =
+    matchingData?.matchingAvailable === false ||
+    matchingOffersQuery.isError;
 
   if (bundleQuery.isLoading) {
-    return <LoadingCard text="Loading candidate dashboard..." />;
+    return <LoadingCard text="Chargement du tableau de bord candidat..." />;
   }
 
   if (bundleQuery.isError) {
     return (
       <ErrorCard
         queryResult={bundleQuery}
-        text="Unable to load the candidate dashboard."
+        text="Impossible de charger le tableau de bord candidat."
       />
     );
   }
@@ -103,99 +224,199 @@ export default function CandidateDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title={`Welcome back, ${firstName}`}
-        description="Your candidate profile, CV parsing status, and indexed offers are now loaded from the real API Gateway."
-        actions={
-          <div className="flex flex-wrap gap-2">
-            <Button asChild variant="outline" size="sm">
-              <Link to="/candidate/upload-cv">
-                <FileUp className="h-4 w-4" />
-                Manage CV
-              </Link>
-            </Button>
-            <Button
-              asChild
-              size="sm"
-              className="bg-accent text-accent-foreground hover:bg-accent/90"
-            >
-              <Link to="/candidate/profile">Open profile</Link>
-            </Button>
-          </div>
+        title="Tableau de bord candidat"
+        description={
+          displayLocation
+            ? `Bonjour ${displayName}. Suivez votre profil et vos opportunités depuis ${displayLocation}.`
+            : `Bonjour ${displayName}. Suivez votre profil et vos opportunités depuis cet espace.`
         }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Profile completion"
-          value={`${profileCompletion}%`}
+        <DashboardActionCard
           icon={FileText}
-          className="start-border-left-blue"
-          iconBackground={'start-background-color-blue'}
+          title="Complétion du profil"
+          value={`${profileCompletion}%`}
+          hint="Voir les éléments complets et manquants"
+          onClick={() =>
+            document
+              .getElementById(PROFILE_COMPLETION_SECTION_ID)
+              ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+          }
         />
-        <StatCard
-          label="CV records"
-          value={bundle?.cvRecords.length ?? 0}
-          icon={FileUp}
-          className="start-border-left-green"
-          iconBackground={'start-background-color-green'}
+        <DashboardActionCard
+          icon={Target}
+          title="Offres compatibles"
+          value={
+            matchingOffersQuery.isLoading
+              ? '...'
+              : matchingUnavailable
+                ? '--'
+                : compatibleOffers.length
+          }
+          hint={
+            matchingUnavailable
+              ? candidateMatchingUnavailableMessage
+              : `Score supérieur ou égal à ${minimumScore}%`
+          }
+          onClick={() => navigate('/candidate/offers')}
         />
-        <StatCard
-          label="Indexed offers"
-          value={offersQuery.data?.total ?? 0}
-          icon={Briefcase}
-          className="start-border-left-orange"
-          iconBackground={'start-background-color-orange'}
+        <DashboardActionCard
+          icon={Sparkles}
+          title="Offres recommandées"
+          value={
+            matchingOffersQuery.isLoading
+              ? '...'
+              : matchingUnavailable
+                ? '--'
+                : recommendedOffersCount
+          }
+          hint={
+            matchingUnavailable
+              ? candidateMatchingUnavailableMessage
+              : 'Version provisoire basée sur les résultats de matching'
+          }
+          onClick={() => navigate('/candidate/offers')}
         />
-        <StatCard
-          label="Average offer score"
-          value={`${averageScore}%`}
-          icon={TrendingUp}
-          className="start-border-left-teal"
-          iconBackground={'start-background-color-teal'}
+        <DashboardActionCard
+          icon={Layers3}
+          title="Toutes les offres actives"
+          value={
+            matchingOffersQuery.isLoading
+              ? '...'
+              : matchingData?.activeOffersCount ?? '--'
+          }
+          hint={
+            matchingData?.activeOffersCount == null
+              ? 'Total des offres actives indisponible pour le moment'
+              : 'Nombre d’offres actuellement actives'
+          }
+          onClick={() => navigate('/candidate/offers')}
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(22rem,1fr)]">
-        <section className="panel p-5 card-border-3">
-          <div className="mb-4 flex items-center justify-between gap-3">
+      <section
+        id={PROFILE_COMPLETION_SECTION_ID}
+        className="panel p-6 scroll-mt-24 card-border-top"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">
+              Complétion du profil
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              Identifiez rapidement ce qui est complet et ce qui manque pour
+              améliorer vos recommandations.
+            </p>
+          </div>
+          <StatusPill
+            label={`${profileCompletionItems.filter((item) => item.completed).length}/${profileCompletionItems.length} sections complètes`}
+            tone={profileCompletion === 100 ? 'success' : 'warning'}
+            dot={false}
+          />
+        </div>
+
+        <div className="mt-5 grid gap-3 lg:grid-cols-2">
+          {profileCompletionItems.map((item) => (
+            <div
+              key={item.label}
+              className="rounded-2xl border border-border bg-background p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">
+                    {item.label}
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.completed
+                      ? 'Section complète.'
+                      : item.missing.join(', ')}
+                  </p>
+                </div>
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    item.completed
+                      ? 'bg-success-soft text-success'
+                      : 'bg-warning-soft text-warning'
+                  }`}
+                >
+                  {item.completed ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <CircleAlert className="h-3.5 w-3.5" />
+                  )}
+                  {item.completed ? 'Complet' : 'Incomplet'}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-dashed border-border bg-surface-muted/40 p-4">
+          <p className="text-sm font-semibold text-foreground">
+            Éléments manquants du profil
+          </p>
+          {missingProfileItems.length > 0 ? (
+            <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
+              {missingProfileItems.map((item) => (
+                <li key={item} className="flex items-start gap-2">
+                  <CircleAlert className="mt-0.5 h-4 w-4 text-warning" />
+                  <span>{item}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-sm text-muted-foreground">
+              Votre profil est complet pour le moment.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.3fr)_minmax(20rem,1fr)]">
+        <section className="panel p-6 card-border-top">
+          <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-foreground">
-                Top indexed offers
+              <h2 className="text-lg font-semibold text-foreground">
+                Nouvelles offres
               </h2>
-              <p className="text-xs text-muted-foreground">
-                Powered by <code>/search/offers</code> through the API Gateway.
+              <p className="text-sm text-muted-foreground">
+                Offres actuellement au-dessus de votre seuil minimum.
               </p>
             </div>
-            <Link
-              to="/candidate/offers"
-              className="inline-flex items-center gap-1 text-xs font-medium text-accent rounded-md border border-border px-4 py-1 light-link-border-left-3"
+            <button
+              type="button"
+              onClick={() => navigate('/candidate/offers')}
+              className="inline-flex items-center gap-1 text-sm font-medium text-accent"
             >
-              View all <ArrowRight className="h-3 w-3" />
-            </Link>
+              Voir les offres <ArrowRight className="h-4 w-4" />
+            </button>
           </div>
 
-          {offersQuery.isError ? (
-            <div className="rounded-md border border-destructive/20 bg-destructive-soft p-4 text-sm text-destructive">
-              {offersQuery.error instanceof Error
-                ? offersQuery.error.message
-                : 'Unable to load indexed offers.'}
-            </div>
-          ) : offers.length === 0 ? (
-            <div className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-              No indexed results. Try syncing the search index first.
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {offers.map((offer) => {
-                const normalizedScore =
-                  offer.score <= 1
-                    ? Math.round(offer.score * 100)
-                    : Math.round(offer.score);
+          <div className="mt-5 space-y-3">
+            {matchingOffersQuery.isLoading ? (
+              <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                Chargement des offres compatibles...
+              </div>
+            ) : matchingUnavailable ? (
+              <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                {matchingData?.unavailableMessage ??
+                  candidateMatchingUnavailableMessage}
+              </div>
+            ) : newOffers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                Aucune nouvelle offre à afficher pour le moment.
+              </div>
+            ) : (
+              newOffers.map((offer) => {
+                const publishedAt = formatDate(offer.publishedAt);
+
                 return (
-                  <Link
-                    key={offer.offerId}
-                    to={`/candidate/offers/${offer.offerId}`}
-                    className="block rounded-2xl border border-border bg-background p-4 transition-colors hover:border-accent/40 hover:bg-surface-muted"
+                  <button
+                    key={offer.matchingResultId}
+                    type="button"
+                    onClick={() => navigate('/candidate/offers')}
+                    className="w-full rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -203,122 +424,105 @@ export default function CandidateDashboard() {
                           {offer.title}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {[offer.location, offer.contractType, offer.workMode]
+                          {[offer.companyName, offer.location, offer.contractType]
                             .filter(Boolean)
                             .join(' • ')}
                         </p>
+                        {publishedAt ? (
+                          <p className="mt-2 text-xs text-muted-foreground">
+                            Publiée le {publishedAt}
+                          </p>
+                        ) : null}
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {offer.skills.slice(0, 5).map((skill) => (
                             <SkillTag
-                              key={skill}
+                              key={`${offer.offerId}-${skill}`}
                               label={skill}
                               variant="matched"
                             />
                           ))}
                         </div>
                       </div>
-                      <ScoreBadge score={normalizedScore} />
+                      <ScoreBadge score={offer.scoreGlobal} />
                     </div>
-                  </Link>
+                  </button>
                 );
-              })}
-            </div>
-          )}
+              })
+            )}
+          </div>
         </section>
 
-        <div className="space-y-4">
-          <section className="panel p-5 card-border-19">
-            <h2 className="text-sm font-semibold text-foreground">
-              Current profile snapshot
-            </h2>
-            <div className="mt-4 grid gap-3">
-              <Info label="Candidate" value={displayName} />
-              <Info
-                label="Location"
-                value={displayLocation || 'Location not specified'}
-              />
-              <Info
-                label="Primary language"
-                value={bundle?.primaryLanguage ?? 'Not specified'}
-              />
-              <Info
-                label="Current CV parsing status"
-                value={bundle?.currentCv?.parsingStatus ?? 'No current CV'}
-              />
-              <Info
-                label="Last upload"
-                value={formatDate(bundle?.currentCv?.uploadedAt)}
-              />
-            </div>
-          </section>
+        <section className="panel p-6 card-border-top">
+          <h2 className="text-lg font-semibold text-foreground">
+            Vos centres d’intérêt
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Ces mots-clés sont temporaires et seront remplacés plus tard par
+            vos préférences réelles.
+          </p>
 
-          <section className="panel p-5 card-border-19">
-            <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="text-sm font-semibold text-foreground">
-                Detected skills
-              </h2>
-            </div>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {topSkills.length > 0 ? (
-                topSkills
-                  .slice(0, 16)
-                  .map((skill) => (
-                    <SkillTag key={skill} label={skill} variant="matched" />
-                  ))
+          <div className="mt-5 flex flex-wrap gap-2">
+            {candidateInterestKeywords.map((keyword) => (
+              <SkillTag key={keyword} label={keyword} variant="matched" />
+            ))}
+          </div>
+
+          <div className="mt-5 rounded-2xl border border-border bg-surface-muted/40 p-4">
+            <p className="text-sm font-semibold text-foreground">
+              Compétences actuellement visibles dans votre profil
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {(bundle?.skills ?? []).length > 0 ? (
+                bundle.skills.slice(0, 8).map((skill) => (
+                  <SkillTag
+                    key={skill.id}
+                    label={inferSkillLabel(skill)}
+                    variant="outline"
+                  />
+                ))
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No skills stored yet. Upload and parse a CV or add skills from
-                  the profile page.
+                  Aucune compétence renseignée pour le moment.
                 </p>
               )}
             </div>
-          </section>
-
-          <section className="panel p-5 card-border-19">
-            <h2 className="text-sm font-semibold text-foreground">
-              Recent CV activity
-            </h2>
-            <div className="mt-4 space-y-3">
-              {(bundle?.cvRecords ?? []).slice(0, 4).map((record) => (
-                <div
-                  key={record.id}
-                  className="rounded-md bg-surface-muted p-3"
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-foreground">
-                      {record.originalFilename ?? record.blobName}
-                    </p>
-                    <StatusPill
-                      label={record.parsingStatus}
-                      tone={statusToTone(record.parsingStatus)}
-                    />
-                  </div>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Uploaded {formatDate(record.uploadedAt)}
-                  </p>
-                </div>
-              ))}
-              {(bundle?.cvRecords ?? []).length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No CV activity yet. Use the CV page to upload your first file.
-                </p>
-              ) : null}
-            </div>
-          </section>
-        </div>
+          </div>
+        </section>
       </div>
     </div>
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function DashboardActionCard({
+  icon: Icon,
+  title,
+  value,
+  hint,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  value: string | number;
+  hint: string;
+  onClick: () => void;
+}) {
   return (
-    <div className="rounded-md bg-surface-muted p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
-      <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      className="panel flex flex-col gap-3 p-5 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted"
+    >
+      <div className="flex items-start justify-between gap-3">
+        <span className="stat-label">{title}</span>
+        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary-muted text-primary">
+          <Icon className="h-5 w-5" />
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="stat-value">{value}</span>
+        <ArrowRight className="h-4 w-4 text-accent" />
+      </div>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </button>
   );
 }

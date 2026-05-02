@@ -11,6 +11,8 @@ from .schemas import (
     CandidateListItemResponse,
     CandidateStatusUpdateRequest,
     CandidateStatusUpdateResponse,
+    CandidateActiveOffersCountResponse,
+    CandidateMatchedOffersResponse,
     JobSeekerContactUpsertRequest,
     JobSeekerEducationCreateRequest,
     JobSeekerEducationResponse,
@@ -41,6 +43,8 @@ from .service import (
     delete_skill,
     get_my_profile,
     get_preference,
+    get_active_offers_count,
+    get_my_matched_offers,
     list_education,
     list_experience,
     list_languages,
@@ -279,3 +283,29 @@ def upsert_preference_endpoint(
     current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
 ):
     return upsert_preference(db, current_user, payload)
+
+@router.get(
+    "/candidates/me/offers/active-count",
+    response_model=CandidateActiveOffersCountResponse,
+)
+def get_my_active_offers_count_endpoint(
+    db: Session = Depends(get_db),
+    _current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return get_active_offers_count(db)
+
+
+@router.get(
+    "/candidates/me/matched-offers",
+    response_model=CandidateMatchedOffersResponse,
+)
+def get_my_matched_offers_endpoint(
+    min_score: float = Query(default=50, ge=0, le=100),
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return get_my_matched_offers(
+        db,
+        current_user,
+        min_score=min_score,
+    )

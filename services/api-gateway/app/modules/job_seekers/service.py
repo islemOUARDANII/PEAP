@@ -3,6 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.schemas import CurrentUserResponse
+from app.clients.matching_client import execute_run as execute_matching_service_run
+from app.modules.matching_runs import repository as matching_run_repository
 
 from . import repository
 from .schemas import (
@@ -477,3 +479,75 @@ def update_candidate_status(
 
 def candidate_counts(db: Session) -> dict:
     return repository.count_job_seekers(db)
+
+def get_active_offers_count(db: Session) -> dict:
+    return {
+        "active_offers_count": repository.count_active_offers(db),
+    }
+
+
+def get_my_matched_offers(
+    db: Session,
+    current_user: CurrentUserResponse,
+    *,
+    min_score: float = 50,
+) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    # Le front envoie 50 pour 50 %. Le moteur stocke 0.50.
+    normalized_min_score = min_score / 100 if min_score > 1 else min_score
+
+    model_version = repository.get_default_candidate_to_offer_model_version(db)
+    if not model_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aucun modèle actif STANDARD_CANDIDATE_TO_OFFER n'est configuré.",
+        )
+
+    active_offers_count = repository.count_active_offers(db)
+
+    try:
+        run = matching_run_repository.create_matching_run(
+            db,
+            run_type="AUTOMATIC",
+            direction="CANDIDATE_TO_OFFER",
+            model_version_id=model_version["id"],
+            launched_by_user_id=current_user.id,
+            source_entity_type="JOB_SEEKER",
+            source_entity_id=job_seeker["id"],
+            parameters_json={
+                "source": "candidate_portal",
+                "min_score": normalized_min_score,
+            },
+        )
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        _handle_integrity_error(exc)
+
+    execute_matching_service_run(
+        run["id"],
+        {
+            "run_id": run["id"],
+            "trace_id": f"candidate-matched-offers-{run['id']}",
+            "dry_run": False,
+            "admin_override": False,
+        },
+    )
+
+    rows = repository.list_candidate_matching_results_with_offers(
+        db,
+        run_id=run["id"],
+        min_score=normalized_min_score,
+    )
+
+    return {
+        "model_code": model_version["model_code"],
+        "model_version_id": model_version["id"],
+        "run_id": run["id"],
+        "min_score": normalized_min_score,
+        "active_offers_count": active_offers_count,
+        "total_results": active_offers_count,
+        "matched_count": len(rows),
+        "offers": rows,
+    }

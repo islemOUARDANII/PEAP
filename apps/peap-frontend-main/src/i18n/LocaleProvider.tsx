@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 
-import { translateText, type Locale } from "./translations";
+import { DEFAULT_LOCALE, translateText, type Locale } from "./translations";
 
-const LOCALE_STORAGE_KEY = "matchcore.locale";
 const TEXT_ATTRIBUTES = ["placeholder", "title", "aria-label", "alt"] as const;
 
 const textNodeOriginals = new WeakMap<Text, string>();
@@ -16,17 +15,7 @@ interface LocaleContextValue {
 
 const LocaleContext = createContext<LocaleContextValue | null>(null);
 
-const isLocale = (value: unknown): value is Locale => value === "en" || value === "fr";
-
 const canUseWindow = (): boolean => typeof window !== "undefined" && typeof document !== "undefined";
-
-const readStoredLocale = (): Locale => {
-  if (!canUseWindow()) {
-    return "en";
-  }
-  const raw = window.localStorage.getItem(LOCALE_STORAGE_KEY);
-  return isLocale(raw) ? raw : "en";
-};
 
 const translateDomTree = (root: ParentNode, locale: Locale) => {
   if (!canUseWindow()) {
@@ -111,40 +100,8 @@ function LocaleTextSync({ locale }: { locale: Locale }) {
   return null;
 }
 
-function LanguageToggle() {
-  const localeContext = useLocale();
-
-  return (
-    <div className="fixed bottom-4 right-4 z-[80] inline-flex items-center gap-1 rounded-full border border-border bg-background/95 p-1 shadow-lg backdrop-blur">
-      {(["en", "fr"] as const).map((value) => {
-        const active = localeContext.locale === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            onClick={() => localeContext.setLocale(value)}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition-colors ${
-              active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-surface-muted hover:text-foreground"
-            }`}
-            aria-label={value === "en" ? "Switch language to English" : "Passer la langue en francais"}
-          >
-            {value.toUpperCase()}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 export function LocaleProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocaleState] = useState<Locale>(() => readStoredLocale());
-
-  useEffect(() => {
-    if (!canUseWindow()) {
-      return;
-    }
-    window.localStorage.setItem(LOCALE_STORAGE_KEY, locale);
-  }, [locale]);
+  const [locale, setLocaleState] = useState<Locale>(DEFAULT_LOCALE);
 
   const value = useMemo<LocaleContextValue>(
     () => ({
@@ -159,7 +116,6 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     <LocaleContext.Provider value={value}>
       <LocaleTextSync locale={locale} />
       {children}
-      <LanguageToggle />
     </LocaleContext.Provider>
   );
 }

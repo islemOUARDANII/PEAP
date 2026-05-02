@@ -50,9 +50,9 @@ export const navByRole: Record<Role, RoleNavigation> = {
       {
         label: 'Navigation',
         items: [
-          { to: '/candidate', label: 'Dashboard', icon: LayoutDashboard },
-          { to: '/candidate/profile', label: 'Mon CV', icon: FileText },
-          { to: '/candidate/demo-offers', label: 'Offres', icon: Briefcase },
+          { to: '/candidate', label: 'Tableau de bord', icon: LayoutDashboard },
+          { to: '/candidate/profile', label: 'Mon profil', icon: FileText },
+          { to: '/candidate/offers', label: 'Offres', icon: Briefcase },
         ],
       },
     ],
@@ -117,16 +117,16 @@ export const navByRole: Record<Role, RoleNavigation> = {
 export const searchTargetsByRole: Record<Role, SearchTarget[]> = {
   candidate: [
     {
-      to: '/candidate/demo-cv',
-      label: 'Mon CV',
-      description: 'Uploader un CV, relire le profil extrait et le valider.',
-      keywords: ['cv', 'profil', 'upload', 'validation', 'skills', 'languages'],
+      to: '/candidate/profile',
+      label: 'Mon profil',
+      description: 'Consulter et mettre a jour votre profil candidat.',
+      keywords: ['profil', 'cv', 'competences', 'langues', 'experience'],
     },
     {
-      to: '/candidate/demo-offers',
+      to: '/candidate/offers',
       label: 'Offres',
-      description: 'Search offers matched to your validated demo profile.',
-      keywords: ['offer', 'score', 'cv', 'company', 'skill', 'location'],
+      description: 'Consulter les offres compatibles avec votre profil.',
+      keywords: ['offres', 'matching', 'score', 'competences', 'localisation'],
     },
   ],
   provider: [

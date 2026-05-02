@@ -8,9 +8,7 @@ import { AuthIndexRedirect, RequireAuth } from '@/app/routeGuards';
 import CandidateDashboard from '@/pages/candidate/Dashboard';
 import Profile from '@/pages/candidate/Profile';
 import CandidateOffers from '@/pages/candidate/Offers';
-import CandidateOfferDetails from '@/pages/candidate/OfferDetails';
 import UploadCv from '@/pages/candidate/UploadCv';
-import DemoOffers from '@/pages/candidate/DemoOffers';
 
 import ProviderDashboard from '@/pages/provider/Dashboard';
 import Offers from '@/pages/provider/Offers';
@@ -61,10 +59,13 @@ export function AppRouter() {
           />
           <Route path="/candidate/upload-cv" element={<UploadCv />} />
           <Route path="/candidate/offers" element={<CandidateOffers />} />
-          <Route path="/candidate/demo-offers" element={<DemoOffers />} />
+          <Route
+            path="/candidate/demo-offers"
+            element={<Navigate to="/candidate/offers" replace />}
+          />
           <Route
             path="/candidate/offers/:id"
-            element={<CandidateOfferDetails />}
+            element={<Navigate to="/candidate/offers" replace />}
           />
           <Route
             path="/candidate/job-offers"

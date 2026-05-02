@@ -1,17 +1,17 @@
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Depends, File, Request, UploadFile
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, File, Request, UploadFile, HTTPException, status
+from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 from app.clients.kafka_client import publish_event
 from app.db.session import get_db
 from app.modules.audit.service import log_pipeline_event, log_user_activity
-from app.modules.auth.dependencies import require_roles
+from app.modules.auth.dependencies import require_roles, get_current_user
 from app.modules.auth.schemas import CurrentUserResponse
 from app.modules.job_seekers.service import resolve_current_job_seeker
 from app.clients.parsing_client import ParsingServiceError, parse_cv
 from .schemas import CvParseResponse, CvRecordResponse
-from fastapi import Depends, HTTPException, Request, status
 from .service import (
     archive_my_cv,
     get_current_cv_file,
@@ -22,6 +22,9 @@ from .service import (
     parse_my_cv,
     upload_my_cv,
 )
+from azure.storage.blob import BlobServiceClient
+import io
+import os
 
 router = APIRouter(tags=["CV"])
 
@@ -89,12 +92,74 @@ def get_my_current_cv_endpoint(
 
 @router.get("/candidates/me/cv/current/view")
 @router.get("/job-seekers/me/cv/current/view", include_in_schema=False)
-def view_my_current_cv_endpoint(
-    db: Session = Depends(get_db),
-    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+def view_current_cv(
+    current_user=Depends(get_current_user),
+    db=Depends(get_db),
 ):
-    path, mime_type = get_my_current_cv_file(db, current_user)
-    return FileResponse(path=path, media_type=mime_type, filename=path.name)
+    job_seeker = db.execute(
+    text(
+            """
+            SELECT id
+            FROM aneti.job_seeker
+            WHERE user_id = :user_id
+            LIMIT 1
+            """
+    ),
+    {"user_id": current_user.id},
+    ).mappings().first()
+
+    if not job_seeker:
+        raise HTTPException(status_code=404, detail="Profil candidat introuvable")
+
+    job_seeker_id = job_seeker["id"]
+
+    print("DEBUG current_user:", job_seeker_id)
+    print("DEBUG current_user.id:", current_user.id)
+    cv = db.execute(
+    text(
+        """
+        SELECT id, blob_name, original_filename, mime_type
+        FROM aneti.job_seeker_cv
+        WHERE job_seeker_id = :job_seeker_id
+          AND is_current = true
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    ),
+    {"job_seeker_id": job_seeker_id},
+).mappings().first()
+
+    if not cv:
+        raise HTTPException(status_code=404, detail="Aucun CV trouvé")
+
+    blob_name = cv["blob_name"]
+    if not blob_name:
+        raise HTTPException(status_code=404, detail="Fichier CV introuvable")
+
+    connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+    container_name = os.getenv("AZURE_STORAGE_CONTAINER")
+
+    blob_service = BlobServiceClient.from_connection_string(connection_string)
+    blob_client = blob_service.get_blob_client(
+        container=container_name,
+        blob=blob_name,
+    )
+
+    try:
+        content = blob_client.download_blob().readall()
+    except Exception:
+        raise HTTPException(status_code=404, detail="Impossible de lire le fichier CV")
+
+    mime_type = cv.get("mime_type") or "application/pdf"
+    filename = cv.get("original_filename") or "cv.pdf"
+
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{filename}"'
+        },
+    )
 
 
 @router.delete("/candidates/me/cv/{cv_record_id}")

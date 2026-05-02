@@ -141,6 +141,10 @@ def normalize_location(raw_location: str | None) -> dict[str, Any]:
                 "raw_location": raw_location,
                 "normalized_location": normalized_location,
                 "location_parts": location_parts,
+                "display_location": (
+                    f"{best_delegation['libelle_delegation'].title()}, "
+                    f"{best_delegation['libelle_gouvernorat'].title()}, Tunisie"
+                ),
                 "status": "MATCHED_DELEGATION",
                 "country": "Tunisie",
                 "governorate": {

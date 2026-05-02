@@ -98,3 +98,12 @@ def certifications(db: Session = Depends(get_db), _current_user=_secured()):
 @router.get("/segmentations", response_model=list[ReferentialItemResponse])
 def segmentations(db: Session = Depends(get_db), _current_user=_secured()):
     return repository.list_reference(db, "ref_segmentation", "code_segmentation", "libelle_segmentation")
+
+@router.get("/languages", response_model=list[ReferentialItemResponse])
+def languages(db: Session = Depends(get_db), _current_user=_secured()):
+    return repository.list_languages(db)
+
+
+@router.get("/language-levels", response_model=list[ReferentialItemResponse])
+def language_levels(db: Session = Depends(get_db), _current_user=_secured()):
+    return repository.list_language_levels(db)
