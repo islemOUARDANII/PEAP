@@ -243,6 +243,8 @@ export default function CandidateDashboard() {
               .getElementById(PROFILE_COMPLETION_SECTION_ID)
               ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
+          className="start-border-left-blue"
+          iconBackground={'start-background-color-blue'}
         />
         <DashboardActionCard
           icon={Target}
@@ -260,6 +262,8 @@ export default function CandidateDashboard() {
               : `Score supérieur ou égal à ${minimumScore}%`
           }
           onClick={() => navigate('/candidate/offers')}
+          className="start-border-left-green"
+          iconBackground={'start-background-color-green'}
         />
         <DashboardActionCard
           icon={Sparkles}
@@ -277,6 +281,8 @@ export default function CandidateDashboard() {
               : 'Version provisoire basée sur les résultats de matching'
           }
           onClick={() => navigate('/candidate/offers')}
+          className="start-border-left-orange"
+          iconBackground={'start-background-color-orange'}
         />
         <DashboardActionCard
           icon={Layers3}
@@ -292,6 +298,8 @@ export default function CandidateDashboard() {
               : 'Nombre d’offres actuellement actives'
           }
           onClick={() => navigate('/candidate/offers')}
+          className="start-border-left-teal"
+          iconBackground={'start-background-color-teal'}
         />
       </div>
 
@@ -334,11 +342,10 @@ export default function CandidateDashboard() {
                   </p>
                 </div>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
-                    item.completed
-                      ? 'bg-success-soft text-success'
-                      : 'bg-warning-soft text-warning'
-                  }`}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${item.completed
+                    ? 'bg-success-soft text-success'
+                    : 'bg-warning-soft text-warning'
+                    }`}
                 >
                   {item.completed ? (
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -499,22 +506,26 @@ function DashboardActionCard({
   value,
   hint,
   onClick,
+  className,
+  iconBackground,
 }: {
   icon: LucideIcon;
   title: string;
   value: string | number;
   hint: string;
   onClick: () => void;
+  className?: string;
+  iconBackground?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      className="panel flex flex-col gap-3 p-5 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted"
+      className={`panel flex flex-col gap-3 p-5 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted ${className || ''}`}
     >
       <div className="flex items-start justify-between gap-3">
         <span className="stat-label">{title}</span>
-        <span className="flex h-10 w-10 items-center justify-center rounded-md bg-primary-muted text-primary">
+        <span className={`flex h-10 w-10 items-center justify-center rounded-md ${iconBackground || 'bg-primary-muted'} text-primary`}>
           <Icon className="h-5 w-5" />
         </span>
       </div>

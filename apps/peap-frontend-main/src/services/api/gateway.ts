@@ -702,6 +702,8 @@ export interface MatchingResultDetailRecord {
   recommendation?: string | null;
   metadataJson: Record<string, unknown>;
   createdAt?: string | null;
+  className?: string;
+  iconBackground?: string;
 }
 
 interface MatchingResultDetailResponse {

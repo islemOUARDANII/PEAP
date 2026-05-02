@@ -27,3 +27,8 @@ export const chartsConfig = {
     ],
   },
 };
+export enum UserRole {
+  Candidate = 'candidate',
+  Provider = 'provider',
+  Advisor = 'advisor',
+}

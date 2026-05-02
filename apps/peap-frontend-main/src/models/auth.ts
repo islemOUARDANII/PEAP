@@ -11,7 +11,7 @@ export interface AuthUser {
     email: string;
     role: Role;
     backendRole: string;
-    roles: string[];
+    roles?: string[];
     name: string;
     status?: string;
     profile?: BackendUserProfile | null;

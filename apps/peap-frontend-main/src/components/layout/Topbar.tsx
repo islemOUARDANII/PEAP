@@ -9,6 +9,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/app/auth";
 import { searchTargetsByRole, type SearchTarget } from "@/config/navigation";
+import { UserRole } from "@/app/constants";
 
 const roleLabels: Record<Role, string> = {
   candidate: "Candidate",
@@ -125,54 +126,56 @@ export function Topbar({ role }: TopbarProps) {
           />
         </Link>
 
-        <form
-          role="search"
-          onSubmit={handleSearchSubmit}
-          className="relative min-w-0 flex-1 lg:max-w-xl xl:max-w-2xl"
-        >
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => {
-              setQuery(event.target.value);
-              setIsSearchOpen(true);
-            }}
-            onFocus={() => setIsSearchOpen(true)}
-            onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
-            placeholder={searchPlaceholders[role]}
-            className="h-10 rounded-md border-border bg-surface-muted/75 pl-9 pr-16 shadow-xs focus-visible:ring-accent"
-          />
-          <kbd className="pointer-events-none absolute right-2 top-1/2 hidden h-5 -translate-y-1/2 items-center gap-1 rounded border border-border bg-surface px-1.5 font-mono text-[10px] text-muted-foreground xl:inline-flex">
-            Ctrl K
-          </kbd>
-          {isSearchOpen && trimmedQuery && (
-            <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-md border border-border bg-popover shadow-md">
-              <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                Search in this portal
-              </div>
-              {visibleTargets.map((target) => (
-                <button
-                  key={target.to}
-                  type="button"
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    navigateToSearch(target);
-                  }}
-                  className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-surface-muted"
-                >
-                  <Search className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-foreground">
-                      Search "{trimmedQuery}" in {target.label}
+        {role !== UserRole.Candidate && (
+          <form
+            role="search"
+            onSubmit={handleSearchSubmit}
+            className="relative min-w-0 flex-1 lg:max-w-xl xl:max-w-2xl"
+          >
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setIsSearchOpen(true);
+              }}
+              onFocus={() => setIsSearchOpen(true)}
+              onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
+              placeholder={searchPlaceholders[role]}
+              className="h-10 rounded-md border-border bg-surface-muted/75 pl-9 pr-16 shadow-xs focus-visible:ring-accent"
+            />
+            <kbd className="pointer-events-none absolute right-2 top-1/2 hidden h-5 -translate-y-1/2 items-center gap-1 rounded border border-border bg-surface px-1.5 font-mono text-[10px] text-muted-foreground xl:inline-flex">
+              Ctrl K
+            </kbd>
+            {isSearchOpen && trimmedQuery && (
+              <div className="absolute left-0 right-0 top-11 z-50 overflow-hidden rounded-md border border-border bg-popover shadow-md">
+                <div className="border-b border-border px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Search in this portal
+                </div>
+                {visibleTargets.map((target) => (
+                  <button
+                    key={target.to}
+                    type="button"
+                    onMouseDown={(event) => {
+                      event.preventDefault();
+                      navigateToSearch(target);
+                    }}
+                    className="flex w-full items-start gap-2.5 px-3 py-2.5 text-left hover:bg-surface-muted"
+                  >
+                    <Search className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground">
+                        Search "{trimmedQuery}" in {target.label}
+                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{target.description}</span>
                     </span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">{target.description}</span>
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-        </form>
+                  </button>
+                ))}
+              </div>
+            )}
+          </form>
+        )}
 
         <div className="ml-auto flex shrink-0 items-center gap-3 border-l border-border/80 pl-3 sm:pl-4">
           <span className="hidden items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1 text-xs font-medium text-foreground shadow-xs sm:inline-flex">

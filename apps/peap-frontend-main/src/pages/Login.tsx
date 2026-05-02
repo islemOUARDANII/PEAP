@@ -31,7 +31,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { useAuth } from '@/app/auth';
+import { AuthStatusUser, useAuth } from '@/app/auth';
 import { roleHomePath } from '@/app/routeGuards';
 import {
   registerCandidate,
@@ -43,6 +43,7 @@ import myImage from '@/assets/ANETI-RAW-LOGO-WHITE-ORANGE.png';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getPortalRole } from '@/lib/portalRoles';
+import { stat } from 'fs';
 
 interface LoginLocationState {
   from?: string;
@@ -798,12 +799,12 @@ export default function Login() {
                 {/* Role chip */}
                 <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 mb-6">
                   {/* <Icon className="h-3.5 w-3.5 text-primary" /> */}
-                    <span className="text-[16px] font-medium text-muted-foreground">
-                      Signing in as{' '}
-                      <span className="text-foreground font-semibold text-primary">
+                  <span className="text-[16px] font-medium text-muted-foreground">
+                    Signing in as{' '}
+                    <span className="text-foreground font-semibold text-primary">
                       {roleLabel}
-                      </span>
                     </span>
+                  </span>
                 </div>
 
                 <h1 className="text-3xl font-semibold tracking-tight text-foreground">
@@ -855,6 +856,12 @@ export default function Login() {
                       Forgot Password?
                     </button>
                   </div>
+
+                  {submitError && (
+                    <p className="text-sm text-destructive">
+                      Invalid email or password.
+                    </p>
+                  )}
 
                   <Button
                     type="submit"

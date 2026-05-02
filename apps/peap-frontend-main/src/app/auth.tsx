@@ -147,3 +147,8 @@ export function useAuth(): AuthContextValue {
 
     return context;
 }
+export enum AuthStatusUser {
+    Loading = "loading",
+    Authenticated = "authenticated",
+    Unauthenticated = "unauthenticated"
+}
