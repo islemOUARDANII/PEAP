@@ -42,9 +42,9 @@ export function AppRouter() {
 
         <Route
           element={
-            <RequireAuth allowedRoles={['candidate']}>
-              <CandidateLayout />
-            </RequireAuth>
+            // <RequireAuth allowedRoles={['candidate']}>
+            <CandidateLayout />
+            // </RequireAuth>
           }
         >
           <Route path="/candidate" element={<CandidateDashboard />} />

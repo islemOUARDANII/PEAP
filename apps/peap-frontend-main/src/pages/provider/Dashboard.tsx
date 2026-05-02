@@ -23,7 +23,11 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  Cell,
+  LabelList,
 } from 'recharts';
+import { CustomValueLabel } from '@/components/common/ReCharts';
+import { chartsConfig } from '@/app/constants';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -130,7 +134,7 @@ export default function ProviderDashboard() {
                     fontSize: 12,
                   }}
                 />
-                <Bar
+                {/* <Bar
                   dataKey="matches"
                   fill="hsl(var(--accent))"
                   radius={[4, 4, 0, 0]}
@@ -139,7 +143,25 @@ export default function ProviderDashboard() {
                   dataKey="applications"
                   fill="hsl(var(--primary))"
                   radius={[4, 4, 0, 0]}
-                />
+                /> */}
+
+                <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="matches" content={<CustomValueLabel />} />
+                  <Cell
+                    key={`cell-matches`}
+                    fill={chartsConfig.chartProvider.colors[0]}
+                  />
+                </Bar>
+                <Bar dataKey="applications" radius={[0, 4, 4, 0]}>
+                  <LabelList
+                    dataKey="applications"
+                    content={<CustomValueLabel />}
+                  />
+                  <Cell
+                    key={`cell-applications`}
+                    fill={chartsConfig.chartProvider.colors[1]}
+                  />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>

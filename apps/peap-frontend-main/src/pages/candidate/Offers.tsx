@@ -27,7 +27,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { gatewayApi, type MatchingResultDetailRecord } from '@/services/api/gateway';
+import {
+  gatewayApi,
+  type MatchingResultDetailRecord,
+} from '@/services/api/gateway';
 import { queryKeys } from '@/services/api/queryKeys';
 import {
   candidateMatchingUnavailableMessage,
@@ -133,10 +136,7 @@ function MatchingUnavailableState() {
 export default function CandidateOffers() {
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [appliedOfferIds, setAppliedOfferIds] = useState<string[]>([]);
-  const minimumScore = useMemo(
-    () => getStoredCandidateMinimumOfferScore(),
-    [],
-  );
+  const minimumScore = useMemo(() => getStoredCandidateMinimumOfferScore(), []);
 
   const bundleQuery = useQuery({
     queryKey: queryKeys.candidate.bundle(),
@@ -144,7 +144,10 @@ export default function CandidateOffers() {
   });
 
   const matchingOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), bundleQuery.data?.id ?? 'none'],
+    queryKey: [
+      ...queryKeys.candidate.jobOffers(),
+      bundleQuery.data?.id ?? 'none',
+    ],
     queryFn: () => getCandidateMatchingOffers(bundleQuery.data!.id),
     enabled: Boolean(bundleQuery.data?.id),
     staleTime: 5 * 60_000,
@@ -163,8 +166,9 @@ export default function CandidateOffers() {
   );
 
   const selectedOffer =
-    compatibleOffers.find((offer) => offer.matchingResultId === selectedOfferId) ??
-    null;
+    compatibleOffers.find(
+      (offer) => offer.matchingResultId === selectedOfferId,
+    ) ?? null;
 
   const offerDetailQuery = useQuery({
     queryKey: [
@@ -182,7 +186,9 @@ export default function CandidateOffers() {
     }
 
     setAppliedOfferIds((current) =>
-      current.includes(selectedOfferId) ? current : [...current, selectedOfferId],
+      current.includes(selectedOfferId)
+        ? current
+        : [...current, selectedOfferId],
     );
     toast.success('Votre candidature a été enregistrée.');
   };
@@ -214,7 +220,7 @@ export default function CandidateOffers() {
           </p>
           <p className="text-sm text-muted-foreground">
             {matchingUnavailable
-              ? "Les offres seront affichées dès que le moteur de matching sera disponible."
+              ? 'Les offres seront affichées dès que le moteur de matching sera disponible.'
               : `${compatibleOffers.length} offre(s) affichée(s) avec un score supérieur ou égal à votre seuil.`}
           </p>
         </div>
@@ -266,8 +272,12 @@ export default function CandidateOffers() {
                     <MapPin className="h-3.5 w-3.5" />
                     {offer.location}
                   </span>
-                  {offer.contractType ? <StatusChip label={offer.contractType} /> : null}
-                  {offer.workMode ? <StatusChip label={offer.workMode} /> : null}
+                  {offer.contractType ? (
+                    <StatusChip label={offer.contractType} />
+                  ) : null}
+                  {offer.workMode ? (
+                    <StatusChip label={offer.workMode} />
+                  ) : null}
                 </div>
 
                 <p className="mt-4 line-clamp-4 text-sm leading-6 text-foreground/90">
@@ -277,13 +287,15 @@ export default function CandidateOffers() {
 
                 <div className="mt-4 flex flex-wrap gap-2">
                   {offer.skills.length > 0 ? (
-                    offer.skills.slice(0, 6).map((skill) => (
-                      <SkillTag
-                        key={`${offer.matchingResultId}-${skill}`}
-                        label={skill}
-                        variant="matched"
-                      />
-                    ))
+                    offer.skills
+                      .slice(0, 6)
+                      .map((skill) => (
+                        <SkillTag
+                          key={`${offer.matchingResultId}-${skill}`}
+                          label={skill}
+                          variant="matched"
+                        />
+                      ))
                   ) : (
                     <p className="text-xs text-muted-foreground">
                       Aucune compétence renseignée.
@@ -324,8 +336,12 @@ export default function CandidateOffers() {
           {selectedOffer ? (
             <>
               <DialogHeader>
-                <DialogTitle className="pr-8">{selectedOffer.title}</DialogTitle>
-                <DialogDescription>{selectedOffer.companyName}</DialogDescription>
+                <DialogTitle className="pr-8">
+                  {selectedOffer.title}
+                </DialogTitle>
+                <DialogDescription>
+                  {selectedOffer.companyName}
+                </DialogDescription>
               </DialogHeader>
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -472,8 +488,8 @@ export default function CandidateOffers() {
                   </div>
                 ) : offerDetailQuery.isError ? (
                   <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-                    Les explications détaillées de matching sont indisponibles pour
-                    le moment.
+                    Les explications détaillées de matching sont indisponibles
+                    pour le moment.
                   </div>
                 ) : offerDetailQuery.data?.details.length ? (
                   <div className="grid gap-3 md:grid-cols-2">
@@ -504,7 +520,8 @@ export default function CandidateOffers() {
                   type="button"
                   onClick={handleApply}
                   disabled={
-                    !selectedOfferId || appliedOfferIds.includes(selectedOfferId)
+                    !selectedOfferId ||
+                    appliedOfferIds.includes(selectedOfferId)
                   }
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                 >
@@ -567,7 +584,9 @@ function MatchingExplanationCard({
           {formatCriterionLabel(detail.criterionLabel, detail.criterionCode)}
         </p>
         <div className="flex flex-wrap gap-2">
-          {detail.matched === true ? <StatusChip label="Correspondance" /> : null}
+          {detail.matched === true ? (
+            <StatusChip label="Correspondance" />
+          ) : null}
           {detail.isGap ? <StatusChip label="Point à améliorer" /> : null}
           {formatScore(detail.score) ? (
             <StatusChip label={`Score ${formatScore(detail.score)}`} />

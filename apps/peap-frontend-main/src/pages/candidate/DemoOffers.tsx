@@ -1,34 +1,35 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Briefcase, MapPin, Search, Sparkles } from "lucide-react";
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Briefcase, MapPin, Search, Sparkles } from 'lucide-react';
 
-import { PageHeader } from "@/components/common/PageHeader";
-import { ScoreBadge } from "@/components/common/ScoreBadge";
-import { SkillTag } from "@/components/common/SkillTag";
-import { StatusPill } from "@/components/common/StatusPill";
-import { Input } from "@/components/ui/input";
+import { PageHeader } from '@/components/common/PageHeader';
+import { ScoreBadge } from '@/components/common/ScoreBadge';
+import { SkillTag } from '@/components/common/SkillTag';
+import { StatusPill } from '@/components/common/StatusPill';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { searchOffersSafe } from "@/services/api/demoGateway";
-import { readDemoCandidateProfile } from "@/services/candidate/demoProfileSession";
+} from '@/components/ui/select';
+import { searchOffersSafe } from '@/services/api/demoGateway';
+import { readDemoCandidateProfile } from '@/services/candidate/demoProfileSession';
+import OfferCardCandidat from '@/components/common/OfferCardCandidat';
 
 export default function DemoOffers() {
   const candidateProfile = readDemoCandidateProfile();
-  const [query, setQuery] = useState("");
-  const [location, setLocation] = useState("");
-  const [contractType, setContractType] = useState("all");
-  const [skillFilter, setSkillFilter] = useState("all");
+  const [query, setQuery] = useState('');
+  const [location, setLocation] = useState('');
+  const [contractType, setContractType] = useState('all');
+  const [skillFilter, setSkillFilter] = useState('all');
 
   const offersQuery = useQuery({
     queryKey: [
-      "demo",
-      "candidate",
-      "offers",
+      'demo',
+      'candidate',
+      'offers',
       {
         query,
         location,
@@ -36,8 +37,8 @@ export default function DemoOffers() {
         skillFilter,
         profile: candidateProfile.email,
         title: candidateProfile.title,
-        skills: candidateProfile.skills.join("|"),
-        languages: candidateProfile.languages.join("|"),
+        skills: candidateProfile.skills.join('|'),
+        languages: candidateProfile.languages.join('|'),
       },
     ],
     queryFn: () =>
@@ -45,7 +46,7 @@ export default function DemoOffers() {
         query,
         location,
         contractType,
-        skills: skillFilter === "all" ? [] : [skillFilter],
+        skills: skillFilter === 'all' ? [] : [skillFilter],
         candidateProfile,
       }),
     staleTime: 30_000,
@@ -61,7 +62,9 @@ export default function DemoOffers() {
   );
   const contractOptions = useMemo(
     () =>
-      Array.from(new Set((offers ?? []).map((offer) => offer.contractType))).sort(),
+      Array.from(
+        new Set((offers ?? []).map((offer) => offer.contractType)),
+      ).sort(),
     [offers],
   );
 
@@ -83,7 +86,7 @@ export default function DemoOffers() {
         }
       />
 
-      <section className="panel p-5">
+      <section className="panel p-5 card-border-top-blue-aneti">
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <div className="relative xl:col-span-2">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -133,7 +136,8 @@ export default function DemoOffers() {
           </Select>
 
           <div className="rounded-3xl border border-border bg-primary-muted/20 px-4 py-3 text-sm text-foreground">
-            Profil validé. Vous pouvez maintenant consulter les offres compatibles.
+            Profil validé. Vous pouvez maintenant consulter les offres
+            compatibles.
           </div>
         </div>
 
@@ -159,59 +163,7 @@ export default function DemoOffers() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(offers ?? []).map((offer) => (
-            <article
-              key={offer.id}
-              className="panel flex flex-col p-5 transition-colors hover:border-accent/40"
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-base font-semibold text-foreground">
-                    {offer.title}
-                  </h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {offer.company}
-                  </p>
-                </div>
-                <ScoreBadge score={offer.estimatedMatchScore} />
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {offer.location}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  {offer.contractType}
-                </span>
-                <StatusPill label={offer.workMode} dot={false} />
-              </div>
-
-              <p className="mt-4 text-sm leading-6 text-foreground/90">
-                {offer.description}
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {(offer.requiredSkills ?? []).map((skill) => (
-                  <SkillTag key={`${offer.id}-${skill}`} label={skill} variant="matched" />
-                ))}
-              </div>
-
-              <div className="mt-5 rounded-2xl border border-border bg-surface-muted px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-foreground">
-                    Compatibilité estimée
-                  </p>
-                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
-                    <Sparkles className="h-4 w-4" />
-                    {offer.estimatedMatchScore}%
-                  </span>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Score basé sur les compétences, le niveau, l'expérience et la localisation disponibles pour la démonstration.
-                </p>
-              </div>
-            </article>
+            <OfferCardCandidat key={offer.id} offer={offer} />
           ))}
         </div>
       )}
