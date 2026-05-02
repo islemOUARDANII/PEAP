@@ -1,32 +1,45 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Briefcase, MapPin, Search } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowRight, Briefcase, Loader2, MapPin, Search } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-import { PageHeader } from "@/components/common/PageHeader";
-import { ScoreBadge } from "@/components/common/ScoreBadge";
-import { SkillTag } from "@/components/common/SkillTag";
-import { StatusPill } from "@/components/common/StatusPill";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { gatewayApi } from "@/services/api/gateway";
+import { PageHeader } from '@/components/common/PageHeader';
+import { ScoreBadge } from '@/components/common/ScoreBadge';
+import { SkillTag } from '@/components/common/SkillTag';
+import { StatusPill } from '@/components/common/StatusPill';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { gatewayApi } from '@/services/api/gateway';
+import LoadingCard from '@/components/common/LoadingCard';
+import ErrorCard from '@/components/common/ErrorCard';
 
-const normalizeScore = (value: number): number => (value <= 1 ? Math.round(value * 100) : Math.round(value));
+const normalizeScore = (value: number): number =>
+  value <= 1 ? Math.round(value * 100) : Math.round(value);
 
 export default function CandidateOffers() {
-  const [query, setQuery] = useState("");
-  const [contractType, setContractType] = useState("all");
-  const [workMode, setWorkMode] = useState("all");
-  const [governorate, setGovernorate] = useState("");
+  const [query, setQuery] = useState('');
+  const [contractType, setContractType] = useState('all');
+  const [workMode, setWorkMode] = useState('all');
+  const [governorate, setGovernorate] = useState('');
 
   const searchQuery = useQuery({
-    queryKey: ["search", "offers", { query, contractType, workMode, governorate }],
+    queryKey: [
+      'search',
+      'offers',
+      { query, contractType, workMode, governorate },
+    ],
     queryFn: () =>
       gatewayApi.search.offers({
         query,
         size: 24,
-        contract_type: contractType === "all" ? undefined : contractType,
-        work_mode: workMode === "all" ? undefined : workMode,
+        contract_type: contractType === 'all' ? undefined : contractType,
+        work_mode: workMode === 'all' ? undefined : workMode,
         governorate: governorate || undefined,
       }),
     staleTime: 30_000,
@@ -35,11 +48,16 @@ export default function CandidateOffers() {
   const offers = searchQuery.data?.results ?? [];
   const contractOptions = useMemo(
     () =>
-      Array.from(new Set(offers.map((offer) => offer.contractType).filter(Boolean))) as string[],
+      Array.from(
+        new Set(offers.map((offer) => offer.contractType).filter(Boolean)),
+      ) as string[],
     [offers],
   );
   const workModeOptions = useMemo(
-    () => Array.from(new Set(offers.map((offer) => offer.workMode).filter(Boolean))) as string[],
+    () =>
+      Array.from(
+        new Set(offers.map((offer) => offer.workMode).filter(Boolean)),
+      ) as string[],
     [offers],
   );
 
@@ -95,15 +113,14 @@ export default function CandidateOffers() {
       </div>
 
       {searchQuery.isLoading ? (
-        <div className="panel p-6 text-sm text-muted-foreground">Loading indexed offers...</div>
+        <LoadingCard text="Loading indexed offers..." />
       ) : searchQuery.isError ? (
-        <div className="panel p-6 text-sm text-destructive">
-          {searchQuery.error instanceof Error
-            ? searchQuery.error.message
-            : "Unable to load indexed offers."}
-        </div>
+        <ErrorCard
+          queryResult={searchQuery}
+          text="Unable to load indexed offers."
+        />
       ) : offers.length === 0 ? (
-        <div className="panel p-6 text-sm text-muted-foreground">
+        <div className="panel p-6 text-sm text-muted-foreground card-border-20 flex gap-2 items-center justify-center">
           No indexed results. Try syncing the search index first.
         </div>
       ) : (
@@ -117,9 +134,13 @@ export default function CandidateOffers() {
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-sm font-semibold text-foreground">{offer.title}</p>
+                    <p className="text-sm font-semibold text-foreground">
+                      {offer.title}
+                    </p>
                     <p className="mt-1 text-xs text-muted-foreground">
-                      {[offer.location, offer.contractType, offer.workMode].filter(Boolean).join(" • ")}
+                      {[offer.location, offer.contractType, offer.workMode]
+                        .filter(Boolean)
+                        .join(' • ')}
                     </p>
                   </div>
                   <ScoreBadge score={score} />
@@ -132,11 +153,14 @@ export default function CandidateOffers() {
                       {offer.location}
                     </span>
                   ) : null}
-                  {offer.status ? <StatusPill label={offer.status} dot={false} /> : null}
+                  {offer.status ? (
+                    <StatusPill label={offer.status} dot={false} />
+                  ) : null}
                 </div>
 
                 <p className="mt-4 line-clamp-3 text-sm leading-6 text-foreground/90">
-                  {offer.description || "No indexed description is available for this offer yet."}
+                  {offer.description ||
+                    'No indexed description is available for this offer yet.'}
                 </p>
 
                 <div className="mt-4 flex flex-wrap gap-1.5">
@@ -144,7 +168,9 @@ export default function CandidateOffers() {
                     <SkillTag key={skill} label={skill} variant="matched" />
                   ))}
                   {offer.skills.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No indexed skill labels available.</p>
+                    <p className="text-xs text-muted-foreground">
+                      No indexed skill labels available.
+                    </p>
                   ) : null}
                 </div>
 

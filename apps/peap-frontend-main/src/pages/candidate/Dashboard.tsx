@@ -1,19 +1,33 @@
-import { useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { ArrowRight, Briefcase, FileText, FileUp, Sparkles, TrendingUp } from "lucide-react";
-import { Link } from "react-router-dom";
+import { useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  ArrowRight,
+  Briefcase,
+  FileText,
+  FileUp,
+  Sparkles,
+  TrendingUp,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
 
-import { PageHeader } from "@/components/common/PageHeader";
-import { ScoreBadge } from "@/components/common/ScoreBadge";
-import { SkillTag } from "@/components/common/SkillTag";
-import { StatCard } from "@/components/common/StatCard";
-import { StatusPill, statusToTone } from "@/components/common/StatusPill";
-import { Button } from "@/components/ui/button";
-import { gatewayApi, inferCandidateDisplayName, inferCandidateLocation, inferSkillLabel } from "@/services/api/gateway";
+import { PageHeader } from '@/components/common/PageHeader';
+import { ScoreBadge } from '@/components/common/ScoreBadge';
+import { SkillTag } from '@/components/common/SkillTag';
+import { StatCard } from '@/components/common/StatCard';
+import { StatusPill, statusToTone } from '@/components/common/StatusPill';
+import { Button } from '@/components/ui/button';
+import {
+  gatewayApi,
+  inferCandidateDisplayName,
+  inferCandidateLocation,
+  inferSkillLabel,
+} from '@/services/api/gateway';
+import LoadingCard from '@/components/common/LoadingCard';
+import ErrorCard from '@/components/common/ErrorCard';
 
 const formatDate = (value: string | null | undefined): string => {
   if (!value) {
-    return "-";
+    return '-';
   }
 
   const parsed = new Date(value);
@@ -26,13 +40,13 @@ const formatDate = (value: string | null | undefined): string => {
 
 export default function CandidateDashboard() {
   const bundleQuery = useQuery({
-    queryKey: ["candidate", "bundle"],
+    queryKey: ['candidate', 'bundle'],
     queryFn: () => gatewayApi.candidate.getBundle(),
   });
 
   const offersQuery = useQuery({
-    queryKey: ["search", "offers", "candidate-dashboard"],
-    queryFn: () => gatewayApi.search.offers({ query: "", size: 4 }),
+    queryKey: ['search', 'offers', 'candidate-dashboard'],
+    queryFn: () => gatewayApi.search.offers({ query: '', size: 4 }),
     staleTime: 30_000,
   });
 
@@ -58,33 +72,31 @@ export default function CandidateDashboard() {
     return Math.round((completed / checkpoints.length) * 100);
   }, [bundle]);
 
-  const displayName = bundle ? inferCandidateDisplayName(bundle) : "Candidate";
-  const firstName = displayName.split(" ")[0] || displayName;
-  const displayLocation = bundle ? inferCandidateLocation(bundle) : "";
+  const displayName = bundle ? inferCandidateDisplayName(bundle) : 'Candidate';
+  const firstName = displayName.split(' ')[0] || displayName;
+  const displayLocation = bundle ? inferCandidateLocation(bundle) : '';
   const topSkills = bundle?.skills.map(inferSkillLabel) ?? [];
   const averageScore =
     offers.length > 0
       ? Math.round(
-          offers.reduce((total, item) => total + (item.score <= 1 ? item.score * 100 : item.score), 0) /
-            offers.length,
+          offers.reduce(
+            (total, item) =>
+              total + (item.score <= 1 ? item.score * 100 : item.score),
+            0,
+          ) / offers.length,
         )
       : 0;
 
   if (bundleQuery.isLoading) {
-    return (
-      <div className="panel p-6 text-sm text-muted-foreground">
-        Loading candidate dashboard...
-      </div>
-    );
+    return <LoadingCard text="Loading candidate dashboard..." />;
   }
 
   if (bundleQuery.isError) {
     return (
-      <div className="panel p-6 text-sm text-destructive">
-        {bundleQuery.error instanceof Error
-          ? bundleQuery.error.message
-          : "Unable to load the candidate dashboard."}
-      </div>
+      <ErrorCard
+        queryResult={bundleQuery}
+        text="Unable to load the candidate dashboard."
+      />
     );
   }
 
@@ -101,7 +113,11 @@ export default function CandidateDashboard() {
                 Manage CV
               </Link>
             </Button>
-            <Button asChild size="sm" className="bg-accent text-accent-foreground hover:bg-accent/90">
+            <Button
+              asChild
+              size="sm"
+              className="bg-accent text-accent-foreground hover:bg-accent/90"
+            >
               <Link to="/candidate/profile">Open profile</Link>
             </Button>
           </div>
@@ -109,22 +125,51 @@ export default function CandidateDashboard() {
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Profile completion" value={`${profileCompletion}%`} icon={FileText} />
-        <StatCard label="CV records" value={bundle?.cvRecords.length ?? 0} icon={FileUp} />
-        <StatCard label="Indexed offers" value={offersQuery.data?.total ?? 0} icon={Briefcase} />
-        <StatCard label="Average offer score" value={`${averageScore}%`} icon={TrendingUp} />
+        <StatCard
+          label="Profile completion"
+          value={`${profileCompletion}%`}
+          icon={FileText}
+          className="start-border-left-blue"
+          iconBackground={'start-background-color-blue'}
+        />
+        <StatCard
+          label="CV records"
+          value={bundle?.cvRecords.length ?? 0}
+          icon={FileUp}
+          className="start-border-left-green"
+          iconBackground={'start-background-color-green'}
+        />
+        <StatCard
+          label="Indexed offers"
+          value={offersQuery.data?.total ?? 0}
+          icon={Briefcase}
+          className="start-border-left-orange"
+          iconBackground={'start-background-color-orange'}
+        />
+        <StatCard
+          label="Average offer score"
+          value={`${averageScore}%`}
+          icon={TrendingUp}
+          className="start-border-left-teal"
+          iconBackground={'start-background-color-teal'}
+        />
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(22rem,1fr)]">
-        <section className="panel p-5">
+        <section className="panel p-5 card-border-3">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold text-foreground">Top indexed offers</h2>
+              <h2 className="text-sm font-semibold text-foreground">
+                Top indexed offers
+              </h2>
               <p className="text-xs text-muted-foreground">
                 Powered by <code>/search/offers</code> through the API Gateway.
               </p>
             </div>
-            <Link to="/candidate/offers" className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:underline">
+            <Link
+              to="/candidate/offers"
+              className="inline-flex items-center gap-1 text-xs font-medium text-accent rounded-md border border-border px-4 py-1 light-link-border-left-3"
+            >
               View all <ArrowRight className="h-3 w-3" />
             </Link>
           </div>
@@ -133,7 +178,7 @@ export default function CandidateDashboard() {
             <div className="rounded-md border border-destructive/20 bg-destructive-soft p-4 text-sm text-destructive">
               {offersQuery.error instanceof Error
                 ? offersQuery.error.message
-                : "Unable to load indexed offers."}
+                : 'Unable to load indexed offers.'}
             </div>
           ) : offers.length === 0 ? (
             <div className="rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
@@ -142,7 +187,10 @@ export default function CandidateDashboard() {
           ) : (
             <div className="space-y-3">
               {offers.map((offer) => {
-                const normalizedScore = offer.score <= 1 ? Math.round(offer.score * 100) : Math.round(offer.score);
+                const normalizedScore =
+                  offer.score <= 1
+                    ? Math.round(offer.score * 100)
+                    : Math.round(offer.score);
                 return (
                   <Link
                     key={offer.offerId}
@@ -151,13 +199,21 @@ export default function CandidateDashboard() {
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-foreground">{offer.title}</p>
+                        <p className="text-sm font-semibold text-foreground">
+                          {offer.title}
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {[offer.location, offer.contractType, offer.workMode].filter(Boolean).join(" • ")}
+                          {[offer.location, offer.contractType, offer.workMode]
+                            .filter(Boolean)
+                            .join(' • ')}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {offer.skills.slice(0, 5).map((skill) => (
-                            <SkillTag key={skill} label={skill} variant="matched" />
+                            <SkillTag
+                              key={skill}
+                              label={skill}
+                              variant="matched"
+                            />
                           ))}
                         </div>
                       </div>
@@ -171,43 +227,72 @@ export default function CandidateDashboard() {
         </section>
 
         <div className="space-y-4">
-          <section className="panel p-5">
-            <h2 className="text-sm font-semibold text-foreground">Current profile snapshot</h2>
+          <section className="panel p-5 card-border-19">
+            <h2 className="text-sm font-semibold text-foreground">
+              Current profile snapshot
+            </h2>
             <div className="mt-4 grid gap-3">
               <Info label="Candidate" value={displayName} />
-              <Info label="Location" value={displayLocation || "Location not specified"} />
-              <Info label="Primary language" value={bundle?.primaryLanguage ?? "Not specified"} />
-              <Info label="Current CV parsing status" value={bundle?.currentCv?.parsingStatus ?? "No current CV"} />
-              <Info label="Last upload" value={formatDate(bundle?.currentCv?.uploadedAt)} />
+              <Info
+                label="Location"
+                value={displayLocation || 'Location not specified'}
+              />
+              <Info
+                label="Primary language"
+                value={bundle?.primaryLanguage ?? 'Not specified'}
+              />
+              <Info
+                label="Current CV parsing status"
+                value={bundle?.currentCv?.parsingStatus ?? 'No current CV'}
+              />
+              <Info
+                label="Last upload"
+                value={formatDate(bundle?.currentCv?.uploadedAt)}
+              />
             </div>
           </section>
 
-          <section className="panel p-5">
+          <section className="panel p-5 card-border-19">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-accent" />
-              <h2 className="text-sm font-semibold text-foreground">Detected skills</h2>
+              <h2 className="text-sm font-semibold text-foreground">
+                Detected skills
+              </h2>
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
               {topSkills.length > 0 ? (
-                topSkills.slice(0, 16).map((skill) => <SkillTag key={skill} label={skill} variant="matched" />)
+                topSkills
+                  .slice(0, 16)
+                  .map((skill) => (
+                    <SkillTag key={skill} label={skill} variant="matched" />
+                  ))
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  No skills stored yet. Upload and parse a CV or add skills from the profile page.
+                  No skills stored yet. Upload and parse a CV or add skills from
+                  the profile page.
                 </p>
               )}
             </div>
           </section>
 
-          <section className="panel p-5">
-            <h2 className="text-sm font-semibold text-foreground">Recent CV activity</h2>
+          <section className="panel p-5 card-border-19">
+            <h2 className="text-sm font-semibold text-foreground">
+              Recent CV activity
+            </h2>
             <div className="mt-4 space-y-3">
               {(bundle?.cvRecords ?? []).slice(0, 4).map((record) => (
-                <div key={record.id} className="rounded-md bg-surface-muted p-3">
+                <div
+                  key={record.id}
+                  className="rounded-md bg-surface-muted p-3"
+                >
                   <div className="flex items-center justify-between gap-3">
                     <p className="text-sm font-medium text-foreground">
                       {record.originalFilename ?? record.blobName}
                     </p>
-                    <StatusPill label={record.parsingStatus} tone={statusToTone(record.parsingStatus)} />
+                    <StatusPill
+                      label={record.parsingStatus}
+                      tone={statusToTone(record.parsingStatus)}
+                    />
                   </div>
                   <p className="mt-1 text-xs text-muted-foreground">
                     Uploaded {formatDate(record.uploadedAt)}
@@ -230,7 +315,9 @@ export default function CandidateDashboard() {
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-md bg-surface-muted p-3">
-      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
       <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
     </div>
   );
