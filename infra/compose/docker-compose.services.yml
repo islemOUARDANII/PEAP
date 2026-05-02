@@ -1,0 +1,108 @@
+services:
+  api-gateway:
+    build:
+      context: ../../services/api-gateway
+      dockerfile: Dockerfile
+    container_name: matching-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../../services/api-gateway/.env
+    environment:
+      PARSING_SERVICE_URL: http://parsing-service:8001
+      MATCHING_SERVICE_URL: http://matching-service:8002
+      SEARCH_SERVICE_URL: http://search-service:8003
+      SEARCH_SERVICE_API_KEY: dev_internal_api_key_change_me
+      RECOMMENDATION_SERVICE_URL: http://recommendation-service:8004
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      REDIS_URL: redis://redis:6379/0
+      INTERNAL_API_KEY: dev_internal_api_key_change_me
+    volumes:
+      - ../../services/api-gateway/storage:/app/storage
+    networks:
+      - matching-net
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+  parsing-service:
+    build:
+      context: ../../services/parsing-service
+      dockerfile: Dockerfile
+    container_name: matching-parsing-service
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    env_file:
+      - ../../services/parsing-service/.env
+    environment:
+      INTERNAL_API_KEY: dev_internal_api_key_change_me
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks:
+      - matching-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8001
+
+  matching-service:
+    build:
+      context: ../../services/matching-service
+      dockerfile: Dockerfile
+    container_name: matching-matching-service
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    env_file:
+      - ../../services/matching-service/.env
+    environment:
+      INTERNAL_API_KEY: dev_internal_api_key_change_me
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks:
+      - matching-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8002
+
+  search-service:
+    build:
+      context: ../../services/search-service
+      dockerfile: Dockerfile
+    container_name: matching-search-service
+    restart: unless-stopped
+    ports:
+      - "8003:8003"
+    env_file:
+      - ../../services/search-service/.env
+    environment:
+      API_KEY: dev_internal_api_key_change_me
+      ES_URL: http://elasticsearch:9200
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+    networks:
+      - matching-net
+    healthcheck:
+      test: [ "CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8003
+
+  notification-service:
+    build:
+      context: ../../services/notification-service
+      dockerfile: Dockerfile
+    container_name: matching-notification-service
+    restart: unless-stopped
+    ports:
+      - "8004:8004"
+    env_file:
+      - ../../services/notification-service/.env
+    environment:
+      INTERNAL_API_KEY: dev_internal_api_key_change_me
+    networks:
+      - matching-net
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8004
+networks:
+  matching-net:
+    external: true
