@@ -490,12 +490,20 @@ def get_my_matched_offers(
     db: Session,
     current_user: CurrentUserResponse,
     *,
-    min_score: float = 50,
+    min_score: float | None = None,
+    force_refresh: bool = False,
 ) -> dict:
     job_seeker = resolve_current_job_seeker(db, current_user)
+    
+    saved_threshold = repository.get_offer_score_threshold(
+        db,
+        job_seeker["id"],
+    )
 
-    # Le front envoie 50 pour 50 %. Le moteur stocke 0.50.
-    normalized_min_score = min_score / 100 if min_score > 1 else min_score
+    effective_min_score = float(min_score) if min_score is not None else float(saved_threshold)
+
+    # Les scores sont stockés en pourcentage : 36.4, 58.66, etc.
+    normalized_min_score = effective_min_score
 
     model_version = repository.get_default_candidate_to_offer_model_version(db)
     if not model_version:
@@ -506,48 +514,186 @@ def get_my_matched_offers(
 
     active_offers_count = repository.count_active_offers(db)
 
-    try:
-        run = matching_run_repository.create_matching_run(
+    candidate_last_updated = repository.get_candidate_profile_last_updated(
+        db,
+        job_seeker["id"],
+    )
+
+    offers_last_updated = repository.get_active_offers_last_updated(db)
+
+    timestamps = [
+        value
+        for value in [candidate_last_updated, offers_last_updated]
+        if value is not None
+    ]
+
+    min_valid_created_at = max(timestamps) if timestamps else None
+
+    reusable_run = None
+
+    if not force_refresh:
+        reusable_run = repository.find_reusable_candidate_to_offer_run(
             db,
-            run_type="AUTOMATIC",
-            direction="CANDIDATE_TO_OFFER",
+            job_seeker_id=job_seeker["id"],
             model_version_id=model_version["id"],
-            launched_by_user_id=current_user.id,
-            source_entity_type="JOB_SEEKER",
-            source_entity_id=job_seeker["id"],
-            parameters_json={
-                "source": "candidate_portal",
-                "min_score": normalized_min_score,
+            min_created_at=min_valid_created_at,
+        )
+
+    if reusable_run:
+        run_id = reusable_run["id"]
+    else:
+        try:
+            run = matching_run_repository.create_matching_run(
+                db,
+                run_type="AUTOMATIC",
+                direction="CANDIDATE_TO_OFFER",
+                model_version_id=model_version["id"],
+                launched_by_user_id=current_user.id,
+                source_entity_type="JOB_SEEKER",
+                source_entity_id=job_seeker["id"],
+                parameters_json={
+                    "source": "candidate_portal",
+                    "min_score": float(normalized_min_score),
+                    "cache_strategy": "profile_and_offers_timestamp",
+                },
+            )
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            _handle_integrity_error(exc)
+
+        run_id = run["id"]
+
+        execute_matching_service_run(
+            run_id,
+            {
+                "run_id": run_id,
+                "trace_id": f"candidate-matched-offers-{run_id}",
+                "dry_run": False,
+                "admin_override": False,
             },
         )
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        _handle_integrity_error(exc)
-
-    execute_matching_service_run(
-        run["id"],
-        {
-            "run_id": run["id"],
-            "trace_id": f"candidate-matched-offers-{run['id']}",
-            "dry_run": False,
-            "admin_override": False,
-        },
-    )
 
     rows = repository.list_candidate_matching_results_with_offers(
         db,
-        run_id=run["id"],
+        run_id=run_id,
+        job_seeker_id=job_seeker["id"],
         min_score=normalized_min_score,
     )
 
     return {
         "model_code": model_version["model_code"],
         "model_version_id": model_version["id"],
-        "run_id": run["id"],
-        "min_score": normalized_min_score,
+        "run_id": run_id,
+        "min_score": float(normalized_min_score),
         "active_offers_count": active_offers_count,
         "total_results": active_offers_count,
         "matched_count": len(rows),
         "offers": rows,
+        "cache": {
+            "reused": bool(reusable_run),
+            "candidate_last_updated": candidate_last_updated.isoformat()
+            if candidate_last_updated
+            else None,
+            "offers_last_updated": offers_last_updated.isoformat()
+            if offers_last_updated
+            else None,
+            "min_valid_created_at": min_valid_created_at.isoformat()
+            if min_valid_created_at
+            else None,
+        },
     }
+
+
+def get_my_keywords(
+    db: Session,
+    current_user: CurrentUserResponse,
+) -> list[dict]:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+    return repository.list_job_seeker_keywords(db, job_seeker["id"])
+
+
+def replace_my_keywords(
+    db: Session,
+    current_user: CurrentUserResponse,
+    *,
+    keywords: list[str],
+) -> list[dict]:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    rows = repository.replace_job_seeker_keywords(
+        db,
+        job_seeker_id=job_seeker["id"],
+        keywords=keywords,
+    )
+
+    db.commit()
+    return rows
+
+
+def get_my_offer_score_threshold(
+    db: Session,
+    current_user: CurrentUserResponse,
+) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    return {
+        "min_offer_score_threshold": repository.get_offer_score_threshold(
+            db,
+            job_seeker["id"],
+        )
+    }
+
+
+def update_my_offer_score_threshold(
+    db: Session,
+    current_user: CurrentUserResponse,
+    *,
+    min_offer_score_threshold: float,
+) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    if min_offer_score_threshold < 0 or min_offer_score_threshold > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Le seuil doit être compris entre 0 et 100.",
+        )
+
+    row = repository.update_offer_score_threshold(
+        db,
+        job_seeker_id=job_seeker["id"],
+        min_offer_score_threshold=min_offer_score_threshold,
+    )
+
+    db.commit()
+    return row
+
+
+def apply_to_offer(
+    db: Session,
+    current_user: CurrentUserResponse,
+    *,
+    offer_id: str,
+    matching_result_id: str | None = None,
+    cover_message: str | None = None,
+) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    row = repository.create_job_application(
+        db,
+        job_seeker_id=job_seeker["id"],
+        offer_id=offer_id,
+        matching_result_id=matching_result_id,
+        cover_message=cover_message,
+    )
+
+    db.commit()
+    return row
+
+
+def list_my_applications(
+    db: Session,
+    current_user: CurrentUserResponse,
+) -> list[dict]:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+    return repository.list_job_applications(db, job_seeker["id"])

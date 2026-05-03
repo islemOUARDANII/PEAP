@@ -6,7 +6,6 @@ from typing import Any
 from app.engines.rtmc_mapper_adapter import map_cv_to_rtmc
 from app.engines.legacy_parsing.parser_app.config import Settings
 from app.engines.legacy_parsing.parser_app.pipeline import CVParsingPipeline
-from app.engines.rtmc_mapper_adapter import map_cv_to_rtmc
 from app.engines.geo_normalizer_adapter import enrich_cv_locations
 from app.engines.education_normalizer_adapter import normalize_education_entries
 from app.engines.language_normalizer import split_skills_and_languages
@@ -103,6 +102,35 @@ def _parse_result_to_dict(result) -> dict[str, Any]:
     }
 
 
+def _normalize_experience_entry(
+    entry: dict[str, Any],
+    default_entry_type: str = "experience",
+) -> dict[str, Any]:
+    title = (
+        entry.get("title")
+        or entry.get("job_title")
+        or entry.get("position")
+        or entry.get("role")
+    )
+
+    return {
+        "title": title,
+        "company": entry.get("company"),
+        "location": entry.get("location"),
+        "start_date": entry.get("start_date"),
+        "end_date": entry.get("end_date"),
+        "is_current": bool(entry.get("is_current") or False),
+        "description": entry.get("description"),
+        "responsibilities": entry.get("responsibilities") or [],
+        "technologies": entry.get("technologies") or [],
+        "projects": entry.get("projects") or [],
+        "duration_months": entry.get("duration_months"),
+        "duration_years": entry.get("duration_years"),
+        "entry_type": entry.get("entry_type") or default_entry_type,
+        "source_section": entry.get("source_section"),
+        "confidence": entry.get("confidence"),
+    }
+
 def _build_profile_patch(parsed_payload: dict[str, Any]) -> dict[str, Any]:
     cv_data = parsed_payload.get("cv_data") or {}
     raw_json = parsed_payload.get("raw_json") or {}
@@ -118,14 +146,27 @@ def _build_profile_patch(parsed_payload: dict[str, Any]) -> dict[str, Any]:
 
     education = cv_data.get("education") or raw_json.get("education") or []
     experience = cv_data.get("experience") or raw_json.get("experience") or []
-
+    raw_stages = cv_data.get("stages") or raw_json.get("stages") or []
+    
     skills = _extract_skills(cv_data=cv_data, raw_json=raw_json)
     languages = cv_data.get("languages") or raw_json.get("languages") or []
 
+    
     return {
         "identity": {k: v for k, v in identity.items() if v},
         "education": normalize_education_entries(education) if isinstance(education, list) else [],
-        "experience": experience if isinstance(experience, list) else [],
+        "experience": [
+            _normalize_experience_entry(item, default_entry_type="experience")
+            for item in experience
+            if isinstance(item, dict)
+        ] if isinstance(experience, list) else [],
+
+        "stages": [
+            _normalize_experience_entry(item, default_entry_type="internship")
+            for item in raw_stages
+            if isinstance(item, dict)
+        ] if isinstance(raw_stages, list) else [],
+        
         "skills": skills,
         "languages": languages if isinstance(languages, list) else [],
     }

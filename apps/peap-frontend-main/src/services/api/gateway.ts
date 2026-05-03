@@ -1,4 +1,4 @@
-import { apiJsonRequest, apiRequest } from "./client";
+import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
 
 const toStringValue = (value: unknown, fallback = ""): string =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -16,6 +16,11 @@ const toNumberValue = (value: unknown, fallback = 0): number => {
 const toBooleanValue = (value: unknown): boolean => value === true;
 
 const asArray = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : []);
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 
 const joinLocation = (...parts: Array<string | null | undefined>): string =>
   parts
@@ -76,9 +81,15 @@ export interface CandidateEducationRecord {
   levelCode?: string | null;
   levelLabel?: string | null;
   diplomaLabel?: string | null;
+  degree?: string | null;
   specialty?: string | null;
   institution?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   graduationYear?: number | null;
+  location?: string | null;
+  honors?: string | null;
+  gpa?: string | null;
   rtmcEducationNodeId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -89,9 +100,15 @@ interface CandidateEducationResponse {
   level_code?: string | null;
   level_label?: string | null;
   diploma_label?: string | null;
+  degree?: string | null;
   specialty?: string | null;
   institution?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   graduation_year?: number | null;
+  location?: string | null;
+  honors?: string | null;
+  gpa?: number | string | null;
   rtmc_education_node_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -103,10 +120,17 @@ export interface CandidateExperienceRecord {
   jobTitleRaw?: string | null;
   companyName?: string | null;
   sector?: string | null;
+  location?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  isCurrent?: boolean;
   durationMonths?: number | null;
+  durationYears?: number | null;
   description?: string | null;
+  responsibilities?: string[] | null;
+  technologies?: string[] | null;
+  projects?: Array<Record<string, unknown> | string> | null;
+  entryType?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,10 +141,17 @@ interface CandidateExperienceResponse {
   job_title_raw?: string | null;
   company_name?: string | null;
   sector?: string | null;
+  location?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  is_current?: boolean;
   duration_months?: number | null;
+  duration_years?: number | string | null;
   description?: string | null;
+  responsibilities?: string[] | null;
+  technologies?: string[] | null;
+  projects?: Array<Record<string, unknown> | string> | null;
+  entry_type?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +162,8 @@ export interface CandidateSkillRecord {
   skillLabelRaw?: string | null;
   skillNodeLabel?: string | null;
   skillNodeType?: string | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
   level?: string | null;
   years?: number | null;
   evidence?: string | null;
@@ -145,6 +178,8 @@ interface CandidateSkillResponse {
   skill_label_raw?: string | null;
   skill_node_label?: string | null;
   skill_node_type?: string | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
   level?: string | null;
   years?: number | string | null;
   evidence?: string | null;
@@ -253,8 +288,15 @@ export interface CandidateCvParseResult {
     identity: Record<string, unknown>;
     education: Array<Record<string, unknown>>;
     experience: Array<Record<string, unknown>>;
+    stages: Array<Record<string, unknown>>;
     skills: Array<Record<string, unknown>>;
     languages: Array<Record<string, unknown>>;
+    certifications: Array<Record<string, unknown>>;
+    projects: Array<Record<string, unknown>>;
+    interests: Array<Record<string, unknown> | string>;
+    preferences: Record<string, unknown>;
+    geoNormalization: Record<string, unknown>;
+    cvMetadata: Record<string, unknown>;
   };
   warnings: string[];
   parserVersion: string;
@@ -270,8 +312,15 @@ interface CandidateCvParseResponse {
     identity?: Record<string, unknown>;
     education?: Array<Record<string, unknown>>;
     experience?: Array<Record<string, unknown>>;
+    stages?: Array<Record<string, unknown>>;
     skills?: Array<Record<string, unknown>>;
     languages?: Array<Record<string, unknown>>;
+    certifications?: Array<Record<string, unknown>>;
+    projects?: Array<Record<string, unknown>>;
+    interests?: Array<Record<string, unknown> | string>;
+    preferences?: Record<string, unknown>;
+    geo_normalization?: Record<string, unknown>;
+    cv_metadata?: Record<string, unknown>;
   };
   warnings?: string[];
   parser_version: string;
@@ -308,6 +357,111 @@ export interface CandidateProfileBundle {
   preference?: CandidatePreferenceRecord | null;
   currentCv?: CandidateCvRecord | null;
   cvRecords: CandidateCvRecord[];
+}
+
+interface CandidateActiveOffersCountResponse {
+  active_offers_count: number;
+}
+
+interface JobSeekerKeywordResponse {
+  id?: string | null;
+  keyword?: string | null;
+  keyword_type?: string | null;
+  keywordType?: string | null;
+  source?: string | null;
+  weight?: number | string | null;
+  [key: string]: unknown;
+}
+
+export interface JobSeekerKeywordRecord {
+  id: string;
+  keyword: string;
+  keywordType?: string | null;
+  source?: string | null;
+  weight?: number | null;
+}
+
+interface CandidateOfferThresholdResponse {
+  min_threshold?: number | string | null;
+  threshold?: number | string | null;
+  offer_threshold?: number | string | null;
+  value?: number | string | null;
+}
+
+export interface CandidateOfferThresholdRecord {
+  minThreshold: number | null;
+}
+
+interface CandidateMatchedOfferResponse {
+  result_id: string;
+  run_id: string;
+  offer_id: string;
+  title?: string | null;
+  employer_name?: string | null;
+  description?: string | null;
+  status?: string | null;
+  contract_type?: string | null;
+  work_mode?: string | null;
+  country?: string | null;
+  governorate_code?: string | null;
+  governorate_label?: string | null;
+  delegation_code?: string | null;
+  delegation_label?: string | null;
+  published_at?: string | null;
+  deadline_at?: string | null;
+  score_global: number;
+  score_percent: number;
+  rank: number;
+  explanation_short?: string | null;
+  explanation_json?: Record<string, unknown> | null;
+  has_gaps?: boolean;
+}
+
+interface CandidateMatchedOffersResponse {
+  model_code: string;
+  model_version_id: string;
+  run_id: string;
+  min_score: number;
+  active_offers_count: number;
+  total_results: number;
+  matched_count: number;
+  offers: CandidateMatchedOfferResponse[];
+}
+
+export interface CandidateMatchedOfferRecord {
+  resultId: string;
+  runId: string;
+  offerId: string;
+  title: string;
+  employerName: string;
+  description: string | null;
+  status: string | null;
+  contractType: string | null;
+  workMode: string | null;
+  country: string | null;
+  governorateCode: string | null;
+  governorateLabel: string | null;
+  delegationCode: string | null;
+  delegationLabel: string | null;
+  publishedAt: string | null;
+  deadlineAt: string | null;
+  scoreGlobal: number;
+  scorePercent: number;
+  rank: number;
+  explanationShort: string | null;
+  explanationJson: Record<string, unknown>;
+  hasGaps: boolean;
+}
+
+export interface CandidateMatchedOffersRecord {
+  modelCode: string;
+  modelVersionId: string;
+  runId: string;
+  minScore: number;
+  activeOffersCount: number;
+  totalResults: number;
+  matchedCount: number;
+  offers: CandidateMatchedOfferRecord[];
 }
 
 interface EmployerProfileResponse {
@@ -467,7 +621,11 @@ export interface SearchOfferResult {
   contractType?: string | null;
   workMode?: string | null;
   status?: string | null;
+  companyName?: string | null;
   companyId?: string | null;
+  searchScore?: number | null;
+  publishedAt?: string | null;
+  deadlineAt?: string | null;
   score: number;
   createdAt?: string | null;
   raw: Record<string, unknown>;
@@ -970,10 +1128,16 @@ const mapCandidateEducation = (item: CandidateEducationResponse): CandidateEduca
   id: item.id,
   levelCode: item.level_code ?? null,
   levelLabel: item.level_label ?? null,
-  diplomaLabel: item.diploma_label ?? null,
+  diplomaLabel: item.diploma_label ?? item.degree ?? null,
+  degree: item.degree ?? item.diploma_label ?? null,
   specialty: item.specialty ?? null,
   institution: item.institution ?? null,
+  startDate: item.start_date ?? null,
+  endDate: item.end_date ?? null,
   graduationYear: item.graduation_year ?? null,
+  location: item.location ?? null,
+  honors: item.honors ?? null,
+  gpa: item.gpa == null ? null : String(item.gpa),
   rtmcEducationNodeId: item.rtmc_education_node_id ?? null,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
@@ -985,10 +1149,18 @@ const mapCandidateExperience = (item: CandidateExperienceResponse): CandidateExp
   jobTitleRaw: item.job_title_raw ?? null,
   companyName: item.company_name ?? null,
   sector: item.sector ?? null,
+  location: item.location ?? null,
   startDate: item.start_date ?? null,
   endDate: item.end_date ?? null,
+  isCurrent: item.is_current ?? false,
   durationMonths: item.duration_months ?? null,
+  durationYears:
+    item.duration_years == null ? null : toNumberValue(item.duration_years),
   description: item.description ?? null,
+  responsibilities: asArray(item.responsibilities),
+  technologies: asArray(item.technologies),
+  projects: asArray(item.projects),
+  entryType: item.entry_type ?? null,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
 });
@@ -999,6 +1171,11 @@ const mapCandidateSkill = (item: CandidateSkillResponse): CandidateSkillRecord =
   skillLabelRaw: item.skill_label_raw ?? null,
   skillNodeLabel: item.skill_node_label ?? null,
   skillNodeType: item.skill_node_type ?? null,
+  category:
+    item.category ??
+    toNullableString((item.metadata as Record<string, unknown> | null)?.category) ??
+    null,
+  metadata: item.metadata ?? null,
   level: item.level ?? null,
   years: item.years == null ? null : toNumberValue(item.years),
   evidence: item.evidence ?? null,
@@ -1108,19 +1285,110 @@ const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
 });
 
 const mapSearchOffer = (item: SearchOfferResponseItem): SearchOfferResult => ({
-  offerId: toStringValue(item.offer_id),
+  offerId: toStringValue(item.offer_id ?? item.id),
   title: toStringValue(item.title),
   description: item.description ?? null,
   skills: asArray(item.skills).map((skill) => toStringValue(skill)).filter(Boolean),
-  location: item.location ?? null,
+  location:
+    toNullableString(item.location) ??
+    joinLocation(
+      toNullableString(item.delegation_label),
+      toNullableString(item.governorate_label),
+      toNullableString(item.country),
+    ),
   contractType: item.contract_type ?? null,
   workMode: item.work_mode ?? null,
   status: item.status ?? null,
+  companyName:
+    toNullableString(item.employer_name) ??
+    toNullableString(item.company_name) ??
+    toNullableString(item.company) ??
+    toNullableString(item.organization),
   companyId: item.company_id ?? null,
-  score: toNumberValue(item.score),
+  searchScore: Object.prototype.hasOwnProperty.call(item, "score")
+    ? item.score == null
+      ? null
+      : toNumberValue(item.score)
+    : null,
+  publishedAt: toNullableString(item.published_at) ?? toNullableString(item.created_at),
+  deadlineAt: toNullableString(item.deadline_at),
+  score: item.score == null ? 0 : toNumberValue(item.score),
   createdAt: item.created_at ?? null,
   raw: item,
 });
+
+const mapJobSeekerKeyword = (
+  item: JobSeekerKeywordResponse | string,
+  index: number,
+): JobSeekerKeywordRecord | null => {
+  if (typeof item === "string") {
+    const keyword = toNullableString(item);
+    if (!keyword) {
+      return null;
+    }
+
+    return {
+      id: `keyword-${index + 1}`,
+      keyword,
+      keywordType: null,
+      source: null,
+      weight: null,
+    };
+  }
+
+  const keyword =
+    toNullableString(item.keyword) ??
+    toNullableString(item.label) ??
+    toNullableString(item.name);
+
+  if (!keyword) {
+    return null;
+  }
+
+  return {
+    id: toStringValue(item.id, `keyword-${index + 1}`),
+    keyword,
+    keywordType: toNullableString(item.keyword_type ?? item.keywordType),
+    source: toNullableString(item.source),
+    weight: item.weight == null ? null : toNumberValue(item.weight),
+  };
+};
+
+const mapCandidateOfferThreshold = (
+  item: CandidateOfferThresholdResponse | number | string | null,
+): CandidateOfferThresholdRecord | null => {
+  if (item == null) {
+    return null;
+  }
+
+  if (typeof item === "number" || typeof item === "string") {
+    return {
+      minThreshold: toNumberValue(item),
+    };
+  }
+
+  const minThreshold =
+    item.min_threshold ??
+    item.threshold ??
+    item.offer_threshold ??
+    item.value;
+
+  return {
+    minThreshold: minThreshold == null ? null : toNumberValue(minThreshold),
+  };
+};
+
+const normalizeKeywordPayload = (keywords: string[]): string[] =>
+  Array.from(
+    new Set(
+      keywords
+        .map((keyword) => toNullableString(keyword))
+        .filter((keyword): keyword is string => Boolean(keyword)),
+    ),
+  );
+
+const isUnsupportedPayloadError = (error: unknown): error is ApiServiceError =>
+  error instanceof ApiServiceError && [400, 404, 405, 422].includes(error.status);
 
 const mapSearchCandidate = (item: SearchCandidateResponseItem): SearchCandidateResult => ({
   candidateId: toStringValue(item.candidate_id),
@@ -1326,6 +1594,46 @@ const mapAuditEvent = (item: AuditEventResponse): AuditEventRecord => ({
   errorCode: item.error_code ?? null,
   errorMessage: item.error_message ?? null,
   metadata: item.metadata ?? {},
+});
+
+const mapCandidateMatchedOffer = (
+  item: CandidateMatchedOfferResponse,
+): CandidateMatchedOfferRecord => ({
+  resultId: item.result_id,
+  runId: item.run_id,
+  offerId: item.offer_id,
+  title: toStringValue(item.title, "Offre non renseignée"),
+  employerName: toStringValue(item.employer_name, "Entreprise non renseignée"),
+  description: item.description ?? null,
+  status: item.status ?? null,
+  contractType: item.contract_type ?? null,
+  workMode: item.work_mode ?? null,
+  country: item.country ?? null,
+  governorateCode: item.governorate_code ?? null,
+  governorateLabel: item.governorate_label ?? null,
+  delegationCode: item.delegation_code ?? null,
+  delegationLabel: item.delegation_label ?? null,
+  publishedAt: item.published_at ?? null,
+  deadlineAt: item.deadline_at ?? null,
+  scoreGlobal: toNumberValue(item.score_global),
+  scorePercent: toNumberValue(item.score_percent),
+  rank: toNumberValue(item.rank),
+  explanationShort: item.explanation_short ?? null,
+  explanationJson: item.explanation_json ?? {},
+  hasGaps: Boolean(item.has_gaps),
+});
+
+const mapCandidateMatchedOffers = (
+  payload: CandidateMatchedOffersResponse,
+): CandidateMatchedOffersRecord => ({
+  modelCode: payload.model_code,
+  modelVersionId: payload.model_version_id,
+  runId: payload.run_id,
+  minScore: toNumberValue(payload.min_score),
+  activeOffersCount: toNumberValue(payload.active_offers_count),
+  totalResults: toNumberValue(payload.total_results),
+  matchedCount: toNumberValue(payload.matched_count),
+  offers: asArray(payload.offers).map(mapCandidateMatchedOffer),
 });
 
 export const gatewayApi = {
@@ -1574,6 +1882,160 @@ export const gatewayApi = {
         method: "DELETE",
       });
     },
+
+    async getKeywords(): Promise<JobSeekerKeywordRecord[]> {
+      const payload = await apiRequest<Array<JobSeekerKeywordResponse | string>>(
+        "/candidates/me/keywords",
+        { method: "GET" },
+      );
+
+      const seen = new Set<string>();
+
+      return asArray(payload)
+        .map((item, index) => mapJobSeekerKeyword(item, index))
+        .filter((item): item is JobSeekerKeywordRecord => Boolean(item))
+        .filter((item) => {
+          const key = item.keyword.trim().toLowerCase();
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+    },
+
+    async replaceKeywords(keywords: string[]): Promise<JobSeekerKeywordRecord[]> {
+      const normalizedKeywords = normalizeKeywordPayload(keywords);
+      const payloadVariants: unknown[] = [
+        { keywords: normalizedKeywords },
+        normalizedKeywords,
+        normalizedKeywords.map((keyword) => ({ keyword })),
+      ];
+
+      let lastError: unknown = null;
+
+      for (const payload of payloadVariants) {
+        try {
+          const response = await apiJsonRequest<Array<JobSeekerKeywordResponse | string>>(
+            "/candidates/me/keywords",
+            "PUT",
+            payload,
+          );
+
+          const seen = new Set<string>();
+
+          return asArray(response)
+            .map((item, index) => mapJobSeekerKeyword(item, index))
+            .filter((item): item is JobSeekerKeywordRecord => Boolean(item))
+            .filter((item) => {
+              const key = item.keyword.trim().toLowerCase();
+              if (seen.has(key)) {
+                return false;
+              }
+              seen.add(key);
+              return true;
+            });
+        } catch (error) {
+          if (!isUnsupportedPayloadError(error) || [404, 405].includes(error.status)) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Impossible de mettre à jour les mots-clés.");
+    },
+
+    updateKeywords(keywords: string[]): Promise<JobSeekerKeywordRecord[]> {
+      return gatewayApi.candidate.replaceKeywords(keywords);
+    },
+
+    async getOfferThreshold(): Promise<CandidateOfferThresholdRecord | null> {
+      const payload = await apiRequest<CandidateOfferThresholdResponse | number | string | null>(
+        "/candidates/me/preferences/offer-threshold",
+        { method: "GET" },
+      );
+
+      return mapCandidateOfferThreshold(payload);
+    },
+
+    async updateOfferThreshold(
+      minThreshold: number,
+    ): Promise<CandidateOfferThresholdRecord | null> {
+      const payloadVariants: unknown[] = [
+        { min_threshold: minThreshold },
+        { threshold: minThreshold },
+        minThreshold,
+      ];
+
+      let lastError: unknown = null;
+
+      for (const payload of payloadVariants) {
+        try {
+          const response = await apiJsonRequest<
+            CandidateOfferThresholdResponse | number | string | null
+          >(
+            "/candidates/me/preferences/offer-threshold",
+            "PUT",
+            payload,
+          );
+
+          return mapCandidateOfferThreshold(response);
+        } catch (error) {
+          if (!isUnsupportedPayloadError(error) || [404, 405].includes(error.status)) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Impossible de mettre à jour le seuil des offres.");
+    },
+
+    getActiveOffersCount: async (): Promise<number> => {
+      const payload = await apiRequest<CandidateActiveOffersCountResponse>(
+        "/candidates/me/offers/active-count",
+        { method: "GET" },
+      );
+
+      return toNumberValue(payload.active_offers_count);
+    },
+
+    getMatchedOffers: async (
+      minScore?: number,
+    ): Promise<CandidateMatchedOffersRecord> => {
+      const payload = await apiRequest<CandidateMatchedOffersResponse>(
+        "/candidates/me/matched-offers",
+        { method: "GET" },
+        typeof minScore === "number"
+          ? {
+              query: {
+                min_score: minScore,
+              },
+            }
+          : undefined,
+      );
+
+      return mapCandidateMatchedOffers(payload);
+    },
+
+    applyToOffer: async (payload: {
+      offer_id: string;
+      matching_result_id?: string | null;
+      cover_message?: string | null;
+    }): Promise<Record<string, unknown> | null> =>
+      apiJsonRequest<Record<string, unknown> | null>(
+        "/candidates/me/applications",
+        "POST",
+        payload,
+      ),
+
     async parseCv(cvRecordId: string): Promise<CandidateCvParseResult> {
       const payload = await apiRequest<CandidateCvParseResponse>(
         `/candidates/me/cv/${encodeURIComponent(cvRecordId)}/parse`,
@@ -1590,8 +2052,16 @@ export const gatewayApi = {
           identity: payload.extracted_profile_patch?.identity ?? {},
           education: payload.extracted_profile_patch?.education ?? [],
           experience: payload.extracted_profile_patch?.experience ?? [],
+          stages: payload.extracted_profile_patch?.stages ?? [],
           skills: payload.extracted_profile_patch?.skills ?? [],
           languages: payload.extracted_profile_patch?.languages ?? [],
+          certifications: payload.extracted_profile_patch?.certifications ?? [],
+          projects: payload.extracted_profile_patch?.projects ?? [],
+          interests: payload.extracted_profile_patch?.interests ?? [],
+          preferences: payload.extracted_profile_patch?.preferences ?? {},
+          geoNormalization:
+            payload.extracted_profile_patch?.geo_normalization ?? {},
+          cvMetadata: payload.extracted_profile_patch?.cv_metadata ?? {},
         },
         warnings: payload.warnings ?? [],
         parserVersion: payload.parser_version,
@@ -1793,18 +2263,42 @@ export const gatewayApi = {
     },
   },
   search: {
-    async offers(payload: Record<string, unknown>): Promise<SearchOffersResponse> {
+    async offers(payload: {
+      query?: string;
+      size?: number;
+      filters?: Record<string, unknown>;
+      [key: string]: unknown;
+    }): Promise<SearchOffersResponse> {
       const response = await apiJsonRequest<Record<string, unknown>>(
         "/search/offers",
         "POST",
         payload,
       );
 
+      const data = asRecord(response.data);
+      const meta = asRecord(response.meta);
+      const pagination = asRecord(response.pagination);
+      const resolvedResults =
+        asArray(response.results as SearchOfferResponseItem[] | undefined).length > 0
+          ? asArray(response.results as SearchOfferResponseItem[] | undefined)
+          : asArray(response.items as SearchOfferResponseItem[] | undefined).length > 0
+            ? asArray(response.items as SearchOfferResponseItem[] | undefined)
+            : asArray(data.results as SearchOfferResponseItem[] | undefined).length > 0
+              ? asArray(data.results as SearchOfferResponseItem[] | undefined)
+              : asArray(data.items as SearchOfferResponseItem[] | undefined);
+      const total =
+        response.total ??
+        pagination.total ??
+        meta.total ??
+        data.total ??
+        response.count ??
+        resolvedResults.length;
+
       return {
-        total: toNumberValue(response.total),
+        total: toNumberValue(total, resolvedResults.length),
         mode: toNullableString(response.mode),
         query: toNullableString(response.query),
-        results: asArray(response.results as SearchOfferResponseItem[]).map(mapSearchOffer),
+        results: resolvedResults.map(mapSearchOffer),
         raw: response,
       };
     },

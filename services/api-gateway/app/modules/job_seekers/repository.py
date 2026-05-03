@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from datetime import datetime
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -883,6 +884,7 @@ def list_candidate_matching_results_with_offers(
     db: Session,
     *,
     run_id: str,
+    job_seeker_id: str,
     min_score: float,
 ) -> list[dict]:
     return _fetch_all(
@@ -899,6 +901,9 @@ def list_candidate_matching_results_with_offers(
             jo.work_mode,
             jo.country,
             jo.governorate_code,
+            (ja.id IS NOT NULL) AS already_applied,
+            ja.id::text AS application_id,
+            ja.status AS application_status,
             g.libelle_gouvernorat AS governorate_label,
             jo.delegation_code,
             d.libelle_delegation AS delegation_label,
@@ -906,7 +911,11 @@ def list_candidate_matching_results_with_offers(
             jo.deadline_at,
             COALESCE(e.commercial_name, e.legal_name) AS employer_name,
             mr.score_global::float8 AS score_global,
-            ROUND((mr.score_global::numeric * 100), 2)::float8 AS score_percent,
+            CASE
+            WHEN mr.score_global <= 1
+                THEN ROUND((mr.score_global::numeric * 100), 2)::float8
+                    ELSE ROUND(mr.score_global::numeric, 2)::float8
+                END AS score_percent,
             mr.rank,
             mr.explanation_short,
             COALESCE(mr.explanation_json, '{}'::jsonb) AS explanation_json,
@@ -925,6 +934,9 @@ def list_candidate_matching_results_with_offers(
             ON g.code_gouvernorat = jo.governorate_code
         LEFT JOIN taxonomy.ref_n_delegat d
             ON d.code_delegation = jo.delegation_code
+        LEFT JOIN aneti.job_application ja
+            ON ja.offer_id = jo.id
+        AND ja.job_seeker_id = CAST(:job_seeker_id AS uuid)    
         WHERE mr.run_id = CAST(:run_id AS uuid)
           AND mr.score_global >= :min_score
           AND jo.status IN ('PUBLISHED', 'ACTIVE')
@@ -932,6 +944,312 @@ def list_candidate_matching_results_with_offers(
         """,
         {
             "run_id": run_id,
+            "job_seeker_id": job_seeker_id,
             "min_score": min_score,
         },
+    )
+
+def get_candidate_profile_last_updated(db: Session, job_seeker_id: str) -> datetime | None:
+    row = _fetch_one(
+        db,
+        """
+        SELECT MAX(updated_at) AS last_updated
+        FROM (
+            SELECT updated_at
+            FROM aneti.job_seeker
+            WHERE id = CAST(:job_seeker_id AS uuid)
+
+            UNION ALL
+
+            SELECT updated_at
+            FROM aneti.job_seeker_skill
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+
+            UNION ALL
+
+            SELECT updated_at
+            FROM aneti.job_seeker_language
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+
+            UNION ALL
+
+            SELECT updated_at
+            FROM aneti.job_seeker_education
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+
+            UNION ALL
+
+            SELECT updated_at
+            FROM aneti.job_seeker_experience
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+
+            UNION ALL
+
+            SELECT updated_at
+            FROM aneti.job_seeker_preference
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+        ) profile_updates;
+        """,
+        {"job_seeker_id": job_seeker_id},
+    )
+
+    return row["last_updated"] if row else None
+
+def get_active_offers_last_updated(db: Session) -> datetime | None:
+    row = _fetch_one(
+        db,
+        """
+        SELECT MAX(last_updated) AS last_updated
+        FROM (
+            SELECT updated_at AS last_updated
+            FROM aneti.job_offer
+            WHERE status IN ('PUBLISHED', 'ACTIVE')
+
+            UNION ALL
+
+            SELECT r.updated_at AS last_updated
+            FROM aneti.job_offer_requirement r
+            JOIN aneti.job_offer o
+                ON o.id = r.offer_id
+            WHERE o.status IN ('PUBLISHED', 'ACTIVE')
+        ) offer_updates;
+        """,
+    )
+
+    return row["last_updated"] if row else None
+
+def find_reusable_candidate_to_offer_run(
+    db: Session,
+    *,
+    job_seeker_id: str,
+    model_version_id: str,
+    min_created_at: datetime | None,
+) -> dict | None:
+    return _fetch_one(
+        db,
+        """
+        SELECT
+            id::text AS id,
+            status,
+            started_at,
+            finished_at
+        FROM matching.matching_run
+        WHERE direction = 'CANDIDATE_TO_OFFER'
+          AND model_version_id = CAST(:model_version_id AS uuid)
+          AND source_entity_type = 'JOB_SEEKER'
+          AND source_entity_id = :job_seeker_id
+          AND status IN ('COMPLETED')
+          AND (
+                :min_created_at IS NULL
+                OR started_at >= :min_created_at
+          )
+        ORDER BY started_at DESC
+        LIMIT 1;
+        """,
+        {
+            "job_seeker_id": job_seeker_id,
+            "model_version_id": model_version_id,
+            "min_created_at": min_created_at,
+        },
+    )
+
+
+def list_job_seeker_keywords(db: Session, job_seeker_id: str) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            id::text AS id,
+            keyword,
+            keyword_type,
+            source,
+            weight::float8 AS weight,
+            created_at,
+            updated_at
+        FROM aneti.job_seeker_keyword
+        WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+        ORDER BY weight DESC, keyword ASC;
+        """,
+        {"job_seeker_id": job_seeker_id},
+    )
+
+
+def replace_job_seeker_keywords(
+    db: Session,
+    *,
+    job_seeker_id: str,
+    keywords: list[str],
+) -> list[dict]:
+    cleaned_keywords = []
+    seen = set()
+
+    for keyword in keywords or []:
+        value = str(keyword or "").strip()
+        if not value:
+            continue
+
+        key = value.lower()
+        if key in seen:
+            continue
+
+        seen.add(key)
+        cleaned_keywords.append(value)
+
+    db.execute(
+        text("""
+            DELETE FROM aneti.job_seeker_keyword
+            WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+        """),
+        {"job_seeker_id": job_seeker_id},
+    )
+
+    for keyword in cleaned_keywords:
+        db.execute(
+            text("""
+                INSERT INTO aneti.job_seeker_keyword (
+                    job_seeker_id,
+                    keyword,
+                    keyword_type,
+                    source,
+                    weight
+                )
+                VALUES (
+                    CAST(:job_seeker_id AS uuid),
+                    :keyword,
+                    'INTEREST',
+                    'MANUAL',
+                    1.00
+                )
+            """),
+            {
+                "job_seeker_id": job_seeker_id,
+                "keyword": keyword,
+            },
+        )
+
+    return list_job_seeker_keywords(db, job_seeker_id)
+
+
+def get_offer_score_threshold(db: Session, job_seeker_id: str) -> float:
+    row = _fetch_one(
+        db,
+        """
+        SELECT min_offer_score_threshold::float8 AS threshold
+        FROM aneti.job_seeker_preference
+        WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+        LIMIT 1;
+        """,
+        {"job_seeker_id": job_seeker_id},
+    )
+
+    if not row:
+        return 50.0
+
+    return float(row["threshold"] or 50.0)
+
+
+def update_offer_score_threshold(
+    db: Session,
+    *,
+    job_seeker_id: str,
+    min_offer_score_threshold: float,
+) -> dict:
+    db.execute(
+        text("""
+            INSERT INTO aneti.job_seeker_preference (
+                job_seeker_id,
+                min_offer_score_threshold
+            )
+            VALUES (
+                CAST(:job_seeker_id AS uuid),
+                :threshold
+            )
+            ON CONFLICT (job_seeker_id)
+            DO UPDATE SET
+                min_offer_score_threshold = EXCLUDED.min_offer_score_threshold,
+                updated_at = now()
+        """),
+        {
+            "job_seeker_id": job_seeker_id,
+            "threshold": min_offer_score_threshold,
+        },
+    )
+
+    return {
+        "min_offer_score_threshold": min_offer_score_threshold,
+    }
+
+
+def create_job_application(
+    db: Session,
+    *,
+    job_seeker_id: str,
+    offer_id: str,
+    matching_result_id: str | None = None,
+    cover_message: str | None = None,
+) -> dict:
+    return _fetch_one(
+        db,
+        """
+        INSERT INTO aneti.job_application (
+            job_seeker_id,
+            offer_id,
+            matching_result_id,
+            cover_message,
+            status
+        )
+        VALUES (
+            CAST(:job_seeker_id AS uuid),
+            CAST(:offer_id AS uuid),
+            CASE
+                WHEN :matching_result_id IS NULL OR :matching_result_id = ''
+                    THEN NULL
+                ELSE CAST(:matching_result_id AS uuid)
+            END,
+            :cover_message,
+            'APPLIED'
+        )
+        ON CONFLICT (job_seeker_id, offer_id)
+        DO UPDATE SET
+            matching_result_id = COALESCE(EXCLUDED.matching_result_id, aneti.job_application.matching_result_id),
+            cover_message = COALESCE(EXCLUDED.cover_message, aneti.job_application.cover_message),
+            status = 'APPLIED',
+            updated_at = now()
+        RETURNING
+            id::text AS id,
+            job_seeker_id::text AS job_seeker_id,
+            offer_id::text AS offer_id,
+            matching_result_id::text AS matching_result_id,
+            status,
+            cover_message,
+            applied_at,
+            updated_at;
+        """,
+        {
+            "job_seeker_id": job_seeker_id,
+            "offer_id": offer_id,
+            "matching_result_id": matching_result_id,
+            "cover_message": cover_message,
+        },
+    )
+
+
+def list_job_applications(db: Session, job_seeker_id: str) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            id::text AS id,
+            job_seeker_id::text AS job_seeker_id,
+            offer_id::text AS offer_id,
+            matching_result_id::text AS matching_result_id,
+            status,
+            cover_message,
+            applied_at,
+            updated_at
+        FROM aneti.job_application
+        WHERE job_seeker_id = CAST(:job_seeker_id AS uuid)
+        ORDER BY applied_at DESC;
+        """,
+        {"job_seeker_id": job_seeker_id},
     )

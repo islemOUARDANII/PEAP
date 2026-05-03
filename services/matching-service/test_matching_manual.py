@@ -3,9 +3,8 @@ from sqlalchemy import text
 from app.db.session import SessionLocal
 from app.repositories.candidate_repository import load_candidate_payload
 from app.repositories.offer_repository import load_offer_payload
-from app.repositories.model_config_repository import _default_params
 from app.engines.scoring_adapter import compute_matching_score
-
+from app.repositories.model_config_repository import load_model_config
 
 OFFER_ID = "4ea5eecc-7acd-4b69-994c-4bd703fd70c6"
 JOB_SEEKER_ID = "895c44f2-81ac-4187-8ade-ce7b8d20cb36"
@@ -56,7 +55,7 @@ def load_model_config_from_db(db, model_version_id: str) -> dict:
 
     weights = {}
     hard_filters = []
-    params = _default_params()
+    params = load_model_config(db, model_version_id)
 
     for row in rows:
         criterion_code = str(row["criterion_code"]).strip().upper()
@@ -145,9 +144,9 @@ def main():
         results = []
 
         for model in models:
-            model_config = load_model_config_from_db(
+            model_config = load_model_config(
                 db=db,
-                model_version_id=str(model["model_version_id"]),
+                model_version_id=model["model_version_id"],
             )
 
             result = compute_matching_score(candidate, offer, model_config)

@@ -6,8 +6,8 @@ import {
   CircleAlert,
   FileText,
   Layers3,
+  Search,
   Sparkles,
-  Target,
   type LucideIcon,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -27,51 +27,17 @@ import {
   type CandidateProfileBundle,
 } from '@/services/api/gateway';
 import {
-  getCandidateMatchingOffers,
-  candidateMatchingUnavailableMessage,
-} from '@/services/candidate/candidateMatchingOffers';
-import {
-  candidateInterestKeywords,
-  getStoredCandidateMinimumOfferScore,
-} from '@/services/candidate/candidatePortalPreferences';
+  getAllPublishedOffers,
+  getInterestingOffers,
+  getRecommendedOffers,
+  MATCHING_UNAVAILABLE_MESSAGE,
+  SEARCH_UNAVAILABLE_MESSAGE,
+} from '@/services/candidate/candidateOffers';
+import { cleanText, formatDate } from '@/services/candidate/candidateOfferUtils';
 
 const PROFILE_COMPLETION_SECTION_ID = 'completion-profil';
 
-const formatDate = (value: string | null | undefined): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toLocaleDateString('fr-FR');
-};
-
 const unique = (values: string[]): string[] => Array.from(new Set(values));
-
-const cleanText = (value: string | null | undefined): string | null => {
-  if (!value) {
-    return null;
-  }
-
-  const normalized = value.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  if (
-    /^(non specifie|non spécifié|not specified|null|undefined)$/i.test(
-      normalized,
-    )
-  ) {
-    return null;
-  }
-
-  return normalized;
-};
 
 type ProfileCompletionItem = {
   label: string;
@@ -118,8 +84,7 @@ const buildProfileCompletionItems = (
     {
       label: 'Expérience',
       completed: bundle.experience.length > 0,
-      missing:
-        bundle.experience.length > 0 ? [] : ['Au moins une expérience'],
+      missing: bundle.experience.length > 0 ? [] : ['Au moins une expérience'],
     },
     {
       label: 'Compétences',
@@ -141,20 +106,33 @@ const buildProfileCompletionItems = (
 
 export default function CandidateDashboard() {
   const navigate = useNavigate();
-  const minimumScore = useMemo(
-    () => getStoredCandidateMinimumOfferScore(),
-    [],
-  );
 
   const bundleQuery = useQuery({
     queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
   });
 
-  const matchingOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), bundleQuery.data?.id ?? 'none'],
-    queryFn: () => getCandidateMatchingOffers(bundleQuery.data!.id),
-    enabled: Boolean(bundleQuery.data?.id),
+  const keywordsQuery = useQuery({
+    queryKey: [...queryKeys.candidate.profile(), 'keywords'],
+    queryFn: () => gatewayApi.candidate.getKeywords(),
+    staleTime: 5 * 60_000,
+  });
+
+  const interestingOffersQuery = useQuery({
+    queryKey: [...queryKeys.candidate.jobOffers(), 'interesting'],
+    queryFn: () => getInterestingOffers(),
+    staleTime: 5 * 60_000,
+  });
+
+  const recommendedOffersQuery = useQuery({
+    queryKey: [...queryKeys.candidate.jobOffers(), 'recommended'],
+    queryFn: () => getRecommendedOffers(),
+    staleTime: 5 * 60_000,
+  });
+
+  const allOffersQuery = useQuery({
+    queryKey: [...queryKeys.candidate.jobOffers(), 'all'],
+    queryFn: () => getAllPublishedOffers(),
     staleTime: 5 * 60_000,
   });
 
@@ -176,19 +154,6 @@ export default function CandidateDashboard() {
     return Math.round((completedCount / profileCompletionItems.length) * 100);
   }, [profileCompletionItems]);
 
-  const matchingData = matchingOffersQuery.data;
-  const compatibleOffers = useMemo(
-    () =>
-      (matchingData?.offers ?? []).filter(
-        (offer) => offer.scoreGlobal >= minimumScore,
-      ),
-    [matchingData?.offers, minimumScore],
-  );
-
-  // Temporaire: cette box réutilise le même calcul que "Offres compatibles"
-  // jusqu’à ce qu’une logique dédiée distingue les recommandations.
-  const recommendedOffersCount = compatibleOffers.length;
-
   const missingProfileItems = useMemo(
     () =>
       unique(
@@ -201,12 +166,11 @@ export default function CandidateDashboard() {
     [profileCompletionItems],
   );
 
-  const newOffers = compatibleOffers.slice(0, 3);
   const displayName = bundle ? inferCandidateDisplayName(bundle) : 'Candidat';
   const displayLocation = bundle ? inferCandidateLocation(bundle) : '';
-  const matchingUnavailable =
-    matchingData?.matchingAvailable === false ||
-    matchingOffersQuery.isError;
+  const highlightedRecommendedOffers =
+    recommendedOffersQuery.data?.offers.slice(0, 3) ?? [];
+  const keywords = keywordsQuery.data ?? [];
 
   if (bundleQuery.isLoading) {
     return <LoadingCard text="Chargement du tableau de bord candidat..." />;
@@ -244,68 +208,73 @@ export default function CandidateDashboard() {
               ?.scrollIntoView({ behavior: 'smooth', block: 'start' })
           }
           className="start-border-left-blue"
-          iconBackground={'start-background-color-blue'}
+          iconBackground="start-background-color-blue"
         />
         <DashboardActionCard
-          icon={Target}
-          title="Offres compatibles"
+          icon={Search}
+          title="Offres qui peuvent vous intéresser"
           value={
-            matchingOffersQuery.isLoading
+            interestingOffersQuery.isLoading
               ? '...'
-              : matchingUnavailable
+              : interestingOffersQuery.isError
                 ? '--'
-                : compatibleOffers.length
+                : interestingOffersQuery.data?.total ?? 0
           }
           hint={
-            matchingUnavailable
-              ? candidateMatchingUnavailableMessage
-              : `Score supérieur ou égal à ${minimumScore}%`
+            interestingOffersQuery.isError
+              ? SEARCH_UNAVAILABLE_MESSAGE
+              : interestingOffersQuery.data?.message ??
+                'Offres trouvées à partir de vos centres d’intérêt.'
           }
-          onClick={() => navigate('/candidate/offers')}
+          onClick={() => navigate('/candidate/offers?tab=interesting')}
           className="start-border-left-green"
-          iconBackground={'start-background-color-green'}
+          iconBackground="start-background-color-green"
         />
         <DashboardActionCard
           icon={Sparkles}
           title="Offres recommandées"
           value={
-            matchingOffersQuery.isLoading
+            recommendedOffersQuery.isLoading
               ? '...'
-              : matchingUnavailable
+              : recommendedOffersQuery.isError
                 ? '--'
-                : recommendedOffersCount
+                : recommendedOffersQuery.data?.total ?? 0
           }
           hint={
-            matchingUnavailable
-              ? candidateMatchingUnavailableMessage
-              : 'Version provisoire basée sur les résultats de matching'
+            recommendedOffersQuery.isError
+              ? MATCHING_UNAVAILABLE_MESSAGE
+              : recommendedOffersQuery.data?.total
+                ? 'Recommandations issues du matching de votre profil.'
+                : 'Aucune offre recommandée pour le moment.'
           }
-          onClick={() => navigate('/candidate/offers')}
+          onClick={() => navigate('/candidate/offers?tab=recommended')}
           className="start-border-left-orange"
-          iconBackground={'start-background-color-orange'}
+          iconBackground="start-background-color-orange"
         />
         <DashboardActionCard
           icon={Layers3}
           title="Toutes les offres actives"
           value={
-            matchingOffersQuery.isLoading
+            allOffersQuery.isLoading
               ? '...'
-              : matchingData?.activeOffersCount ?? '--'
+              : allOffersQuery.isError
+                ? '--'
+                : allOffersQuery.data?.total ?? 0
           }
           hint={
-            matchingData?.activeOffersCount == null
-              ? 'Total des offres actives indisponible pour le moment'
-              : 'Nombre d’offres actuellement actives'
+            allOffersQuery.isError
+              ? SEARCH_UNAVAILABLE_MESSAGE
+              : 'Nombre total d’offres publiées et actives.'
           }
-          onClick={() => navigate('/candidate/offers')}
+          onClick={() => navigate('/candidate/offers?tab=all')}
           className="start-border-left-teal"
-          iconBackground={'start-background-color-teal'}
+          iconBackground="start-background-color-teal"
         />
       </div>
 
       <section
         id={PROFILE_COMPLETION_SECTION_ID}
-        className="panel p-6 scroll-mt-24 card-border-top"
+        className="panel scroll-mt-24 p-6 card-border-top"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -336,16 +305,15 @@ export default function CandidateDashboard() {
                     {item.label}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {item.completed
-                      ? 'Section complète.'
-                      : item.missing.join(', ')}
+                    {item.completed ? 'Section complète.' : item.missing.join(', ')}
                   </p>
                 </div>
                 <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${item.completed
-                    ? 'bg-success-soft text-success'
-                    : 'bg-warning-soft text-warning'
-                    }`}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${
+                    item.completed
+                      ? 'bg-success-soft text-success'
+                      : 'bg-warning-soft text-warning'
+                  }`}
                 >
                   {item.completed ? (
                     <CheckCircle2 className="h-3.5 w-3.5" />
@@ -385,15 +353,15 @@ export default function CandidateDashboard() {
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-foreground">
-                Nouvelles offres
+                Offres recommandées à la une
               </h2>
               <p className="text-sm text-muted-foreground">
-                Offres actuellement au-dessus de votre seuil minimum.
+                Offres réellement recommandées par le matching de votre profil.
               </p>
             </div>
             <button
               type="button"
-              onClick={() => navigate('/candidate/offers')}
+              onClick={() => navigate('/candidate/offers?tab=recommended')}
               className="inline-flex items-center gap-1 text-sm font-medium text-accent"
             >
               Voir les offres <ArrowRight className="h-4 w-4" />
@@ -401,28 +369,29 @@ export default function CandidateDashboard() {
           </div>
 
           <div className="mt-5 space-y-3">
-            {matchingOffersQuery.isLoading ? (
+            {recommendedOffersQuery.isLoading ? (
               <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-                Chargement des offres compatibles...
+                Chargement des offres recommandées...
               </div>
-            ) : matchingUnavailable ? (
+            ) : recommendedOffersQuery.isError ? (
               <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-                {matchingData?.unavailableMessage ??
-                  candidateMatchingUnavailableMessage}
+                {MATCHING_UNAVAILABLE_MESSAGE}
               </div>
-            ) : newOffers.length === 0 ? (
+            ) : highlightedRecommendedOffers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
-                Aucune nouvelle offre à afficher pour le moment.
+                Aucune offre recommandée pour le moment.
               </div>
             ) : (
-              newOffers.map((offer) => {
+              highlightedRecommendedOffers.map((offer) => {
                 const publishedAt = formatDate(offer.publishedAt);
 
                 return (
                   <button
                     key={offer.matchingResultId}
                     type="button"
-                    onClick={() => navigate('/candidate/offers')}
+                    onClick={() =>
+                      navigate('/candidate/offers?tab=recommended')
+                    }
                     className="w-full rounded-2xl border border-border bg-background p-4 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted"
                   >
                     <div className="flex items-start justify-between gap-3">
@@ -443,14 +412,14 @@ export default function CandidateDashboard() {
                         <div className="mt-3 flex flex-wrap gap-1.5">
                           {offer.skills.slice(0, 5).map((skill) => (
                             <SkillTag
-                              key={`${offer.offerId}-${skill}`}
+                              key={`${offer.matchingResultId}-${skill}`}
                               label={skill}
                               variant="matched"
                             />
                           ))}
                         </div>
                       </div>
-                      <ScoreBadge score={offer.scoreGlobal} />
+                      <ScoreBadge score={offer.score} />
                     </div>
                   </button>
                 );
@@ -464,14 +433,32 @@ export default function CandidateDashboard() {
             Vos centres d’intérêt
           </h2>
           <p className="text-sm text-muted-foreground">
-            Ces mots-clés sont temporaires et seront remplacés plus tard par
-            vos préférences réelles.
+            Ils servent à rechercher les offres qui peuvent vous intéresser.
           </p>
 
           <div className="mt-5 flex flex-wrap gap-2">
-            {candidateInterestKeywords.map((keyword) => (
-              <SkillTag key={keyword} label={keyword} variant="matched" />
-            ))}
+            {keywordsQuery.isLoading ? (
+              <p className="text-sm text-muted-foreground">
+                Chargement de vos centres d’intérêt...
+              </p>
+            ) : keywordsQuery.isError ? (
+              <p className="text-sm text-muted-foreground">
+                Impossible de charger vos centres d’intérêt pour le moment.
+              </p>
+            ) : keywords.length > 0 ? (
+              keywords.map((keyword) => (
+                <SkillTag
+                  key={keyword.id}
+                  label={keyword.keyword}
+                  variant="matched"
+                />
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Ajoutez des centres d’intérêt dans votre profil pour obtenir des
+                offres pertinentes.
+              </p>
+            )}
           </div>
 
           <div className="mt-5 rounded-2xl border border-border bg-surface-muted/40 p-4">
@@ -521,11 +508,17 @@ function DashboardActionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`panel flex flex-col gap-3 p-5 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted ${className || ''}`}
+      className={`panel flex flex-col gap-3 p-5 text-left transition-colors hover:border-accent/40 hover:bg-surface-muted ${
+        className || ''
+      }`}
     >
       <div className="flex items-start justify-between gap-3">
         <span className="stat-label">{title}</span>
-        <span className={`flex h-10 w-10 items-center justify-center rounded-md ${iconBackground || 'bg-primary-muted'} text-primary`}>
+        <span
+          className={`flex h-10 w-10 items-center justify-center rounded-md ${
+            iconBackground || 'bg-primary-muted'
+          } text-primary`}
+        >
           <Icon className="h-5 w-5" />
         </span>
       </div>

@@ -16,6 +16,7 @@ from app.modules.search.router import router as search_router
 from app.modules.segments.router import router as segments_router
 from app.modules.taxonomy.router import router as taxonomy_router
 from app.modules.tech_admin.router import router as tech_admin_router
+from app.modules.notifications.router import router as notifications_router
 
 app = FastAPI(
     title="ANETI Matching API Gateway",
@@ -44,6 +45,7 @@ app.include_router(offers_router)
 app.include_router(segments_router)
 app.include_router(matching_config_router)
 app.include_router(matching_runs_router)
+app.include_router(notifications_router)
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics")
 

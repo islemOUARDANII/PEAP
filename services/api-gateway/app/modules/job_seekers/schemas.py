@@ -288,6 +288,16 @@ class CandidateMatchedOfferItemResponse(BaseModel):
     explanation_json: dict[str, Any] = {}
     has_gaps: bool = False
 
+    already_applied: bool = False
+    application_id: str | None = None
+    application_status: str | None = None
+    
+class CandidateMatchingCacheInfoResponse(BaseModel):
+    reused: bool
+    candidate_last_updated: str | None = None
+    offers_last_updated: str | None = None
+    min_valid_created_at: str | None = None
+
 class CandidateMatchedOffersResponse(BaseModel):
     model_code: str
     model_version_id: str
@@ -297,3 +307,42 @@ class CandidateMatchedOffersResponse(BaseModel):
     total_results: int
     matched_count: int
     offers: list[CandidateMatchedOfferItemResponse]
+    cache: CandidateMatchingCacheInfoResponse | None = None
+
+class JobSeekerKeywordResponse(BaseModel):
+    id: str
+    keyword: str
+    keyword_type: str
+    source: str
+    weight: float
+    created_at: datetime
+    updated_at: datetime
+
+
+class JobSeekerKeywordUpsertRequest(BaseModel):
+    keywords: list[str]
+
+
+class JobApplicationCreateRequest(BaseModel):
+    offer_id: str
+    matching_result_id: str | None = None
+    cover_message: str | None = None
+
+
+class JobApplicationResponse(BaseModel):
+    id: str
+    job_seeker_id: str
+    offer_id: str
+    matching_result_id: str | None = None
+    status: str
+    cover_message: str | None = None
+    applied_at: datetime
+    updated_at: datetime
+
+
+class JobSeekerOfferThresholdRequest(BaseModel):
+    min_offer_score_threshold: float
+
+
+class JobSeekerOfferThresholdResponse(BaseModel):
+    min_offer_score_threshold: float

@@ -83,11 +83,18 @@ def _criterion_to_attribute_path(code: str) -> str:
         "CANDIDATE_STATUS": "candidate.status",
         "OFFER_STATUS": "offer.status",
         "CONTRACT_TYPE": "offer.contract_type",
-        "GOVERNORATE": "offer.governorate_code",
+        "GOVERNORATE": "offer.location.governorate_code",
+
+        # Hard filters basés sur les sous-scores
         "SKILLS": "hard_filters.must_have_skill_rate",
-        "EXPERIENCE_YEARS": "sub_scores.experience_score",
+        "EXPERIENCE_YEARS": "sub_scores.EXPERIENCE_MATCH",
+        "EDUCATION_LEVEL": "sub_scores.EDUCATION_MATCH",
+
+        # RTMC / taxonomy
+        "RTMC_OCCUPATION": "offer.occupation_id",
+        "OCCUPATION": "offer.occupation_id",
     }
-    return mapping.get(code, "")
+    return mapping.get(str(code).strip().upper(), "")
 
 
 def _default_params() -> dict[str, Any]:

@@ -31,6 +31,12 @@ from .schemas import (
     JobSeekerSkillResponse,
     JobSeekerSkillUpdateRequest,
     JobSeekerUpdateRequest,
+    JobSeekerKeywordResponse,
+    JobSeekerKeywordUpsertRequest,
+    JobApplicationCreateRequest,
+    JobApplicationResponse,
+    JobSeekerOfferThresholdRequest,
+    JobSeekerOfferThresholdResponse,
 )
 from .service import (
     create_education,
@@ -57,6 +63,12 @@ from .service import (
     upsert_contact,
     upsert_identity,
     upsert_preference,
+    get_my_keywords,
+    replace_my_keywords,
+    get_my_offer_score_threshold,
+    update_my_offer_score_threshold,
+    apply_to_offer,
+    list_my_applications,
 )
 
 router = APIRouter(tags=["Candidates"])
@@ -300,7 +312,8 @@ def get_my_active_offers_count_endpoint(
     response_model=CandidateMatchedOffersResponse,
 )
 def get_my_matched_offers_endpoint(
-    min_score: float = Query(default=50, ge=0, le=100),
+    min_score: float | None = Query(default=None, ge=0, le=100),
+    force_refresh: bool = Query(default=False),
     db: Session = Depends(get_db),
     current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
 ):
@@ -308,4 +321,87 @@ def get_my_matched_offers_endpoint(
         db,
         current_user,
         min_score=min_score,
+        force_refresh=force_refresh,
     )
+
+@router.get(
+    "/candidates/me/keywords",
+    response_model=list[JobSeekerKeywordResponse],
+)
+def get_my_keywords_endpoint(
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return get_my_keywords(db, current_user)
+
+
+@router.put(
+    "/candidates/me/keywords",
+    response_model=list[JobSeekerKeywordResponse],
+)
+def replace_my_keywords_endpoint(
+    payload: JobSeekerKeywordUpsertRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return replace_my_keywords(
+        db,
+        current_user,
+        keywords=payload.keywords,
+    )
+
+
+@router.get(
+    "/candidates/me/preferences/offer-threshold",
+    response_model=JobSeekerOfferThresholdResponse,
+)
+def get_my_offer_threshold_endpoint(
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return get_my_offer_score_threshold(db, current_user)
+
+
+@router.put(
+    "/candidates/me/preferences/offer-threshold",
+    response_model=JobSeekerOfferThresholdResponse,
+)
+def update_my_offer_threshold_endpoint(
+    payload: JobSeekerOfferThresholdRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return update_my_offer_score_threshold(
+        db,
+        current_user,
+        min_offer_score_threshold=payload.min_offer_score_threshold,
+    )
+
+
+@router.post(
+    "/candidates/me/applications",
+    response_model=JobApplicationResponse,
+)
+def apply_to_offer_endpoint(
+    payload: JobApplicationCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return apply_to_offer(
+        db,
+        current_user,
+        offer_id=payload.offer_id,
+        matching_result_id=payload.matching_result_id,
+        cover_message=payload.cover_message,
+    )
+
+
+@router.get(
+    "/candidates/me/applications",
+    response_model=list[JobApplicationResponse],
+)
+def list_my_applications_endpoint(
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return list_my_applications(db, current_user)
