@@ -56,6 +56,7 @@ def list_offers(db: Session, employer_id: str | None = None) -> list[dict]:
         """
         SELECT
             o.id::text AS id,
+            o.aneti_identifier AS aneti_identifier,
             o.employer_id::text AS employer_id,
             o.title,
             o.description,
@@ -97,6 +98,7 @@ def get_offer_by_id(db: Session, offer_id: str) -> dict | None:
         """
         SELECT
             o.id::text AS id,
+            o.aneti_identifier AS aneti_identifier,
             o.employer_id::text AS employer_id,
             o.title,
             o.description,
@@ -170,7 +172,9 @@ def create_offer(db: Session, payload: Mapping[str, object]) -> dict:
             :deadline_at,
             CAST(:created_by_user_id AS uuid)
         )
-        RETURNING id::text AS id;
+        RETURNING 
+            id::text AS id,
+            aneti_identifier AS aneti_identifier;
         """,
         dict(payload),
     )
@@ -197,7 +201,9 @@ def update_offer(db: Session, offer_id: str, payload: Mapping[str, object]) -> d
             delegation_code = :delegation_code,
             deadline_at = :deadline_at
         WHERE id = CAST(:offer_id AS uuid)
-        RETURNING id::text AS id;
+        RETURNING
+            id::text AS id,
+            aneti_identifier AS aneti_identifier;
         """,
         params,
     )
@@ -223,7 +229,10 @@ def set_offer_status(
                 ELSE published_at
             END
         WHERE id = CAST(:offer_id AS uuid)
-        RETURNING id::text AS id, status;
+        RETURNING
+            id::text AS id,
+            aneti_identifier AS aneti_identifier,
+            status;
         """,
         {
             "offer_id": offer_id,

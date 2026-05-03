@@ -124,10 +124,18 @@ def get_identity(db: Session, job_seeker_id: str) -> dict | None:
             i.birth_date,
             i.gender_code,
             g.libelle_genre AS gender_label,
-            i.nationality
+            i.nationality,
+            i.code_handicap AS code_handicap,
+            th.libelle_handicap AS handicap_label,
+            i.code_degre_handicap AS code_degre_handicap,
+            dh.libelle_degre_handicap AS degre_handicap_label
         FROM aneti.job_seeker_identity i
         LEFT JOIN taxonomy.ref_genre g
             ON g.code_genre = i.gender_code
+        LEFT JOIN taxonomy.ref_type_handicap th
+            ON th.code_handicap = i.code_handicap
+        LEFT JOIN taxonomy.ref_degre_handicap dh
+            ON dh.code_degre_handicap = i.code_degre_handicap
         WHERE i.job_seeker_id = CAST(:job_seeker_id AS uuid)
         LIMIT 1;
         """,
@@ -149,7 +157,9 @@ def upsert_identity(db: Session, job_seeker_id: str, payload: Mapping[str, objec
             last_name,
             birth_date,
             gender_code,
-            nationality
+            nationality,
+            code_handicap,
+            code_degre_handicap
         )
         VALUES (
             CAST(:job_seeker_id AS uuid),
@@ -159,7 +169,9 @@ def upsert_identity(db: Session, job_seeker_id: str, payload: Mapping[str, objec
             :last_name,
             :birth_date,
             :gender_code,
-            :nationality
+            :nationality,
+            :code_handicap,
+            :code_degre_handicap
         )
         ON CONFLICT (job_seeker_id)
         DO UPDATE SET
@@ -169,7 +181,9 @@ def upsert_identity(db: Session, job_seeker_id: str, payload: Mapping[str, objec
             last_name = EXCLUDED.last_name,
             birth_date = EXCLUDED.birth_date,
             gender_code = EXCLUDED.gender_code,
-            nationality = EXCLUDED.nationality
+            nationality = EXCLUDED.nationality,
+            code_handicap = EXCLUDED.code_handicap,
+            code_degre_handicap = EXCLUDED.code_degre_handicap
         RETURNING id::text AS id;
         """,
         params,

@@ -56,3 +56,18 @@ def get_node_endpoint(
     if not node:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Taxonomy node not found")
     return node
+
+@router.get("/references/handicap-types")
+def get_handicap_types(
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_roles(*ALL_ROLES)),
+):
+    return repository.list_handicap_types(db)
+
+
+@router.get("/references/handicap-degrees")
+def get_handicap_degrees(
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_roles(*ALL_ROLES)),
+):
+    return repository.list_handicap_degrees(db)

@@ -34,7 +34,6 @@ type OfferInputMode = 'smart' | 'manual';
 interface OfferLanguageDraft {
   languageCode: string;
   level: string;
-  evidence: string;
 }
 
 type ReferentialOption = {
@@ -55,42 +54,11 @@ type ParsedOfferResult = Partial<OfferParsedOutput> & {
   warnings?: string[];
   parserVersion?: string | null;
 };
-
-const EMPLOYMENT_TYPE_OPTIONS = [
-  'full_time',
-  'part_time',
-  'contract',
-  'internship',
-];
-
-const SENIORITY_LEVEL_OPTIONS = ['junior', 'mid', 'senior', 'lead'];
-
-const emptyOfferLanguage = (): OfferLanguageDraft => ({
-  languageCode: '',
-  level: '',
-  evidence: '',
-});
-
-interface StructuredOfferForm {
-  title: string;
-  companyName: string;
-  location: string;
-  employmentType: string;
-  seniorityLevel: string;
-  targetOccupations: string;
-  mandatorySkills: string;
-  optionalSkills: string;
-  minYearsExperience: string;
-  educationMin: string;
-  certificationsPreferred: string;
-  languages: OfferLanguageDraft[];
-}
-
 const EMPTY_FORM: StructuredOfferForm = {
   title: '',
-  companyName: '',
-  location: '',
-  employmentType: 'full_time',
+  governorateCode: '',
+  delegationCode: '',
+  contractType: '',
   seniorityLevel: 'mid',
   targetOccupations: '',
   mandatorySkills: '',
@@ -102,10 +70,35 @@ const EMPTY_FORM: StructuredOfferForm = {
 };
 
 const SAMPLE_OFFER = `Senior Data Engineer at Atlas Analytics. We are looking for a senior data engineer in Tunis or remote hybrid to design robust data pipelines using Python, SQL, PostgreSQL, Airflow and Docker. Kafka experience is a plus. Minimum 4 years of experience, English B2 required, French appreciated. Full-time role in the IT services industry.`;
+const SENIORITY_LEVEL_OPTIONS = ['junior', 'confirmé', 'senior', 'chef de projet'];
+
+
+const emptyOfferLanguage = (): OfferLanguageDraft => ({
+  languageCode: '',
+  level: '',
+  evidence: '',
+});
+
+interface StructuredOfferForm {
+  title: string;
+  governorateCode: string;
+  delegationCode: string;
+  contractType: string;
+  seniorityLevel: string;
+  targetOccupations: string;
+  mandatorySkills: string;
+  optionalSkills: string;
+  minYearsExperience: string;
+  educationMin: string;
+  certificationsPreferred: string;
+  languages: OfferLanguageDraft[];
+}
 
 export default function CreateOffer() {
   const navigate = useNavigate();
   const createOffer = useCreateOfferMutation();
+  const [form, setForm] = useState<StructuredOfferForm>(EMPTY_FORM);
+
   const languagesQuery = useQuery({
     queryKey: ['referentials', 'languages'],
     queryFn: () => gatewayApi.referentials.languages(),
@@ -116,12 +109,37 @@ export default function CreateOffer() {
     queryFn: () => gatewayApi.referentials.languageLevels(),
     staleTime: 5 * 60_000,
   });
+
+  const contractTypesQuery = useQuery({
+    queryKey: ['referentials', 'contract-types'],
+    queryFn: () => gatewayApi.referentials.contractTypes(),
+    staleTime: 5 * 60_000,
+  });
+
+  const diplomasQuery = useQuery({
+    queryKey: ['referentials', 'diplomas'],
+    queryFn: () => gatewayApi.referentials.diplomas(),
+    staleTime: 5 * 60_000,
+  });
+
+  const governoratesQuery = useQuery({
+    queryKey: ['referentials', 'governorates'],
+    queryFn: () => gatewayApi.referentials.governorates(),
+    staleTime: 5 * 60_000,
+  });
+
+  const delegationsQuery = useQuery({
+    queryKey: ['referentials', 'delegations', form.governorateCode],
+    queryFn: () => gatewayApi.referentials.delegations(form.governorateCode),
+    enabled: Boolean(form.governorateCode),
+    staleTime: 5 * 60_000,
+  });
+
   const [inputMode, setInputMode] = useState<OfferInputMode>('smart');
   const [step, setStep] = useState<'raw' | 'structured'>('raw');
   const [isParsing, setIsParsing] = useState(false);
   const [rawText, setRawText] = useState('');
   const [parsed, setParsed] = useState<ParsedOfferResult | null>(null);
-  const [form, setForm] = useState<StructuredOfferForm>(EMPTY_FORM);
 
   const updateField = (
     field: Exclude<keyof StructuredOfferForm, 'languages'>,
@@ -159,13 +177,9 @@ export default function CreateOffer() {
   };
 
   const submit = async () => {
-    if (
-      !form.title.trim() ||
-      !form.companyName.trim() ||
-      !form.location.trim()
-    ) {
+    if (!form.title.trim() || !form.delegationCode || !form.governorateCode || !form.contractType) {
       toast.error(
-        'Title, company name, and location are required before submission',
+        'Le titre, le gouvernorat et le type de contrat sont obligatoires avant la soumission.',
       );
       return;
     }
@@ -174,6 +188,21 @@ export default function CreateOffer() {
     const languageStrings = form.languages
       .map((item) => languageDraftToText(item, languageOptions))
       .filter(Boolean);
+
+    const governorateOptions = governoratesQuery.data ?? [];
+    const delegationOptions = delegationsQuery.data ?? [];
+
+    const selectedGovernorateLabel =
+      governorateOptions.find((item) => item.code === form.governorateCode)?.label ??
+      form.governorateCode;
+
+    const selectedDelegationLabel =
+      delegationOptions.find((item) => item.code === form.delegationCode)?.label ??
+      form.delegationCode;
+
+    const locationLabel = [selectedDelegationLabel, selectedGovernorateLabel, 'TN']
+      .filter(Boolean)
+      .join(', ');
 
     const normalizedRawText =
       rawText.trim() || buildRawTextFromForm(form, languageOptions);
@@ -188,9 +217,9 @@ export default function CreateOffer() {
       await createOffer.mutateAsync({
         rawText: normalizedRawText,
         title: form.title.trim(),
-        companyName: form.companyName.trim(),
-        location: form.location.trim(),
-        contract: form.employmentType,
+        companyName: '',
+        location: locationLabel,
+        contract: form.contractType,
         level: form.seniorityLevel,
         targetOccupations: splitList(form.targetOccupations),
         requiredSkills: splitList(form.mandatorySkills),
@@ -362,60 +391,97 @@ export default function CreateOffer() {
             <p className="stat-label">Role Basics</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
-                label="Job title *"
+                label="Titre du poste *"
                 value={form.title}
                 onChange={(value) => updateField('title', value)}
               />
-              <Field
-                label="Company name *"
-                value={form.companyName}
-                onChange={(value) => updateField('companyName', value)}
-              />
-              <Field
-                label="Location *"
-                value={form.location}
-                onChange={(value) => updateField('location', value)}
-              />
+
               <div>
-                <Label className="text-xs">Employment type</Label>
+                <Label className="text-xs">Type de contrat *</Label>
                 <Select
-                  value={form.employmentType}
-                  onValueChange={(value) =>
-                    updateField('employmentType', value)
-                  }
+                  value={form.contractType || undefined}
+                  onValueChange={(value) => updateField('contractType', value)}
+                  disabled={contractTypesQuery.isLoading}
                 >
                   <SelectTrigger className="mt-1.5">
-                    <SelectValue />
+                    <SelectValue placeholder="Sélectionner un type de contrat" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="full_time">Full-time</SelectItem>
-                    <SelectItem value="part_time">Part-time</SelectItem>
-                    <SelectItem value="contract">Contract</SelectItem>
-                    <SelectItem value="internship">Internship</SelectItem>
+                    {(contractTypesQuery.data ?? []).map((option) => (
+                      <SelectItem key={option.code} value={option.label}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
+
               <div>
-                <Label className="text-xs">Seniority level</Label>
+                <Label className="text-xs">Gouvernorat *</Label>
+                <Select
+                  value={form.governorateCode || undefined}
+                  onValueChange={(value) =>
+                    setForm((current) => ({
+                      ...current,
+                      governorateCode: value,
+                      delegationCode: '',
+                    }))
+                  }
+                  disabled={governoratesQuery.isLoading}
+                >
+                  <SelectTrigger className="mt-1.5">
+                    <SelectValue placeholder="Sélectionner un gouvernorat" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(governoratesQuery.data ?? []).map((option) => (
+                      <SelectItem key={option.code} value={option.code}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Délégation</Label>
+                <Select
+                  value={form.delegationCode || undefined}
+                  onValueChange={(value) => updateField('delegationCode', value)}
+                  disabled={!form.governorateCode || delegationsQuery.isLoading}
+                >
+                  <SelectTrigger className="mt-1.5">
+                    <SelectValue placeholder="Sélectionner une délégation" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(delegationsQuery.data ?? []).map((option) => (
+                      <SelectItem key={option.code} value={option.code}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-xs">Niveau d’expérience</Label>
                 <Select
                   value={form.seniorityLevel}
-                  onValueChange={(value) =>
-                    updateField('seniorityLevel', value)
-                  }
+                  onValueChange={(value) => updateField('seniorityLevel', value)}
                 >
                   <SelectTrigger className="mt-1.5">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="junior">Junior</SelectItem>
-                    <SelectItem value="mid">Mid</SelectItem>
+                    <SelectItem value="mid">Intermédiaire</SelectItem>
                     <SelectItem value="senior">Senior</SelectItem>
                     <SelectItem value="lead">Lead</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+
               <Field
-                label="Minimum years experience"
+                label="Années d’expérience minimum"
                 value={form.minYearsExperience}
                 type="number"
                 onChange={(value) => updateField('minYearsExperience', value)}
@@ -447,11 +513,25 @@ export default function CreateOffer() {
 
           <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Education, Certifications & Languages</p>
-            <Field
-              label="Minimum education"
-              value={form.educationMin}
-              onChange={(value) => updateField('educationMin', value)}
-            />
+            <div>
+              <Label className="text-xs">Diplôme minimum</Label>
+              <Select
+                value={form.educationMin || undefined}
+                onValueChange={(value) => updateField('educationMin', value)}
+                disabled={diplomasQuery.isLoading}
+              >
+                <SelectTrigger className="mt-1.5">
+                  <SelectValue placeholder="Sélectionner un diplôme minimum" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(diplomasQuery.data ?? []).map((option) => (
+                    <SelectItem key={option.code} value={option.label}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <ListField
               label="Preferred certifications"
               value={form.certificationsPreferred}
@@ -560,28 +640,28 @@ function LanguageRequirementsField({
           {value.map((item, index) => {
             const currentLanguageOptions =
               item.languageCode &&
-              !languageOptions.some(
-                (option) => option.code === item.languageCode,
-              )
+                !languageOptions.some(
+                  (option) => option.code === item.languageCode,
+                )
                 ? [
-                    {
-                      code: item.languageCode,
-                      label: item.languageCode,
-                    },
-                    ...languageOptions,
-                  ]
+                  {
+                    code: item.languageCode,
+                    label: item.languageCode,
+                  },
+                  ...languageOptions,
+                ]
                 : languageOptions;
 
             const currentLevelOptions =
               item.level &&
-              !levelOptions.some((option) => option.code === item.level)
+                !levelOptions.some((option) => option.code === item.level)
                 ? [
-                    {
-                      code: item.level,
-                      label: item.level,
-                    },
-                    ...levelOptions,
-                  ]
+                  {
+                    code: item.level,
+                    label: item.level,
+                  },
+                  ...levelOptions,
+                ]
                 : levelOptions;
 
             return (
@@ -656,14 +736,6 @@ function LanguageRequirementsField({
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
-                </div>
-
-                <div className="md:col-span-3">
-                  <Field
-                    label="Evidence / note"
-                    value={item.evidence}
-                    onChange={(evidence) => updateItem(index, { evidence })}
-                  />
                 </div>
               </div>
             );
@@ -783,8 +855,8 @@ function formFromParsed(
   const offerLocation = asRecord(geo.offer_location ?? null);
   const extractedRequirements = asArray(
     parseResult.extractedRequirements ??
-      parseResult.extracted_requirements ??
-      [],
+    parseResult.extracted_requirements ??
+    [],
   ).map((item) => asRecord(item));
   const diplomaRequirements = extractedRequirements.filter(
     (item) => requirementType(item.criterion_type) === 'DIPLOMA',
@@ -804,13 +876,13 @@ function formFromParsed(
   const mandatorySkills = mandatorySkillCandidates.length
     ? joinCleanList(mandatorySkillCandidates)
     : joinCleanList(
-        extractedSkillRequirements.filter((item) => isMustRequirement(item)),
-      );
+      extractedSkillRequirements.filter((item) => isMustRequirement(item)),
+    );
   const optionalSkills = optionalSkillCandidates.length
     ? joinCleanList(optionalSkillCandidates)
     : joinCleanList(
-        extractedSkillRequirements.filter((item) => !isMustRequirement(item)),
-      );
+      extractedSkillRequirements.filter((item) => !isMustRequirement(item)),
+    );
   const diplomaLabels = Array.from(
     new Set(
       diplomaRequirements
@@ -821,14 +893,13 @@ function formFromParsed(
   const fallbackEducation = cleanParsedText(
     asRecord(requirements.education_min).label ?? requirements.education_min,
   );
-  const normalizedEmploymentType = normalizeEnumValue(offer.employment_type);
-  const employmentType = EMPLOYMENT_TYPE_OPTIONS.includes(
-    normalizedEmploymentType,
-  )
-    ? normalizedEmploymentType
-    : cleanParsedText(offer.employment_type) ||
-      current.employmentType ||
-      EMPTY_FORM.employmentType;
+
+  const contractType =
+    cleanParsedText(offer.contract_type) ||
+    cleanParsedText(offer.employment_type) ||
+    current.contractType ||
+    EMPTY_FORM.contractType;
+
   const normalizedSeniorityLevel = normalizeEnumValue(offer.seniority_level);
   const seniorityLevel = SENIORITY_LEVEL_OPTIONS.includes(
     normalizedSeniorityLevel,
@@ -837,46 +908,51 @@ function formFromParsed(
     : current.seniorityLevel || EMPTY_FORM.seniorityLevel;
   const languages = languageRequirements.length
     ? languageRequirements
-        .map((item) => {
-          const metadata = asRecord(item.metadata);
-          return {
-            languageCode: cleanParsedText(
-              item.raw_value ?? metadata.language_code,
-            ),
-            level: cleanParsedText(item.min_level ?? metadata.level),
-            evidence: cleanParsedText(metadata.evidence || ''),
-          };
-        })
-        .filter((item) => item.languageCode || item.level || item.evidence)
+      .map((item) => {
+        const metadata = asRecord(item.metadata);
+        return {
+          languageCode: cleanParsedText(
+            item.raw_value ?? metadata.language_code,
+          ),
+          level: cleanParsedText(item.min_level ?? metadata.level),
+          evidence: cleanParsedText(metadata.evidence || ''),
+        };
+      })
+      .filter((item) => item.languageCode || item.level || item.evidence)
     : asArray(requirements.languages)
-        .map((item) => {
-          const languageItem = asRecord(item);
-          const level = cleanParsedText(
-            languageItem.min_level ?? languageItem.level,
-          );
-          return {
-            languageCode: cleanParsedText(
-              languageItem.code ?? languageItem.language_code,
-            ),
+      .map((item) => {
+        const languageItem = asRecord(item);
+        const level = cleanParsedText(
+          languageItem.min_level ?? languageItem.level,
+        );
+        return {
+          languageCode: cleanParsedText(
+            languageItem.code ?? languageItem.language_code,
+          ),
+          level,
+          evidence: [
+            cleanParsedText(languageItem.label ?? languageItem.code),
             level,
-            evidence: [
-              cleanParsedText(languageItem.label ?? languageItem.code),
-              level,
-            ]
-              .filter(Boolean)
-              .join(' '),
-          };
-        })
-        .filter((item) => item.languageCode || item.level || item.evidence);
+          ]
+            .filter(Boolean)
+            .join(' '),
+        };
+      })
+      .filter((item) => item.languageCode || item.level || item.evidence);
 
   return {
     title: cleanParsedTitle(offer.title) || current.title || '',
-    companyName: cleanParsedText(offer.company_name),
-    location:
-      cleanParsedText(offerLocation.display_location) ||
-      cleanParsedText(offerLocation.raw_location) ||
-      cleanParsedText(offer.location),
-    employmentType,
+    governorateCode: cleanParsedText(
+      asRecord(offerLocation.governorate).code ??
+      offerLocation.governorate_code ??
+      offer.governorate_code,
+    ),
+    delegationCode: cleanParsedText(
+      asRecord(offerLocation.delegation).code ??
+      offerLocation.delegation_code ??
+      offer.delegation_code,
+    ),
+    contractType,
     seniorityLevel,
     targetOccupations: joinCleanList(
       asArray(
@@ -914,9 +990,9 @@ function buildRawTextFromForm(
   const certifications = splitList(form.certificationsPreferred);
 
   return [
-    `${form.title.trim()} at ${form.companyName.trim()}.`,
-    `Location: ${form.location.trim()}.`,
-    `Employment type: ${form.employmentType}.`,
+    `${form.title.trim()}.`,
+    `Localisation : ${[form.delegationCode, form.governorateCode, 'TN'].filter(Boolean).join(', ')}.`,
+    `Employment type: ${form.contractType}.`,
     form.seniorityLevel ? `Seniority level: ${form.seniorityLevel}.` : '',
     occupations.length > 0
       ? `Target occupations: ${occupations.join(', ')}.`
@@ -975,13 +1051,13 @@ function cleanParsedText(value: unknown): string {
     const item = value as Record<string, unknown>;
     return cleanParsedText(
       item.label ??
-        item.name ??
-        item.title ??
-        item.raw_value ??
-        item.raw_label ??
-        item.normalized_label ??
-        item.code ??
-        '',
+      item.name ??
+      item.title ??
+      item.raw_value ??
+      item.raw_label ??
+      item.normalized_label ??
+      item.code ??
+      '',
     );
   }
 
@@ -1013,11 +1089,11 @@ function skillToText(value: unknown): string {
     const item = value as Record<string, unknown>;
     return cleanParsedText(
       item.normalized_label ??
-        item.raw_label ??
-        item.label ??
-        item.name ??
-        item.raw_value ??
-        '',
+      item.raw_label ??
+      item.label ??
+      item.name ??
+      item.raw_value ??
+      '',
     );
   }
 

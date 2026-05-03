@@ -1,3 +1,4 @@
+import { request } from "https";
 import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
 
 const toStringValue = (value: unknown, fallback = ""): string =>
@@ -62,6 +63,10 @@ interface CandidateIdentityResponse {
   gender_code?: string | null;
   gender_label?: string | null;
   nationality?: string | null;
+  code_handicap?: string | null;
+  handicap_label?: string | null;
+  code_degre_handicap?: string | null;
+  degre_handicap_label?: string | null;
 }
 
 interface CandidateContactResponse {
@@ -535,6 +540,7 @@ interface EmployerOfferRequirementResponse {
 
 interface EmployerOfferResponse {
   id: string;
+  aneti_identifier?: string | null;
   employer_id: string;
   employer_name?: string | null;
   title: string;
@@ -563,6 +569,7 @@ interface EmployerOfferResponse {
 
 export interface EmployerOffer {
   id: string;
+  anetiIdentifier?: string | null;
   employerId: string;
   employerName?: string | null;
   title: string;
@@ -1257,6 +1264,7 @@ const mapEmployerOfferRequirement = (
 
 const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
   id: item.id,
+  anetiIdentifier: item.aneti_identifier ?? null,
   employerId: item.employer_id,
   employerName: item.employer_name ?? null,
   title: item.title,
@@ -2021,10 +2029,10 @@ export const gatewayApi = {
         { method: "GET" },
         typeof minScore === "number"
           ? {
-              query: {
-                min_score: minScore,
-              },
-            }
+            query: {
+              min_score: minScore,
+            },
+          }
           : undefined,
       );
 

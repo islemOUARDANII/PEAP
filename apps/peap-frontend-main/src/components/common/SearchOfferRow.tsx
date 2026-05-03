@@ -1,4 +1,4 @@
-import { Building2, Eye, MapPin } from 'lucide-react';
+import { Building2, Eye, EyeIcon, MapPin } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { CountBadge } from './CountBadge';
@@ -24,9 +24,18 @@ const SearchOfferRow = ({ offer, matchedCount, onClick }) => {
       </div>
       {matchedCount && <CountBadge score={matchedCount} />}
 
-      <div className="flex gap-1.5" onClick={onClick}>
-        <Button asChild variant="outline" size="sm">
-          <Eye className="h-3 w-3 ml-1" /> Voir le détail
+      <div className="flex gap-1.5">
+        {/* <Button asChild variant="outline" size="sm" onClick={onClick}>
+          <Eye className="h-3 w-3 " /> Voir le détail
+        </Button> */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onClick}
+        >
+          <Eye className="h-4 w-4" />
+          Voir détails
         </Button>
       </div>
     </div>

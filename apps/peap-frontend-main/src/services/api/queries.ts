@@ -381,6 +381,7 @@ const mapEmployerOfferToJob = (offer: EmployerOffer): Job => {
 
   return {
     id: offer.id,
+    anetiIdentifier: offer.anetiIdentifier ?? null,
     title: offer.title,
     company: offer.employerName ?? "Employer",
     location: offer.locationLabel || "Location not specified",
@@ -663,9 +664,9 @@ export function useCandidateDashboardQuery() {
         averageMatchScore:
           topMatches.length > 0
             ? Math.round(
-                topMatches.reduce((total, item) => total + (item.score ?? 0), 0) /
-                  topMatches.length,
-              )
+              topMatches.reduce((total, item) => total + (item.score ?? 0), 0) /
+              topMatches.length,
+            )
             : 0,
         recommendationCount: 0,
         topMatches,
@@ -766,23 +767,23 @@ export function useCandidateCvUploadStatusQuery(cvId?: string) {
       const record = records.find((item) => item.id === cvId || item.cvId === cvId);
       return record
         ? {
-            cvId: record.id,
-            traceId: record.storageKey,
-            status: record.parsingStatus,
-            linkedCandidateId: record.cvId,
-            pipeline: {
-              current: { parsing_status: record.parsingStatus },
-              lastUploadAt: record.uploadedAt,
-              steps: [
-                { label: "Uploaded", status: "complete", timestamp: record.uploadedAt },
-                {
-                  label: "Parsed",
-                  status: record.parsingStatus === "PARSED" ? "complete" : "pending",
-                  timestamp: record.updatedAt,
-                },
-              ],
-            },
-          }
+          cvId: record.id,
+          traceId: record.storageKey,
+          status: record.parsingStatus,
+          linkedCandidateId: record.cvId,
+          pipeline: {
+            current: { parsing_status: record.parsingStatus },
+            lastUploadAt: record.uploadedAt,
+            steps: [
+              { label: "Uploaded", status: "complete", timestamp: record.uploadedAt },
+              {
+                label: "Parsed",
+                status: record.parsingStatus === "PARSED" ? "complete" : "pending",
+                timestamp: record.updatedAt,
+              },
+            ],
+          },
+        }
         : null;
     },
     enabled: Boolean(cvId),
@@ -958,23 +959,23 @@ export function useCreateOfferMutation() {
           })),
           ...(typeof payload.minYearsExperience === "number"
             ? [
-                {
-                  criterion_type: "EXPERIENCE_YEARS",
-                  raw_value: String(payload.minYearsExperience),
-                  min_years: payload.minYearsExperience,
-                  is_must: true,
-                },
-              ]
+              {
+                criterion_type: "EXPERIENCE_YEARS",
+                raw_value: String(payload.minYearsExperience),
+                min_years: payload.minYearsExperience,
+                is_must: true,
+              },
+            ]
             : []),
           ...(payload.educationMin
             ? [
-                {
-                  criterion_type: "DIPLOMA",
-                  raw_value: payload.educationMin,
-                  is_must: false,
-                  weight: 60,
-                },
-              ]
+              {
+                criterion_type: "DIPLOMA",
+                raw_value: payload.educationMin,
+                is_must: false,
+                weight: 60,
+              },
+            ]
             : []),
           ...toArray(payload.certificationsPreferred).map((certification) => ({
             criterion_type: "CERTIFICATION",
@@ -990,13 +991,13 @@ export function useCreateOfferMutation() {
           })),
           ...(payload.location
             ? [
-                {
-                  criterion_type: "LOCATION",
-                  raw_value: payload.location,
-                  is_must: false,
-                  weight: 30,
-                },
-              ]
+              {
+                criterion_type: "LOCATION",
+                raw_value: payload.location,
+                is_must: false,
+                weight: 30,
+              },
+            ]
             : []),
         ],
       }),
@@ -1057,16 +1058,16 @@ export function useParseOfferMutation() {
           company_name:
             toStringValue(
               response.mappedPayload.company_name ||
-                response.parsedPayload.company_name ||
-                draft.company_name,
+              response.parsedPayload.company_name ||
+              draft.company_name,
             ),
           location:
             toStringValue(
               draft.location ||
-                response.parsedPayload.location ||
-                response.mappedPayload.location ||
-                draft.governorate_label ||
-                draft.governorate_code,
+              response.parsedPayload.location ||
+              response.mappedPayload.location ||
+              draft.governorate_label ||
+              draft.governorate_code,
             ),
           employment_type: toStringValue(
             draft.contract_type || response.mappedPayload.employment_type,
@@ -1098,20 +1099,20 @@ export function useParseOfferMutation() {
           })),
           min_years_experience: experienceRequirement
             ? toNumberValue(
-                experienceRequirement.min_years ??
-                  draft.min_years_experience ??
-                  response.parsedPayload.min_years_experience,
-                0,
-              )
+              experienceRequirement.min_years ??
+              draft.min_years_experience ??
+              response.parsedPayload.min_years_experience,
+              0,
+            )
             : toNumberValue(
-                draft.min_years_experience ?? response.parsedPayload.min_years_experience,
-                0,
-              ),
+              draft.min_years_experience ?? response.parsedPayload.min_years_experience,
+              0,
+            ),
           education_min: educationRequirement
             ? {
-                code: toNullableString(educationRequirement.node_id) ?? "",
-                label: extractRequirementLabel(educationRequirement),
-              }
+              code: toNullableString(educationRequirement.node_id) ?? "",
+              label: extractRequirementLabel(educationRequirement),
+            }
             : undefined,
           certifications_preferred: certificationRequirements.map((item) => ({
             code: toNullableString(item.node_id),
@@ -1210,12 +1211,12 @@ export function useAdvisorDashboardQuery() {
           recentWarnings.length > 0
             ? recentWarnings
             : [
-                {
-                  id: "dashboard-health",
-                  text: `API Gateway ${dashboard.apiGateway}, Parsing ${dashboard.parsingService}, Matching ${dashboard.matchingService}, Search ${dashboard.searchService}`,
-                  time: auditSummary.latestEventTime ?? new Date().toISOString(),
-                },
-              ],
+              {
+                id: "dashboard-health",
+                text: `API Gateway ${dashboard.apiGateway}, Parsing ${dashboard.parsingService}, Matching ${dashboard.matchingService}, Search ${dashboard.searchService}`,
+                time: auditSummary.latestEventTime ?? new Date().toISOString(),
+              },
+            ],
       };
     },
   });

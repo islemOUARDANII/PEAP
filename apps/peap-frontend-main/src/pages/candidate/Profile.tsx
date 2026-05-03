@@ -157,6 +157,8 @@ interface ProfileDraft {
   birthDate: string;
   genderCode: string;
   nationality: string;
+  codeHandicap: string;
+  codeDegreHandicap: string;
   email: string;
   phone: string;
   address: string;
@@ -252,6 +254,7 @@ const emptyLanguage = (): LanguageDraft => ({
   evidence: '',
 });
 
+
 const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
   firstName: bundle.identity?.first_name ?? '',
   lastName: bundle.identity?.last_name ?? '',
@@ -260,6 +263,8 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
   birthDate: bundle.identity?.birth_date ?? '',
   genderCode: bundle.identity?.gender_code ?? '',
   nationality: bundle.identity?.nationality ?? '',
+  codeHandicap: bundle.identity?.code_handicap ?? '0',
+  codeDegreHandicap: bundle.identity?.code_degre_handicap ?? '',
   email: bundle.contact?.email ?? '',
   phone: bundle.contact?.phone ?? '',
   address: bundle.contact?.address ?? '',
@@ -736,11 +741,11 @@ const extractCandidateLocationCodes = (
 ): { governorateCode: string; delegationCode: string } => {
   const geo = mappedPayload.geo_normalization as
     | {
-        candidate_location?: {
-          governorate?: { code?: string | null };
-          delegation?: { code?: string | null };
-        };
-      }
+      candidate_location?: {
+        governorate?: { code?: string | null };
+        delegation?: { code?: string | null };
+      };
+    }
     | undefined;
 
   return {
@@ -770,9 +775,9 @@ function applyParsedCvToDraft(
 
   const fullName = splitFullName(
     identity.full_name ??
-      identity.name ??
-      personalInfo?.full_name ??
-      personalInfo?.name,
+    identity.name ??
+    personalInfo?.full_name ??
+    personalInfo?.name,
   );
 
   const parsedGeo = parsedPayload.geo_normalization as
@@ -795,13 +800,13 @@ function applyParsedCvToDraft(
       : undefined;
   const parsedPrimaryLanguage = toStringOrEmpty(
     identity.primary_language ??
-      personalInfo?.primary_language ??
-      (firstParsedLanguage &&
+    personalInfo?.primary_language ??
+    (firstParsedLanguage &&
       typeof firstParsedLanguage === 'object' &&
       !Array.isArray(firstParsedLanguage)
-        ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
-          (firstParsedLanguage as Record<string, unknown>).code)
-        : undefined),
+      ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
+        (firstParsedLanguage as Record<string, unknown>).code)
+      : undefined),
   );
 
   return {
@@ -840,9 +845,9 @@ function applyParsedCvToDraft(
       degree: toStringOrEmpty(item.degree ?? item.raw_degree),
       diplomaLabel: toStringOrEmpty(
         item.diploma_label ??
-          item.diplomaLabel ??
-          item.degree ??
-          item.raw_degree,
+        item.diplomaLabel ??
+        item.degree ??
+        item.raw_degree,
       ),
       specialty: toStringOrEmpty(
         item.specialty ?? item.specialty_label ?? item.field,
@@ -884,15 +889,15 @@ function applyParsedCvToDraft(
       description: toStringOrEmpty(item.description),
       responsibilities: Array.isArray(item.responsibilities)
         ? item.responsibilities
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       technologies: Array.isArray(item.technologies)
         ? item.technologies
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       projects: Array.isArray(item.projects) ? item.projects : [],
       entryType: toStringOrEmpty(item.entry_type ?? item.entryType),
@@ -1056,6 +1061,17 @@ const formatExperiencePeriod = (
 };
 
 export default function Profile() {
+  const handicapTypesQuery = useQuery({
+    queryKey: queryKeys.referentials.handicapTypes(),
+    queryFn: gatewayApi.referentials.handicapTypes,
+    staleTime: 30 * 60_000,
+  });
+
+  const handicapDegreesQuery = useQuery({
+    queryKey: queryKeys.referentials.handicapDegrees(),
+    queryFn: gatewayApi.referentials.handicapDegrees,
+    staleTime: 30 * 60_000,
+  });
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -1172,7 +1188,7 @@ export default function Profile() {
     () =>
       normalizeCandidateMinimumOfferScore(
         offerThresholdQuery.data?.minThreshold ??
-          getStoredCandidateMinimumOfferScore(),
+        getStoredCandidateMinimumOfferScore(),
       ),
     [offerThresholdQuery.data?.minThreshold],
   );
@@ -1621,6 +1637,11 @@ export default function Profile() {
         birth_date: currentDraft.birthDate || null,
         gender_code: currentDraft.genderCode || null,
         nationality: currentDraft.nationality || null,
+        code_handicap: draft.codeHandicap || null,
+        code_degre_handicap:
+          draft.codeHandicap && draft.codeHandicap !== '0'
+            ? draft.codeDegreHandicap || null
+            : null,
       });
 
       await gatewayApi.candidate.updateContact({
@@ -1925,6 +1946,18 @@ export default function Profile() {
                   { label: 'Délégation', value: selectedDelegationLabel },
                   { label: 'CIN', value: currentDraft.cin },
                   { label: 'Passeport', value: currentDraft.passportNumber },
+                  {
+                    label: 'Handicap',
+                    value: bundle.identity?.handicap_label ?? 'Aucun',
+                  },
+                  ...(bundle.identity?.code_handicap && bundle.identity.code_handicap !== '0'
+                    ? [
+                      {
+                        label: 'Degré de handicap',
+                        value: bundle.identity?.degre_handicap_label ?? 'Non renseigné',
+                      },
+                    ]
+                    : []),
                 ]}
               />
               <div className="profile-border-left-orange">
@@ -2129,12 +2162,12 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
-                            }
+                            ...current,
+                            governorateCode: value,
+                            delegationCode: '',
+                            preferredGovernorate:
+                              current.preferredGovernorate || value,
+                          }
                           : current,
                       )
                     }
@@ -2175,6 +2208,58 @@ export default function Profile() {
                       )
                     }
                   />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="codeHandicap">Type de handicap</Label>
+                      <Select
+                        value={draft.codeHandicap || '0'}
+                        onValueChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            codeHandicap: value,
+                            codeDegreHandicap: value === '0' ? '' : current.codeDegreHandicap,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="codeHandicap">
+                          <SelectValue placeholder="Sélectionner un type de handicap" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(handicapTypesQuery.data ?? []).map((item) => (
+                            <SelectItem key={item.code} value={item.code}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="codeDegreHandicap">Degré de handicap</Label>
+                      <Select
+                        value={draft.codeDegreHandicap || 'none'}
+                        disabled={!draft.codeHandicap || draft.codeHandicap === '0'}
+                        onValueChange={(value) =>
+                          setDraft((current) => ({
+                            ...current,
+                            codeDegreHandicap: value === 'none' ? '' : value,
+                          }))
+                        }
+                      >
+                        <SelectTrigger id="codeDegreHandicap">
+                          <SelectValue placeholder="Sélectionner un degré" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Non renseigné</SelectItem>
+                          {(handicapDegreesQuery.data ?? []).map((item) => (
+                            <SelectItem key={item.code} value={item.code}>
+                              {item.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
                 </div>
               </section>
 
@@ -2189,12 +2274,12 @@ export default function Profile() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            education:
-                              typeof updater === 'function'
-                                ? updater(current.education)
-                                : updater,
-                          }
+                          ...current,
+                          education:
+                            typeof updater === 'function'
+                              ? updater(current.education)
+                              : updater,
+                        }
                         : current,
                     )
                   }
@@ -2334,12 +2419,12 @@ export default function Profile() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            skills:
-                              typeof updater === 'function'
-                                ? updater(current.skills)
-                                : updater,
-                          }
+                          ...current,
+                          skills:
+                            typeof updater === 'function'
+                              ? updater(current.skills)
+                              : updater,
+                        }
                         : current,
                     )
                   }
@@ -2386,12 +2471,12 @@ export default function Profile() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            languages:
-                              typeof updater === 'function'
-                                ? updater(current.languages)
-                                : updater,
-                          }
+                          ...current,
+                          languages:
+                            typeof updater === 'function'
+                              ? updater(current.languages)
+                              : updater,
+                        }
                         : current,
                     )
                   }
@@ -2534,9 +2619,9 @@ export default function Profile() {
                         setDraft((current) =>
                           current
                             ? {
-                                ...current,
-                                acceptsRelocation: event.target.checked,
-                              }
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
                             : current,
                         )
                       }
@@ -2696,12 +2781,12 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
-                            }
+                            ...current,
+                            governorateCode: value,
+                            delegationCode: '',
+                            preferredGovernorate:
+                              current.preferredGovernorate || value,
+                          }
                           : current,
                       )
                     }
@@ -2746,6 +2831,58 @@ export default function Profile() {
                       }
                       disabled={!isEditing}
                     />
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="codeHandicap">Type de handicap</Label>
+                        <Select
+                          value={draft.codeHandicap || '0'}
+                          onValueChange={(value) =>
+                            setDraft((current) => ({
+                              ...current,
+                              codeHandicap: value,
+                              codeDegreHandicap: value === '0' ? '' : current.codeDegreHandicap,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="codeHandicap">
+                            <SelectValue placeholder="Sélectionner un type de handicap" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(handicapTypesQuery.data ?? []).map((item) => (
+                              <SelectItem key={item.code} value={item.code}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="codeDegreHandicap">Degré de handicap</Label>
+                        <Select
+                          value={draft.codeDegreHandicap || 'none'}
+                          disabled={!draft.codeHandicap || draft.codeHandicap === '0'}
+                          onValueChange={(value) =>
+                            setDraft((current) => ({
+                              ...current,
+                              codeDegreHandicap: value === 'none' ? '' : value,
+                            }))
+                          }
+                        >
+                          <SelectTrigger id="codeDegreHandicap">
+                            <SelectValue placeholder="Sélectionner un degré" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">Non renseigné</SelectItem>
+                            {(handicapDegreesQuery.data ?? []).map((item) => (
+                              <SelectItem key={item.code} value={item.code}>
+                                {item.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </section>
@@ -2843,9 +2980,9 @@ export default function Profile() {
                         setDraft((current) =>
                           current
                             ? {
-                                ...current,
-                                acceptsRelocation: event.target.checked,
-                              }
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
                             : current,
                         )
                       }
@@ -2867,12 +3004,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          education:
-                            typeof updater === 'function'
-                              ? updater(current.education)
-                              : updater,
-                        }
+                        ...current,
+                        education:
+                          typeof updater === 'function'
+                            ? updater(current.education)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -2953,7 +3090,7 @@ export default function Profile() {
                                 'Formation'}
                             </h3>
                             {item.diplomaLabel &&
-                            item.diplomaLabel !== item.degree ? (
+                              item.diplomaLabel !== item.degree ? (
                               <p className="mt-1 text-sm text-foreground">
                                 {item.diplomaLabel}
                               </p>
@@ -3012,12 +3149,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          experience:
-                            typeof updater === 'function'
-                              ? updater(current.experience)
-                              : updater,
-                        }
+                        ...current,
+                        experience:
+                          typeof updater === 'function'
+                            ? updater(current.experience)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3250,12 +3387,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          skills:
-                            typeof updater === 'function'
-                              ? updater(current.skills)
-                              : updater,
-                        }
+                        ...current,
+                        skills:
+                          typeof updater === 'function'
+                            ? updater(current.skills)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3345,12 +3482,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          languages:
-                            typeof updater === 'function'
-                              ? updater(current.languages)
-                              : updater,
-                        }
+                        ...current,
+                        languages:
+                          typeof updater === 'function'
+                            ? updater(current.languages)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3429,13 +3566,13 @@ export default function Profile() {
                   const label = `${formatLanguageLabel(
                     item.languageCode,
                     bundleLanguage?.languageLabelFr ??
-                      bundleLanguage?.languageLabelEn ??
-                      languageOption?.label,
+                    bundleLanguage?.languageLabelEn ??
+                    languageOption?.label,
                   )} - ${formatLanguageLevelLabel(
                     item.level,
                     bundleLanguage?.levelLabelFr ??
-                      bundleLanguage?.levelLabelEn ??
-                      levelOption?.label,
+                    bundleLanguage?.levelLabelEn ??
+                    levelOption?.label,
                   )}`;
 
                   return (
@@ -3743,8 +3880,8 @@ function CollectionSection<T extends { id?: string }>({
   icon: ComponentType<{ className?: string }>;
   items: T[];
   setItems:
-    | Dispatch<SetStateAction<T[]>>
-    | ((next: SetStateAction<T[]>) => void);
+  | Dispatch<SetStateAction<T[]>>
+  | ((next: SetStateAction<T[]>) => void);
   emptyItem: () => T;
   isEditing: boolean;
   renderItem: (item: T, update: (next: T) => void) => ReactNode;
@@ -3796,29 +3933,29 @@ function CollectionSection<T extends { id?: string }>({
         {!isEditing && renderListView
           ? renderListView(items)
           : items?.map((item, index) => (
-              <article
-                key={item.id ?? `${title}-${index}`}
-                className="rounded-2xl border border-border bg-background p-5 border-color-aneti-blue border-left-aneti"
-              >
-                {isEditing ? (
-                  <div className="space-y-4 relative">
-                    <div className="absolute right-[-10px] top-[-30px]">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {renderItem(item, (next) => updateItem(index, next))}
+            <article
+              key={item.id ?? `${title}-${index}`}
+              className="rounded-2xl border border-border bg-background p-5 border-color-aneti-blue border-left-aneti"
+            >
+              {isEditing ? (
+                <div className="space-y-4 relative">
+                  <div className="absolute right-[-10px] top-[-30px]">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                ) : (
-                  viewItem(item)
-                )}
-              </article>
-            ))}
+                  {renderItem(item, (next) => updateItem(index, next))}
+                </div>
+              ) : (
+                viewItem(item)
+              )}
+            </article>
+          ))}
       </div>
     </section>
   );
@@ -3844,9 +3981,8 @@ function ReadOnlyDataGrid({ items }: { items: ReadOnlyGridItem[] }) {
       {items.map((item) => (
         <article
           key={item.label}
-          className={`rounded-2xl border border-border bg-background p-4 ${
-            item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
-          }`}
+          className={`rounded-2xl border border-border bg-background p-4 ${item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
+            }`}
         >
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {item.label}
@@ -3885,9 +4021,9 @@ function ProfileOverviewSection({
     normalizeKeyword(email) ? { icon: Mail, label: email } : null,
     primaryLanguageLabel
       ? {
-          icon: Globe2,
-          label: `Langue principale : ${primaryLanguageLabel}`,
-        }
+        icon: Globe2,
+        label: `Langue principale : ${primaryLanguageLabel}`,
+      }
       : null,
     {
       icon: Languages,

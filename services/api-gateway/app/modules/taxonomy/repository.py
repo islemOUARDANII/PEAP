@@ -98,3 +98,28 @@ def get_node_by_id(db: Session, node_id: str) -> dict | None:
         """,
         {"node_id": node_id},
     )
+
+def list_handicap_types(db: Session) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            code_handicap AS code,
+            libelle_handicap AS label
+        FROM taxonomy.ref_type_handicap
+        ORDER BY code_handicap;
+        """,
+    )
+
+
+def list_handicap_degrees(db: Session) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            code_degre_handicap AS code,
+            libelle_degre_handicap AS label
+        FROM taxonomy.ref_degre_handicap
+        ORDER BY code_degre_handicap;
+        """,
+    )

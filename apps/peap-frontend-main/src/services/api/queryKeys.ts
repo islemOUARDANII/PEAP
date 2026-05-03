@@ -94,4 +94,8 @@ export const queryKeys = {
       ["advisor", "pipeline", "detail", entityType ?? "none", sourceId ?? "none"] as const,
     dataExplorer: () => ["advisor", "data-explorer"] as const,
   },
+  referentials: {
+    handicapTypes: () => ["referentials", "handicap-types"] as const,
+    handicapDegrees: () => ["referentials", "handicap-degrees"] as const,
+  },
 };

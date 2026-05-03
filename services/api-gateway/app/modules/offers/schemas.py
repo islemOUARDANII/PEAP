@@ -93,22 +93,9 @@ class JobOfferDraftRequirementResponse(BaseModel):
     weight: int | None = None
 
 
-class JobOfferDraftParseResponse(BaseModel):
-    parsing_status: str
-    title: str
-    description: str
-    company_name: str | None = None
-    location: str | None = None
-    employment_type: str | None = None
-    seniority_level: str | None = None
-    industry_code: str | None = None
-    requirements: list[JobOfferDraftRequirementResponse] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
-    parser_version: str
-
-
 class JobOfferListItemResponse(BaseModel):
     id: str
+    aneti_identifier: str | None = None
     employer_id: str
     title: str
     description: str | None = None
@@ -140,12 +127,6 @@ class JobOfferResponse(JobOfferListItemResponse):
 
 class OfferActionRequest(OfferBaseModel):
     reason: str | None = None
-
-
-
-class JobOfferDraftParseRequest(OfferBaseModel):
-    raw_text: str = Field(min_length=1)
-    title: str | None = None
 
 
 class JobOfferDraftParseResponse(BaseModel):

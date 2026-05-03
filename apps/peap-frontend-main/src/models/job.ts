@@ -2,6 +2,7 @@ export type JobStatus = "Active" | "Draft" | "Archived" | "Paused";
 
 export interface Job {
   id: string;
+  anetiIdentifier?: string | null;
   title: string;
   company: string;
   location: string;
@@ -30,7 +31,7 @@ export interface JobScoreBreakdown {
 export interface CreateJobOfferPayload {
   rawText: string;
   title: string;
-  companyName?: string;
+  companyName: string;
   location: string;
   contract: string;
   level: string;
@@ -62,7 +63,12 @@ export interface OfferParsedOutput {
     title: string;
     company_name: string;
     location: string;
-    employment_type: "internship" | "full_time" | "part_time" | "contract" | string;
+    employment_type:
+    | "internship"
+    | "full_time"
+    | "part_time"
+    | "contract"
+    | string;
     country?: string;
     company_domain?: string;
     external_company_id?: string;
@@ -108,7 +114,6 @@ export interface OfferParsePayload {
   offerId?: string;
   filename?: string;
 }
-
 
 export interface ProviderOfferDetail {
   offer: Job;

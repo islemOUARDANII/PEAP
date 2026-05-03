@@ -86,11 +86,11 @@ const SEARCH_MODE_OPTIONS: Array<{
   value: CandidateOfferSearchMode;
   label: string;
 }> = [
-  { value: 'keyword', label: 'Mot cle' },
-  { value: 'skill', label: 'Competence' },
-  { value: 'company', label: 'Entreprise' },
-  { value: 'location', label: 'Localisation' },
-];
+    { value: 'keyword', label: 'Mot cle' },
+    { value: 'skill', label: 'Competence' },
+    { value: 'company', label: 'Entreprise' },
+    { value: 'location', label: 'Localisation' },
+  ];
 
 const isOfferTab = (value: string | null): value is OfferTab =>
   value != null && OFFER_TABS.includes(value as OfferTab);
@@ -103,8 +103,8 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const toStringList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value
-        .map((item) => cleanText(item))
-        .filter((item): item is string => Boolean(item))
+      .map((item) => cleanText(item))
+      .filter((item): item is string => Boolean(item))
     : [];
 
 const formatSearchRelevance = (value: number | null): string | null => {
@@ -350,9 +350,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-            query: appliedSearch,
-            mode: searchMode,
-          })
+          query: appliedSearch,
+          mode: searchMode,
+        })
         : getAllPublishedOffers(),
     enabled: activeTab === 'all',
     staleTime: 5 * 60_000,
@@ -367,9 +367,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-            query: appliedSearch,
-            mode: searchMode,
-          })
+          query: appliedSearch,
+          mode: searchMode,
+        })
         : getInterestingOffers(),
     enabled: activeTab === 'interesting' && hasCandidateProfile,
     staleTime: 5 * 60_000,
@@ -430,8 +430,8 @@ export default function CandidateOffers() {
     : false;
   const interestingKeywords =
     activeTab === 'interesting' &&
-    interestingOffersQuery.data &&
-    'keywords' in interestingOffersQuery.data
+      interestingOffersQuery.data &&
+      'keywords' in interestingOffersQuery.data
       ? interestingOffersQuery.data.keywords
       : [];
   const interestingKeywordsLabel = interestingKeywords
@@ -529,9 +529,8 @@ export default function CandidateOffers() {
   const tabCountBadge = (n: number, active: boolean) => (
     <Badge
       variant="secondary"
-      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${
-        active ? 'bg-accent text-accent-foreground' : ''
-      }`}
+      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${active ? 'bg-accent text-accent-foreground' : ''
+        }`}
     >
       {n}
     </Badge>
@@ -822,7 +821,7 @@ export default function CandidateOffers() {
 
             <TabsContent
               value="all"
-              className="mt-0 animate-in fade-in-50 duration-200"
+              className="mt-0 animate-in fade-in-50 duration-200 space-y-4"
             >
               {allOffersQuery.isLoading ? (
                 <div className="panel flex gap-2 items-center justify-center p-4 text-center">
@@ -850,29 +849,30 @@ export default function CandidateOffers() {
               ) : (allOffersQuery.data?.offers ?? []).length === 0 ? (
                 <OfferPanelMessage message="Aucune offre publiée pour le moment." />
               ) : (
-                <>
+                <><div className={view === 'grid' ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "panel divide-y divide-border"}>
                   {(allOffersQuery.data?.offers ?? []).map((offer) => (
                     <>
                       {view === 'grid' ? (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          <SearchOfferCard
-                            key={`all-${offer.offerId ?? offer.title}`}
-                            offer={offer}
-                            showSearchRelevance={hasActiveSearch}
-                            onSelect={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+
+                        <SearchOfferCard
+                          key={`all-${offer.offerId ?? offer.title}`}
+                          offer={offer}
+                          showSearchRelevance={hasActiveSearch}
+                          onSelect={() => setSelectedOffer(offer)}
+                        />
+
                       ) : (
-                        <div className="panel divide-y divide-border">
-                          <SearchOfferRow
-                            key={`all-${offer.offerId ?? offer.title}`}
-                            offer={offer}
-                            onClick={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+
+                        <SearchOfferRow
+                          key={`all-${offer.offerId ?? offer.title}`}
+                          offer={offer}
+                          onClick={() => setSelectedOffer(offer)}
+                        />
+
                       )}
                     </>
                   ))}
+                </div>
                 </>
               )}
             </TabsContent>
@@ -1381,8 +1381,7 @@ function SearchOfferCard({
 
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary text-xs font-semibold">
-            {offer.companyName
-              .split(' ')
+            {offer.companyName?.split(' ')
               .map((s) => s[0])
               .join('')
               .slice(0, 2)}

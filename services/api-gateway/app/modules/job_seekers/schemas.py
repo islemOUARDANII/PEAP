@@ -23,6 +23,8 @@ class JobSeekerIdentityUpsertRequest(JobSeekerBaseModel):
     birth_date: date | None = None
     gender_code: str | None = None
     nationality: str | None = None
+    code_handicap: str | None = None
+    code_degre_handicap: str | None = None
 
 
 class JobSeekerContactUpsertRequest(JobSeekerBaseModel):
@@ -140,6 +142,10 @@ class JobSeekerIdentityResponse(BaseModel):
     gender_code: str | None = None
     gender_label: str | None = None
     nationality: str | None = None
+    code_handicap: str | None = None
+    handicap_label: str | None = None
+    code_degre_handicap: str | None = None
+    degre_handicap_label: str | None = None
 
 
 class JobSeekerContactResponse(BaseModel):

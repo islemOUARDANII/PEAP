@@ -34,7 +34,7 @@ export default function Offers() {
         return true;
       }
 
-      return [job.id, job.title, job.location, job.contract, job.company]
+      return [job.anetiIdentifier, job.id, job.title, job.location, job.contract, job.company]
         .join(" ")
         .toLowerCase()
         .includes(normalizedSearch);
@@ -131,7 +131,7 @@ export default function Offers() {
               <thead>
                 <tr className="border-b border-border bg-surface-muted text-xs text-muted-foreground">
                   <th className="px-4 py-3 text-left font-medium">Offer</th>
-                  <th className="px-2 py-3 text-left font-medium">ID</th>
+                  <th className="px-2 py-3 text-left font-medium">Identifiant ANETI</th>
                   <th className="px-2 py-3 text-left font-medium">Status</th>
                   <th className="px-2 py-3 text-left font-medium">Posted</th>
                   <th className="px-2 py-3 text-left font-medium">Location</th>
@@ -153,7 +153,7 @@ export default function Offers() {
                       </Link>
                       <p className="mt-1 text-xs text-muted-foreground">{job.company}</p>
                     </td>
-                    <td className="px-2 py-3 align-top text-[11px] font-mono text-muted-foreground">{job.id}</td>
+                    <td className="px-2 py-3 align-top text-[11px] font-mono text-muted-foreground">{job.anetiIdentifier ?? job.id}</td>
                     <td className="px-2 py-3 align-top">
                       <StatusPill label={job.status} tone={statusToTone(job.status)} />
                     </td>
