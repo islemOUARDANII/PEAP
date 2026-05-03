@@ -33,7 +33,10 @@ import {
   MATCHING_UNAVAILABLE_MESSAGE,
   SEARCH_UNAVAILABLE_MESSAGE,
 } from '@/services/candidate/candidateOffers';
-import { cleanText, formatDate } from '@/services/candidate/candidateOfferUtils';
+import {
+  cleanText,
+  formatDate,
+} from '@/services/candidate/candidateOfferUtils';
 
 const PROFILE_COMPLETION_SECTION_ID = 'completion-profil';
 
@@ -218,13 +221,13 @@ export default function CandidateDashboard() {
               ? '...'
               : interestingOffersQuery.isError
                 ? '--'
-                : interestingOffersQuery.data?.total ?? 0
+                : (interestingOffersQuery.data?.total ?? 0)
           }
           hint={
             interestingOffersQuery.isError
               ? SEARCH_UNAVAILABLE_MESSAGE
-              : interestingOffersQuery.data?.message ??
-                'Offres trouvées à partir de vos centres d’intérêt.'
+              : (interestingOffersQuery.data?.message ??
+                'Offres trouvées à partir de vos centres d’intérêt.')
           }
           onClick={() => navigate('/candidate/offers?tab=interesting')}
           className="start-border-left-green"
@@ -238,7 +241,7 @@ export default function CandidateDashboard() {
               ? '...'
               : recommendedOffersQuery.isError
                 ? '--'
-                : recommendedOffersQuery.data?.total ?? 0
+                : (recommendedOffersQuery.data?.total ?? 0)
           }
           hint={
             recommendedOffersQuery.isError
@@ -259,7 +262,7 @@ export default function CandidateDashboard() {
               ? '...'
               : allOffersQuery.isError
                 ? '--'
-                : allOffersQuery.data?.total ?? 0
+                : (allOffersQuery.data?.total ?? 0)
           }
           hint={
             allOffersQuery.isError
@@ -305,7 +308,9 @@ export default function CandidateDashboard() {
                     {item.label}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {item.completed ? 'Section complète.' : item.missing.join(', ')}
+                    {item.completed
+                      ? 'Section complète.'
+                      : item.missing.join(', ')}
                   </p>
                 </div>
                 <span
@@ -400,7 +405,11 @@ export default function CandidateDashboard() {
                           {offer.title}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          {[offer.companyName, offer.location, offer.contractType]
+                          {[
+                            offer.companyName,
+                            offer.location,
+                            offer.contractType,
+                          ]
                             .filter(Boolean)
                             .join(' • ')}
                         </p>
@@ -467,13 +476,15 @@ export default function CandidateDashboard() {
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               {(bundle?.skills ?? []).length > 0 ? (
-                bundle.skills.slice(0, 8).map((skill) => (
-                  <SkillTag
-                    key={skill.id}
-                    label={inferSkillLabel(skill)}
-                    variant="outline"
-                  />
-                ))
+                bundle.skills
+                  .slice(0, 8)
+                  .map((skill) => (
+                    <SkillTag
+                      key={skill.id}
+                      label={inferSkillLabel(skill)}
+                      variant="outline"
+                    />
+                  ))
               ) : (
                 <p className="text-sm text-muted-foreground">
                   Aucune compétence renseignée pour le moment.
@@ -524,7 +535,7 @@ function DashboardActionCard({
       </div>
       <div className="flex items-center justify-between gap-3">
         <span className="stat-value">{value}</span>
-        <ArrowRight className="h-4 w-4 text-accent" />
+        {/* <ArrowRight className="h-4 w-4 text-accent" /> */}
       </div>
       <span className="text-xs text-muted-foreground">{hint}</span>
     </button>
