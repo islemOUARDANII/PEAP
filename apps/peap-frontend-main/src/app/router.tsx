@@ -79,6 +79,12 @@ export function AppRouter() {
             path="/candidate/learning"
             element={<Navigate to="/candidate/offers" replace />}
           />
+
+          <Route
+            path="/candidate/demo-search"
+            element={<SearchOffer></SearchOffer>}
+          />
+
         </Route>
 
         <Route
