@@ -23,17 +23,8 @@ const SearchOfferRow = ({ offer, matchedCount, onClick }) => {
         </p>
       </div>
       {matchedCount && <CountBadge score={matchedCount} />}
-
       <div className="flex gap-1.5">
-        {/* <Button asChild variant="outline" size="sm" onClick={onClick}>
-          <Eye className="h-3 w-3 " /> Voir le détail
-        </Button> */}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={onClick}
-        >
+        <Button type="button" variant="outline" size="sm" onClick={onClick}>
           <Eye className="h-4 w-4" />
           Voir détails
         </Button>

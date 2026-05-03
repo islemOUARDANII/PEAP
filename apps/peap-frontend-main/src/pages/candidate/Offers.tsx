@@ -86,11 +86,11 @@ const SEARCH_MODE_OPTIONS: Array<{
   value: CandidateOfferSearchMode;
   label: string;
 }> = [
-    { value: 'keyword', label: 'Mot cle' },
-    { value: 'skill', label: 'Competence' },
-    { value: 'company', label: 'Entreprise' },
-    { value: 'location', label: 'Localisation' },
-  ];
+  { value: 'keyword', label: 'Mot cle' },
+  { value: 'skill', label: 'Competence' },
+  { value: 'company', label: 'Entreprise' },
+  { value: 'location', label: 'Localisation' },
+];
 
 const isOfferTab = (value: string | null): value is OfferTab =>
   value != null && OFFER_TABS.includes(value as OfferTab);
@@ -103,8 +103,8 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const toStringList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value
-      .map((item) => cleanText(item))
-      .filter((item): item is string => Boolean(item))
+        .map((item) => cleanText(item))
+        .filter((item): item is string => Boolean(item))
     : [];
 
 const formatSearchRelevance = (value: number | null): string | null => {
@@ -350,9 +350,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-          query: appliedSearch,
-          mode: searchMode,
-        })
+            query: appliedSearch,
+            mode: searchMode,
+          })
         : getAllPublishedOffers(),
     enabled: activeTab === 'all',
     staleTime: 5 * 60_000,
@@ -367,9 +367,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-          query: appliedSearch,
-          mode: searchMode,
-        })
+            query: appliedSearch,
+            mode: searchMode,
+          })
         : getInterestingOffers(),
     enabled: activeTab === 'interesting' && hasCandidateProfile,
     staleTime: 5 * 60_000,
@@ -430,8 +430,8 @@ export default function CandidateOffers() {
     : false;
   const interestingKeywords =
     activeTab === 'interesting' &&
-      interestingOffersQuery.data &&
-      'keywords' in interestingOffersQuery.data
+    interestingOffersQuery.data &&
+    'keywords' in interestingOffersQuery.data
       ? interestingOffersQuery.data.keywords
       : [];
   const interestingKeywordsLabel = interestingKeywords
@@ -529,8 +529,9 @@ export default function CandidateOffers() {
   const tabCountBadge = (n: number, active: boolean) => (
     <Badge
       variant="secondary"
-      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${active ? 'bg-accent text-accent-foreground' : ''
-        }`}
+      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${
+        active ? 'bg-accent text-accent-foreground' : ''
+      }`}
     >
       {n}
     </Badge>
@@ -849,30 +850,33 @@ export default function CandidateOffers() {
               ) : (allOffersQuery.data?.offers ?? []).length === 0 ? (
                 <OfferPanelMessage message="Aucune offre publiée pour le moment." />
               ) : (
-                <><div className={view === 'grid' ? "grid grid-cols-1 xl:grid-cols-2 gap-4" : "panel divide-y divide-border"}>
-                  {(allOffersQuery.data?.offers ?? []).map((offer) => (
-                    <>
-                      {view === 'grid' ? (
-
-                        <SearchOfferCard
-                          key={`all-${offer.offerId ?? offer.title}`}
-                          offer={offer}
-                          showSearchRelevance={hasActiveSearch}
-                          onSelect={() => setSelectedOffer(offer)}
-                        />
-
-                      ) : (
-
-                        <SearchOfferRow
-                          key={`all-${offer.offerId ?? offer.title}`}
-                          offer={offer}
-                          onClick={() => setSelectedOffer(offer)}
-                        />
-
-                      )}
-                    </>
-                  ))}
-                </div>
+                <>
+                  <div
+                    className={
+                      view === 'grid'
+                        ? 'grid grid-cols-1 xl:grid-cols-2 gap-4'
+                        : 'panel divide-y divide-border'
+                    }
+                  >
+                    {(allOffersQuery.data?.offers ?? []).map((offer) => (
+                      <>
+                        {view === 'grid' ? (
+                          <SearchOfferCard
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            showSearchRelevance={hasActiveSearch}
+                            onSelect={() => setSelectedOffer(offer)}
+                          />
+                        ) : (
+                          <SearchOfferRow
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            onClick={() => setSelectedOffer(offer)}
+                          />
+                        )}
+                      </>
+                    ))}
+                  </div>
                 </>
               )}
             </TabsContent>
@@ -1047,14 +1051,15 @@ export default function CandidateOffers() {
         </div>
       </div>
       <Dialog
-        open={Boolean(selectedOffer)}
+        // open={Boolean(selectedOffer)}
+        open={true}
         onOpenChange={(open) => {
           if (!open) {
             setSelectedOffer(null);
           }
         }}
       >
-        <DialogContent className="max-h-[85vh] max-w-5xl overflow-y-auto">
+        <DialogContent className="max-h-[85vh] max-w-5xl p-8 overflow-y-auto card-border-top">
           {selectedOffer ? (
             selectedOffer.kind === 'matching' ? (
               <>
@@ -1063,7 +1068,10 @@ export default function CandidateOffers() {
                     {selectedOffer.title}
                   </DialogTitle>
                   <DialogDescription>
-                    {selectedOffer.companyName}
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                      <Building2 className="h-3 w-3" />{' '}
+                      {selectedOffer.companyName}
+                    </p>
                   </DialogDescription>
                 </DialogHeader>
 
@@ -1071,61 +1079,61 @@ export default function CandidateOffers() {
                   <DetailField
                     icon={MapPin}
                     label="Localisation"
-                    value={selectedOffer.location ?? 'Non renseignée'}
+                    value={selectedOffer?.location ?? 'Non renseignée'}
                   />
                   <DetailField
                     icon={Briefcase}
                     label="Type de contrat"
-                    value={selectedOffer.contractType ?? 'Non renseigné'}
+                    value={selectedOffer?.contractType ?? 'Non renseigné'}
                   />
                   <DetailField
                     icon={Sparkles}
                     label="Score de compatibilité"
-                    value={`${selectedOffer.score}%`}
+                    value={`${selectedOffer?.score}%`}
                   />
                   <DetailField
                     icon={Building2}
                     label="Entreprise"
-                    value={selectedOffer.companyName}
+                    value={selectedOffer?.companyName}
                   />
-                  {selectedOffer.workMode ? (
+                  {selectedOffer?.workMode ? (
                     <DetailField
                       icon={Briefcase}
                       label="Mode de travail"
-                      value={selectedOffer.workMode}
+                      value={selectedOffer?.workMode}
                     />
                   ) : null}
-                  {selectedOffer.publishedAt ? (
+                  {selectedOffer?.publishedAt ? (
                     <DetailField
                       icon={CalendarDays}
                       label="Date de publication"
                       value={
-                        formatDate(selectedOffer.publishedAt) ??
+                        formatDate(selectedOffer?.publishedAt) ??
                         'Non renseignée'
                       }
                     />
                   ) : null}
                 </div>
 
-                <section className="space-y-3">
+                <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                   <h3 className="text-sm font-semibold text-foreground">
                     Description
                   </h3>
-                  <p className="whitespace-pre-wrap text-sm leading-6 text-foreground/90">
-                    {selectedOffer.description ??
+                  <p className="whitespace-pre-wrap text-sm leading-4 text-foreground/90">
+                    {selectedOffer?.description ??
                       'Aucune description disponible pour le moment.'}
                   </p>
                 </section>
 
-                <section className="space-y-3">
+                <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                   <h3 className="text-sm font-semibold text-foreground">
                     Compétences demandées
                   </h3>
                   <div className="flex flex-wrap gap-2">
-                    {selectedOffer.skills.length > 0 ? (
-                      selectedOffer.skills.map((skill) => (
+                    {selectedOffer?.skills.length > 0 ? (
+                      selectedOffer?.skills.map((skill) => (
                         <SkillTag
-                          key={`${selectedOffer.matchingResultId}-${skill}`}
+                          key={`${selectedOffer?.matchingResultId}-${skill}`}
                           label={skill}
                           variant="matched"
                         />
@@ -1139,7 +1147,7 @@ export default function CandidateOffers() {
                 </section>
 
                 {selectedOffer.languages.length > 0 ? (
-                  <section className="space-y-3">
+                  <section className="space-y-2 rounded-xl border border-border card-border-left-orange border-color-aneti-orange p-4">
                     <h3 className="text-sm font-semibold text-foreground">
                       Langues demandées
                     </h3>
@@ -1156,7 +1164,7 @@ export default function CandidateOffers() {
                 ) : null}
 
                 {selectedOffer.educationRequirements.length > 0 ? (
-                  <section className="space-y-3">
+                  <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                     <h3 className="text-sm font-semibold text-foreground">
                       Formation
                     </h3>
@@ -1167,7 +1175,7 @@ export default function CandidateOffers() {
                 ) : null}
 
                 {selectedOffer.experienceRequirements.length > 0 ? (
-                  <section className="space-y-3">
+                  <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                     <h3 className="text-sm font-semibold text-foreground">
                       Expérience
                     </h3>
@@ -1177,7 +1185,7 @@ export default function CandidateOffers() {
                   </section>
                 ) : null}
 
-                <section className="space-y-3">
+                <section className="space-y-2 rounded-xl border border-border card-border-left-orange border-color-aneti-orange p-4">
                   <div className="flex items-center gap-2">
                     <Lightbulb className="h-4 w-4 text-accent" />
                     <h3 className="text-sm font-semibold text-foreground">
@@ -1225,7 +1233,10 @@ export default function CandidateOffers() {
                     {selectedOffer.title}
                   </DialogTitle>
                   <DialogDescription>
-                    {selectedOffer.companyName ?? 'Entreprise non renseignée'}
+                    <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                      <Building2 className="h-3 w-3" />{' '}
+                      {selectedOffer.companyName}
+                    </p>
                   </DialogDescription>
                 </DialogHeader>
 
@@ -1274,7 +1285,7 @@ export default function CandidateOffers() {
                   ) : null}
                 </div>
 
-                <section className="space-y-3">
+                <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                   <h3 className="text-sm font-semibold text-foreground">
                     Description
                   </h3>
@@ -1285,7 +1296,7 @@ export default function CandidateOffers() {
                 </section>
 
                 {selectedOffer.skills.length > 0 ? (
-                  <section className="space-y-3">
+                  <section className="space-y-2 rounded-xl border border-border card-border-left-orange border-color-aneti-orange p-4">
                     <h3 className="text-sm font-semibold text-foreground">
                       Compétences
                     </h3>
@@ -1323,7 +1334,8 @@ export default function CandidateOffers() {
               </>
             )
           ) : (
-            <div className="py-6 text-sm text-muted-foreground">
+            <div className="flex gap-2 items-center justify-center text-center py-6 text-sm text-destructive">
+              <Ban className="h-6 w-6 text-destructive" />
               Impossible de charger le détail de cette offre pour le moment.
             </div>
           )}
@@ -1381,7 +1393,8 @@ function SearchOfferCard({
 
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary text-xs font-semibold">
-            {offer.companyName?.split(' ')
+            {offer.companyName
+              ?.split(' ')
               .map((s) => s[0])
               .join('')
               .slice(0, 2)}
@@ -1472,7 +1485,7 @@ function RecommendedOfferCard({
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary text-xs font-semibold">
             {offer.companyName
-              .split(' ')
+              ?.split(' ')
               .map((s) => s[0])
               .join('')
               .slice(0, 2)}

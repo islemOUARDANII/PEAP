@@ -782,6 +782,10 @@
   border-left: 6px solid hsl(var(--accent));
 }
 
+.card-border-left-blue {
+  border-left: 6px solid hsl(var(--primary));
+}
+
 .button-download {
   cursor: pointer;
   color: hsl(var(--accent));
@@ -903,6 +907,10 @@
   border-color: #00548d;
 }
 
+.border-color-primary {
+  border-color: hsl(var(--primary));
+}
+
 .profile-border-left-orange {
   border: 1px solid;
   border-left: 6px solid;
@@ -922,8 +930,6 @@
 .profile-background-color-19-opacity-70 {
   background-color: rgba(100, 116, 139, 0.7);
 }
-
-
 
 .profile-border-left-20 {
   border: 1px solid;
