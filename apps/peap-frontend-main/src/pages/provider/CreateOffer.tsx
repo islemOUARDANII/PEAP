@@ -257,7 +257,7 @@ export default function CreateOffer() {
         }
       />
 
-      <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between card-border-top-orange">
         <div>
           <p className="text-sm font-semibold text-foreground">Input mode</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -335,7 +335,7 @@ export default function CreateOffer() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">
                 Structured Review
@@ -356,9 +356,9 @@ export default function CreateOffer() {
                 <RotateCcw className="h-4 w-4 mr-1.5" /> Rework raw text
               </Button>
             )}
-          </div>
+          </div> */}
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Role Basics</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
@@ -423,7 +423,7 @@ export default function CreateOffer() {
             </div>
           </div>
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Extracted Requirements</p>
             <ListField
               label="Target occupations"
@@ -445,7 +445,7 @@ export default function CreateOffer() {
             <TagPreview value={form.optionalSkills} />
           </div>
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Education, Certifications & Languages</p>
             <Field
               label="Minimum education"
@@ -587,7 +587,7 @@ function LanguageRequirementsField({
             return (
               <div
                 key={`${item.languageCode}-${index}`}
-                className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto]"
+                className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto] border-color-aneti-blue border-left-aneti"
               >
                 <div>
                   <Label className="text-xs">Language</Label>
