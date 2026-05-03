@@ -45,7 +45,7 @@ const emitCandidatePortalPreferencesChange = (): void => {
   window.dispatchEvent(new Event(CANDIDATE_PORTAL_PREFERENCES_EVENT_NAME));
 };
 
-const normalizeCandidateMinimumOfferScore = (value: unknown): number => {
+export const normalizeCandidateMinimumOfferScore = (value: unknown): number => {
   const parsed = typeof value === 'number' ? value : Number(value);
 
   if (!Number.isFinite(parsed)) {

@@ -61,10 +61,11 @@ import { readStoredSession } from '@/services/auth/sessionStorage';
 import ErrorCard from '@/components/common/ErrorCard';
 import LoadingCard from '@/components/common/LoadingCard';
 import {
-  candidatePortalPreferencesEventName,
   candidateOfferScoreOptions,
   getStoredCandidateInterestKeywords,
   getStoredCandidateMinimumOfferScore,
+  normalizeCandidateMinimumOfferScore,
+  setStoredCandidateInterestKeywords,
   setStoredCandidateMinimumOfferScore,
 } from '@/services/candidate/candidatePortalPreferences';
 import {
@@ -75,6 +76,7 @@ import {
   buildLanguageItems,
   buildProjectItems,
   buildSkillItems,
+  cleanText as cleanProfileText,
   cleanDisplayText as cleanCandidateDisplayText,
   formatDate as formatCandidateDate,
   formatDateRange as formatCandidateDateRange,
@@ -366,6 +368,98 @@ const hasSkillValue = (item: SkillDraft): boolean =>
 
 const hasLanguageValue = (item: LanguageDraft): boolean =>
   [item.languageCode, item.level, item.evidence].some((value) => value.trim());
+
+const isEndpointUnavailableError = (error: unknown): boolean =>
+  error instanceof ApiServiceError && [404, 405, 501].includes(error.status);
+
+const normalizeKeyword = (value: unknown): string | null => cleanProfileText(value);
+
+const normalizeKeywordList = (keywords: string[]): string[] =>
+  Array.from(
+    new Set(
+      keywords
+        .map((keyword) => normalizeKeyword(keyword))
+        .filter((keyword): keyword is string => Boolean(keyword)),
+    ),
+  );
+
+const toKeywordRecords = (keywords: string[]) =>
+  normalizeKeywordList(keywords).map((keyword, index) => ({
+    id: `keyword-local-${index + 1}`,
+    keyword,
+    keywordType: null,
+    source: 'LOCAL',
+    weight: null,
+  }));
+
+const toNullableYear = (value: string): number | null => {
+  const normalized = value.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  const yearMatch = normalized.match(/\b(19|20)\d{2}\b/);
+  if (!yearMatch) {
+    return null;
+  }
+
+  return Number(yearMatch[0]);
+};
+
+const splitListValue = (value: string, separatorPattern: RegExp): string[] =>
+  Array.from(
+    new Set(
+      value
+        .split(separatorPattern)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    ),
+  );
+
+const toCommaSeparatedValue = (items: string[]): string => items.join(', ');
+
+const toMultilineValue = (items: string[]): string => items.join('\n');
+
+const uniqueTextValues = (...values: Array<string | null | undefined>): string[] => {
+  const seen = new Set<string>();
+  const items: string[] = [];
+
+  for (const value of values) {
+    const normalized = normalizeKeyword(value);
+    if (!normalized) {
+      continue;
+    }
+
+    const comparable = normalized.toLocaleLowerCase('fr');
+    if (seen.has(comparable)) {
+      continue;
+    }
+
+    seen.add(comparable);
+    items.push(normalized);
+  }
+
+  return items;
+};
+
+const formatCountryLabel = (value: string | null | undefined): string | null => {
+  const normalized = value?.trim().toUpperCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const countryLabels: Record<string, string> = {
+    TN: 'Tunisie',
+    FR: 'France',
+    DE: 'Allemagne',
+    IT: 'Italie',
+    ES: 'Espagne',
+    UK: 'Royaume-Uni',
+    US: 'États-Unis',
+  };
+
+  return countryLabels[normalized] ?? cleanCandidateDisplayText(value, '');
+};
 
 async function syncDraftCollection<
   TCurrent extends { id: string },
@@ -667,7 +761,16 @@ function applyParsedCvToDraft(
       gpa: toStringOrEmpty(item.gpa),
     })),
 
-    experience: [...(patch.experience ?? []), ...(patch.stages ?? [])].map((item) => ({
+    experience: [
+      ...(patch.experience ?? []).map((item) => ({
+        ...item,
+        entry_type: item.entry_type ?? item.entryType ?? 'experience',
+      })),
+      ...(patch.stages ?? []).map((item) => ({
+        ...item,
+        entry_type: item.entry_type ?? item.entryType ?? 'internship',
+      })),
+    ].map((item) => ({
       jobTitleRaw: toStringOrEmpty(
         item.title ?? item.job_title ?? item.jobTitleRaw,
       ),
@@ -820,6 +923,11 @@ const formatLanguageLevelLabel = (
 };
 
 const isInternshipExperience = (experience: ExperienceDraft): boolean => {
+  const normalizedEntryType = experience.entryType.trim().toLowerCase();
+  if (normalizedEntryType === 'internship') {
+    return true;
+  }
+
   const haystack = [
     experience.jobTitleRaw,
     experience.companyName,
@@ -863,10 +971,11 @@ export default function Profile() {
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
   const [latestParseResult, setLatestParseResult] =
     useState<CandidateCvParseResult | null>(null);
-  const [interestKeywords, setInterestKeywords] = useState<string[]>(
-    getStoredCandidateInterestKeywords(),
+  const [interestKeywordsDraft, setInterestKeywordsDraft] = useState<string[]>(
+    [],
   );
-  const [minimumOfferScore, setMinimumOfferScore] = useState(
+  const [interestKeywordInput, setInterestKeywordInput] = useState('');
+  const [minimumOfferScoreDraft, setMinimumOfferScoreDraft] = useState(
     getStoredCandidateMinimumOfferScore(),
   );
 
@@ -908,8 +1017,59 @@ export default function Profile() {
     queryFn: () => gatewayApi.referentials.languageLevels(),
     staleTime: 5 * 60_000,
   });
+  const keywordsQuery = useQuery({
+    queryKey: queryKeys.candidate.keywords(),
+    queryFn: async () => {
+      try {
+        return await gatewayApi.candidate.getKeywords();
+      } catch (error) {
+        if (isEndpointUnavailableError(error)) {
+          return toKeywordRecords(getStoredCandidateInterestKeywords());
+        }
+
+        throw error;
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const offerThresholdQuery = useQuery({
+    queryKey: queryKeys.candidate.offerThreshold(),
+    queryFn: async () => {
+      try {
+        return await gatewayApi.candidate.getOfferThreshold();
+      } catch (error) {
+        if (isEndpointUnavailableError(error)) {
+          return {
+            minThreshold: getStoredCandidateMinimumOfferScore(),
+          };
+        }
+
+        throw error;
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
 
   const bundle = bundleQuery.data;
+  const savedInterestKeywords = useMemo(
+    () =>
+      keywordsQuery.data
+        ? normalizeKeywordList(keywordsQuery.data.map((item) => item.keyword))
+        : normalizeKeywordList(getStoredCandidateInterestKeywords()),
+    [keywordsQuery.data],
+  );
+  const savedMinimumOfferScore = useMemo(
+    () =>
+      normalizeCandidateMinimumOfferScore(
+        offerThresholdQuery.data?.minThreshold ??
+          getStoredCandidateMinimumOfferScore(),
+      ),
+    [offerThresholdQuery.data?.minThreshold],
+  );
+  const minimumOfferScore = minimumOfferScoreDraft;
+  const setMinimumOfferScore = setMinimumOfferScoreDraft;
 
   useEffect(() => {
     if (bundle && !isEditing) {
@@ -918,25 +1078,12 @@ export default function Profile() {
   }, [bundle, isEditing]);
 
   useEffect(() => {
-    const syncPortalPreferences = () => {
-      setMinimumOfferScore(getStoredCandidateMinimumOfferScore());
-      setInterestKeywords(getStoredCandidateInterestKeywords());
-    };
-
-    window.addEventListener(
-      candidatePortalPreferencesEventName(),
-      syncPortalPreferences,
-    );
-    window.addEventListener('storage', syncPortalPreferences);
-
-    return () => {
-      window.removeEventListener(
-        candidatePortalPreferencesEventName(),
-        syncPortalPreferences,
-      );
-      window.removeEventListener('storage', syncPortalPreferences);
-    };
-  }, []);
+    if (!isEditing) {
+      setInterestKeywordsDraft(savedInterestKeywords);
+      setMinimumOfferScoreDraft(savedMinimumOfferScore);
+      setInterestKeywordInput('');
+    }
+  }, [isEditing, savedInterestKeywords, savedMinimumOfferScore]);
 
   const currentDraft = draft ?? (bundle ? toDraft(bundle) : null);
   const currentCv = bundle?.currentCv;
@@ -965,6 +1112,38 @@ export default function Profile() {
       delegationsQuery.data,
     ],
   );
+  const selectedGenderLabel = useMemo(
+    () =>
+      gendersQuery.data?.find(
+        (option) => option.code === currentDraft?.genderCode,
+      )?.label ?? bundle?.identity?.gender_label ?? '',
+    [
+      bundle?.identity?.gender_label,
+      currentDraft?.genderCode,
+      gendersQuery.data,
+    ],
+  );
+  const preferredContractTypeLabel = useMemo(
+    () =>
+      contractTypesQuery.data?.find(
+        (option) => option.code === currentDraft?.preferredContractType,
+      )?.label ?? currentDraft?.preferredContractType ?? '',
+    [contractTypesQuery.data, currentDraft?.preferredContractType],
+  );
+  const preferredGovernorateLabel = useMemo(
+    () =>
+      governoratesQuery.data?.find(
+        (option) => option.code === currentDraft?.preferredGovernorate,
+      )?.label ?? currentDraft?.preferredGovernorate ?? '',
+    [currentDraft?.preferredGovernorate, governoratesQuery.data],
+  );
+  const primaryLanguageLabel = useMemo(
+    () =>
+      currentDraft?.primaryLanguage
+        ? formatCandidateLanguageLabel(currentDraft.primaryLanguage)
+        : null,
+    [currentDraft?.primaryLanguage],
+  );
 
   const displayName = useMemo(() => {
     const draftName = [currentDraft?.firstName, currentDraft?.lastName]
@@ -980,11 +1159,12 @@ export default function Profile() {
   }, [bundle, currentDraft?.firstName, currentDraft?.lastName]);
 
   const displayLocation = useMemo(() => {
-    const parts = [
+    const parts = uniqueTextValues(
       currentDraft?.address?.trim(),
       selectedDelegationLabel,
       selectedGovernorateLabel,
-    ].filter(Boolean);
+      formatCountryLabel(currentDraft?.country),
+    );
 
     if (parts.length > 0) {
       return parts.join(', ');
@@ -1056,7 +1236,9 @@ export default function Profile() {
   );
 
   const visibleInterestKeywords =
-    parsedInterestKeywords.length > 0 ? parsedInterestKeywords : interestKeywords;
+    preferParsedView && parsedInterestKeywords.length > 0
+      ? parsedInterestKeywords
+      : savedInterestKeywords;
 
   const refreshCandidateViews = async () => {
     await Promise.all([
@@ -1065,6 +1247,12 @@ export default function Profile() {
       }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.candidate.profile(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.keywords(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.offerThreshold(),
       }),
       queryClient.invalidateQueries({
         queryKey: queryKeys.candidate.bundle(),
@@ -1081,6 +1269,9 @@ export default function Profile() {
       queryClient.invalidateQueries({
         queryKey: queryKeys.candidate.recommendations(),
       }),
+      queryClient.invalidateQueries({
+        queryKey: ['search', 'offers'],
+      }),
     ]);
   };
 
@@ -1089,12 +1280,80 @@ export default function Profile() {
       queryKey: queryKeys.candidate.bundle(),
       queryFn: () => gatewayApi.candidate.getBundle(),
     });
+  const professionalExperienceDrafts = useMemo(
+    () => currentDraft?.experience.filter((item) => !isInternshipExperience(item)) ?? [],
+    [currentDraft?.experience],
+  );
+  const internshipExperienceDrafts = useMemo(
+    () => currentDraft?.experience.filter((item) => isInternshipExperience(item)) ?? [],
+    [currentDraft?.experience],
+  );
+  const replaceExperienceDrafts = (
+    segment: 'professional' | 'internship',
+    nextItems: SetStateAction<ExperienceDraft[]>,
+  ) => {
+    setDraft((current) => {
+      if (!current) {
+        return current;
+      }
 
+      const currentSegment = current.experience.filter((item) =>
+        segment === 'professional'
+          ? !isInternshipExperience(item)
+          : isInternshipExperience(item),
+      );
+      const otherSegment = current.experience.filter((item) =>
+        segment === 'professional'
+          ? isInternshipExperience(item)
+          : !isInternshipExperience(item),
+      );
+      const resolvedSegment =
+        typeof nextItems === 'function' ? nextItems(currentSegment) : nextItems;
+
+      return {
+        ...current,
+        experience:
+          segment === 'professional'
+            ? [...resolvedSegment, ...otherSegment]
+            : [...otherSegment, ...resolvedSegment],
+      };
+    });
+  };
+  const startEditing = () => {
+    if (bundle) {
+      setDraft(toDraft(bundle));
+    }
+    setInterestKeywordsDraft(savedInterestKeywords);
+    setMinimumOfferScoreDraft(savedMinimumOfferScore);
+    setInterestKeywordInput('');
+    setIsEditing(true);
+  };
+  const addInterestKeyword = () => {
+    const normalizedKeyword = normalizeKeyword(interestKeywordInput);
+    if (!normalizedKeyword) {
+      return;
+    }
+
+    setInterestKeywordsDraft((current) =>
+      normalizeKeywordList([...current, normalizedKeyword]),
+    );
+    setInterestKeywordInput('');
+  };
+  const removeInterestKeyword = (keyword: string) => {
+    setInterestKeywordsDraft((current) =>
+      current.filter(
+        (item) => item.toLocaleLowerCase('fr') !== keyword.toLocaleLowerCase('fr'),
+      ),
+    );
+  };
 
   const handleCancel = () => {
     if (bundle) {
       setDraft(toDraft(bundle));
     }
+    setInterestKeywordsDraft(savedInterestKeywords);
+    setMinimumOfferScoreDraft(savedMinimumOfferScore);
+    setInterestKeywordInput('');
     setLatestParseResult(null);
     setIsEditing(false);
   };
@@ -1165,6 +1424,12 @@ export default function Profile() {
         current ? applyParsedCvToDraft(current, parseResult) : current,
       );
 
+      const parsedKeywords = buildInterestKeywords(parseResult);
+      setInterestKeywordsDraft(
+        parsedKeywords.length > 0 ? parsedKeywords : savedInterestKeywords,
+      );
+      setMinimumOfferScoreDraft(savedMinimumOfferScore);
+      setInterestKeywordInput('');
       setIsEditing(true);
 
       await refreshCandidateViews();
@@ -1186,6 +1451,45 @@ export default function Profile() {
       }
     }
   };
+
+  const buildEducationPayload = (item: EducationDraft) => ({
+    level_code: item.levelCode || null,
+    degree: item.degree || null,
+    diploma_label: item.diplomaLabel || item.degree || null,
+    specialty: item.specialty || null,
+    institution: item.institution || null,
+    start_date: item.startDate || null,
+    end_date: item.endDate || null,
+    graduation_year: toNullableYear(item.graduationYear),
+    location: item.location || null,
+    honors: item.honors || null,
+    gpa: item.gpa || null,
+  });
+
+  const buildExperiencePayload = (item: ExperienceDraft) => ({
+    job_title_raw:
+      item.entryType === 'internship'
+        ? item.jobTitleRaw
+          ? /stage|internship|intern/i.test(item.jobTitleRaw)
+            ? item.jobTitleRaw
+            : `Stage - ${item.jobTitleRaw}`
+          : 'Stage'
+        : item.jobTitleRaw || null,
+    company_name: item.companyName || null,
+    sector: item.sector || null,
+    location: item.location || null,
+    start_date: item.startDate || null,
+    end_date: item.endDate || null,
+    is_current: item.isCurrent,
+    duration_months: toNullableNumber(item.durationMonths),
+    duration_years: toNullableNumber(item.durationYears),
+    description: item.description || null,
+    responsibilities:
+      item.responsibilities.length > 0 ? item.responsibilities : null,
+    technologies: item.technologies.length > 0 ? item.technologies : null,
+    projects: item.projects.length > 0 ? item.projects : null,
+    entry_type: item.entryType || (isInternshipExperience(item) ? 'internship' : 'experience'),
+  });
 
   const handleSave = async () => {
     if (!bundle || !currentDraft) {
@@ -1230,26 +1534,9 @@ export default function Profile() {
         bundle.education,
         currentDraft.education,
         hasEducationValue,
+        (item) => gatewayApi.candidate.createEducation(buildEducationPayload(item)),
         (item) =>
-          gatewayApi.candidate.createEducation({
-            level_code: item.levelCode || null,
-            diploma_label: item.diplomaLabel || item.degree || null,
-            specialty: item.specialty || null,
-            institution: item.institution || null,
-            graduation_year: item.graduationYear
-              ? Number(item.graduationYear)
-              : null,
-          }),
-        (item) =>
-          gatewayApi.candidate.updateEducation(item.id!, {
-            level_code: item.levelCode || null,
-            diploma_label: item.diplomaLabel || item.degree || null,
-            specialty: item.specialty || null,
-            institution: item.institution || null,
-            graduation_year: item.graduationYear
-              ? Number(item.graduationYear)
-              : null,
-          }),
+          gatewayApi.candidate.updateEducation(item.id!, buildEducationPayload(item)),
         (id) => gatewayApi.candidate.deleteEducation(id),
       );
 
@@ -1257,38 +1544,9 @@ export default function Profile() {
         bundle.experience,
         currentDraft.experience,
         hasExperienceValue,
+        (item) => gatewayApi.candidate.createExperience(buildExperiencePayload(item)),
         (item) =>
-          gatewayApi.candidate.createExperience({
-            job_title_raw:
-              item.entryType === 'internship'
-                ? item.jobTitleRaw
-                  ? /stage|internship|intern/i.test(item.jobTitleRaw)
-                    ? item.jobTitleRaw
-                    : `Stage - ${item.jobTitleRaw}`
-                  : 'Stage'
-                : item.jobTitleRaw || null,
-            company_name: item.companyName || null,
-            sector: item.sector || null,
-            start_date: item.startDate || null,
-            end_date: item.endDate || null,
-            description: item.description || null,
-          }),
-        (item) =>
-          gatewayApi.candidate.updateExperience(item.id!, {
-            job_title_raw:
-              item.entryType === 'internship'
-                ? item.jobTitleRaw
-                  ? /stage|internship|intern/i.test(item.jobTitleRaw)
-                    ? item.jobTitleRaw
-                    : `Stage - ${item.jobTitleRaw}`
-                  : 'Stage'
-                : item.jobTitleRaw || null,
-            company_name: item.companyName || null,
-            sector: item.sector || null,
-            start_date: item.startDate || null,
-            end_date: item.endDate || null,
-            description: item.description || null,
-          }),
+          gatewayApi.candidate.updateExperience(item.id!, buildExperiencePayload(item)),
         (id) => gatewayApi.candidate.deleteExperience(id),
       );
 
@@ -1334,9 +1592,54 @@ export default function Profile() {
         (id) => gatewayApi.candidate.deleteLanguage(id),
       );
 
+      const normalizedKeywords = normalizeKeywordList(interestKeywordsDraft);
+      let persistedKeywords = toKeywordRecords(normalizedKeywords);
+
+      try {
+        persistedKeywords = await gatewayApi.candidate.replaceKeywords(
+          normalizedKeywords,
+        );
+      } catch (error) {
+        if (!isEndpointUnavailableError(error)) {
+          throw error;
+        }
+      }
+
+      setStoredCandidateInterestKeywords(
+        persistedKeywords.map((item) => item.keyword),
+      );
+      queryClient.setQueryData(queryKeys.candidate.keywords(), persistedKeywords);
+
+      const requestedMinimumOfferScore = normalizeCandidateMinimumOfferScore(
+        minimumOfferScoreDraft,
+      );
+      let persistedMinimumOfferScore = requestedMinimumOfferScore;
+
+      try {
+        const thresholdRecord = await gatewayApi.candidate.updateOfferThreshold(
+          requestedMinimumOfferScore,
+        );
+        persistedMinimumOfferScore = normalizeCandidateMinimumOfferScore(
+          thresholdRecord?.minThreshold ?? requestedMinimumOfferScore,
+        );
+      } catch (error) {
+        if (!isEndpointUnavailableError(error)) {
+          throw error;
+        }
+      }
+
+      setStoredCandidateMinimumOfferScore(persistedMinimumOfferScore);
+      queryClient.setQueryData(queryKeys.candidate.offerThreshold(), {
+        minThreshold: persistedMinimumOfferScore,
+      });
+
       const updatedBundle = await refetchCandidateBundle();
       await refreshCandidateViews();
       setDraft(toDraft(updatedBundle));
+      setLatestParseResult(null);
+      setInterestKeywordsDraft(persistedKeywords.map((item) => item.keyword));
+      setMinimumOfferScoreDraft(persistedMinimumOfferScore);
+      setInterestKeywordInput('');
       setIsEditing(false);
       toast.success('Votre profil a été enregistré.');
     } catch (error) {
@@ -1362,6 +1665,11 @@ export default function Profile() {
       />
     );
   }
+
+  if (!currentDraft) {
+    return <LoadingCard text="Préparation de votre profil..." />;
+  }
+
   return (
     <div className="relative space-y-6">
       {isUploadingCv || isParsingCv ? (
@@ -1428,7 +1736,7 @@ export default function Profile() {
                 type="button"
                 variant="outline"
                 size="sm"
-                onClick={() => setIsEditing(true)}
+                onClick={startEditing}
               >
                 <Pencil className="h-4 w-4" />
                 Modifier
@@ -1461,50 +1769,682 @@ export default function Profile() {
       />
 
       <article className="panel-elevated overflow-hidden card-border-top">
-        <div className="border-b border-border bg-gradient-to-br from-primary/[0.06] via-background to-accent-soft/50 px-6 py-7 sm:px-8">
-          <div className="flex flex-col gap-6 lg:flex-row lg:justify-between lg:items-start">
-            <div className="max-w-3xl">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                Profil candidat
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
-                {displayName}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-                Gardez vos coordonnées, vos expériences, vos compétences et vos
-                préférences à jour pour recevoir des offres plus pertinentes.
-              </p>
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                <ProfileMetaChip
-                  icon={MapPin}
-                  label={cleanCandidateDisplayText(displayLocation)}
-                />
-                <ProfileMetaChip
-                  icon={Mail}
-                  label={cleanCandidateDisplayText(currentDraft?.email)}
-                />
-                <ProfileMetaChip
-                  icon={Globe2}
-                  label={`Langue principale : ${
-                    currentDraft?.primaryLanguage
-                      ? formatCandidateLanguageLabel(
-                          currentDraft.primaryLanguage,
-                        ) ?? 'Non renseigné'
-                      : 'Non renseigné'
-                  }`}
-                />
-                <ProfileMetaChip
-                  icon={Languages}
-                  label={`${languageItems.length} langue(s) renseignée(s)`}
-                />
-              </div>
-            </div>
-          </div>
-
-        </div>
+        <ProfileOverviewSection
+          displayName={displayName}
+          displayLocation={displayLocation}
+          email={currentDraft.email}
+          primaryLanguageLabel={primaryLanguageLabel}
+          languageCount={languageItems.length}
+        />
 
         <div className="space-y-8 px-6 py-7 sm:px-8">
+          {!isEditing ? (
+            <>
+              <ReadOnlyGridSection
+                title="Informations personnelles"
+                description="Vos informations personnelles et vos coordonnées."
+                icon={UserRound}
+                iconClassName="icon-background-color-3"
+                items={[
+                  { label: 'Prénom', value: currentDraft.firstName },
+                  { label: 'Nom', value: currentDraft.lastName },
+                  { label: 'E-mail', value: currentDraft.email },
+                  { label: 'Téléphone', value: currentDraft.phone },
+                  {
+                    label: 'Adresse',
+                    value: displayLocation || currentDraft.address,
+                    fullWidth: true,
+                  },
+                  { label: 'Nationalité', value: currentDraft.nationality },
+                  {
+                    label: 'Date de naissance',
+                    value: formatCandidateDate(currentDraft.birthDate),
+                  },
+                  { label: 'Genre', value: selectedGenderLabel },
+                  { label: 'Gouvernorat', value: selectedGovernorateLabel },
+                  { label: 'Délégation', value: selectedDelegationLabel },
+                  { label: 'CIN', value: currentDraft.cin },
+                  { label: 'Passeport', value: currentDraft.passportNumber },
+                ]}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <ReadOnlyGridSection
+                title="Préférences professionnelles"
+                description="Vos préférences de contrat, de mobilité et de salaire."
+                icon={Globe2}
+                iconClassName="icon-background-color-7"
+                items={[
+                  {
+                    label: 'Type de contrat souhaité',
+                    value: preferredContractTypeLabel,
+                  },
+                  {
+                    label: 'Gouvernorat souhaité',
+                    value: preferredGovernorateLabel,
+                  },
+                  {
+                    label: 'Rayon de mobilité',
+                    value: currentDraft.mobilityRadiusKm
+                      ? `${currentDraft.mobilityRadiusKm} km`
+                      : null,
+                  },
+                  {
+                    label: 'Mobilité élargie',
+                    value: formatBooleanLabel(currentDraft.acceptsRelocation),
+                  },
+                  {
+                    label: 'Salaire minimum souhaité',
+                    value: currentDraft.desiredSalaryMin
+                      ? `${currentDraft.desiredSalaryMin}`
+                      : null,
+                  },
+                  {
+                    label: 'Salaire maximum souhaité',
+                    value: currentDraft.desiredSalaryMax
+                      ? `${currentDraft.desiredSalaryMax}`
+                      : null,
+                  },
+                ]}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <EducationReadOnly items={educationItems} />
+
+              <Separator className="bg-primary/40" />
+
+              <ExperienceReadOnlySection
+                title="Expériences professionnelles"
+                description="Vos expériences professionnelles renseignées."
+                items={professionalExperiences}
+                emptyMessage="Aucune expérience professionnelle renseignée."
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <ExperienceReadOnlySection
+                title="Stages"
+                description="Vos stages et expériences de type internship."
+                items={internshipExperiences}
+                emptyMessage="Aucun stage renseigné."
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <SkillsReadOnly skillGroups={skillGroups} />
+
+              <Separator className="bg-primary/40" />
+
+              <LanguagesReadOnly items={languageItems} />
+
+              {certificationItems.length > 0 ? (
+                <>
+                  <Separator className="bg-primary/40" />
+                  <CertificationsReadOnly items={certificationItems} />
+                </>
+              ) : null}
+
+              {projectItems.length > 0 ? (
+                <>
+                  <Separator className="bg-primary/40" />
+                  <ProjectsReadOnly items={projectItems} />
+                </>
+              ) : null}
+
+              <Separator className="bg-primary/40" />
+
+              <InterestsReadOnly keywords={visibleInterestKeywords} />
+
+              <Separator className="bg-primary/40" />
+
+              <RecommendationPreferencesReadOnly
+                minimumOfferScore={savedMinimumOfferScore}
+              />
+            </>
+          ) : (
+            <>
+              <section className="space-y-4">
+                <SectionTitle
+                  title="Informations personnelles"
+                  description="Mettez à jour vos informations personnelles et vos coordonnées."
+                  icon={UserRound}
+                  iconClassName="icon-background-color-3"
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Prénom"
+                    value={currentDraft.firstName}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, firstName: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Nom"
+                    value={currentDraft.lastName}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, lastName: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="E-mail"
+                    value={currentDraft.email}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, email: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Téléphone"
+                    value={currentDraft.phone}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, phone: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Adresse"
+                    value={currentDraft.address}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, address: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Nationalité"
+                    value={currentDraft.nationality}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, nationality: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Date de naissance"
+                    type="date"
+                    value={currentDraft.birthDate}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, birthDate: value } : current,
+                      )
+                    }
+                  />
+                  <SelectField
+                    label="Langue principale"
+                    value={currentDraft.primaryLanguage}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, primaryLanguage: value } : current,
+                      )
+                    }
+                    options={languagesQuery.data ?? []}
+                    placeholder="Choisir une langue"
+                  />
+                  <OptionSelect
+                    label="Genre"
+                    value={currentDraft.genderCode}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, genderCode: value } : current,
+                      )
+                    }
+                    options={gendersQuery.data ?? []}
+                    placeholder="Sélectionner"
+                  />
+                  <OptionSelect
+                    label="Gouvernorat"
+                    value={currentDraft.governorateCode}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              governorateCode: value,
+                              delegationCode: '',
+                              preferredGovernorate:
+                                current.preferredGovernorate || value,
+                            }
+                          : current,
+                      )
+                    }
+                    options={governoratesQuery.data ?? []}
+                    placeholder="Sélectionner"
+                  />
+                  <OptionSelect
+                    label="Délégation"
+                    value={currentDraft.delegationCode}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, delegationCode: value } : current,
+                      )
+                    }
+                    options={delegationsQuery.data ?? []}
+                    placeholder="Sélectionner"
+                    disabled={!currentDraft.governorateCode}
+                  />
+                  <Field
+                    label="CIN"
+                    value={currentDraft.cin}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, cin: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Passeport"
+                    value={currentDraft.passportNumber}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, passportNumber: value } : current,
+                      )
+                    }
+                  />
+                </div>
+              </section>
+
+              <Separator className="bg-primary/40" />
+
+              <section className="space-y-4">
+                <SectionTitle
+                  title="Préférences professionnelles"
+                  description="Vos préférences de contrat, de mobilité et de salaire."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                />
+                <div className="grid gap-4 md:grid-cols-2">
+                  <OptionSelect
+                    label="Type de contrat souhaité"
+                    value={currentDraft.preferredContractType}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, preferredContractType: value }
+                          : current,
+                      )
+                    }
+                    options={contractTypesQuery.data ?? []}
+                    placeholder="Sélectionner"
+                  />
+                  <OptionSelect
+                    label="Gouvernorat souhaité"
+                    value={currentDraft.preferredGovernorate}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current
+                          ? { ...current, preferredGovernorate: value }
+                          : current,
+                      )
+                    }
+                    options={governoratesQuery.data ?? []}
+                    placeholder="Sélectionner"
+                  />
+                  <Field
+                    label="Rayon de mobilité (km)"
+                    type="number"
+                    value={currentDraft.mobilityRadiusKm}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, mobilityRadiusKm: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Salaire minimum souhaité"
+                    type="number"
+                    value={currentDraft.desiredSalaryMin}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, desiredSalaryMin: value } : current,
+                      )
+                    }
+                  />
+                  <Field
+                    label="Salaire maximum souhaité"
+                    type="number"
+                    value={currentDraft.desiredSalaryMax}
+                    onChange={(value) =>
+                      setDraft((current) =>
+                        current ? { ...current, desiredSalaryMax: value } : current,
+                      )
+                    }
+                  />
+                </div>
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={currentDraft.acceptsRelocation}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                  Accepte la mobilité élargie
+                </label>
+              </section>
+
+              <Separator className="bg-primary/40" />
+
+              <CollectionSection<EducationDraft>
+                title="Formations et diplômes"
+                description="Vos diplômes, niveaux et établissements renseignés."
+                icon={GraduationCap}
+                iconClassName="icon-background-color-7"
+                items={currentDraft.education}
+                setItems={(updater) =>
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          education:
+                            typeof updater === 'function'
+                              ? updater(current.education)
+                              : updater,
+                        }
+                      : current,
+                  )
+                }
+                emptyItem={emptyEducation}
+                isEditing
+                emptyStateMessage="Aucune formation renseignée."
+                renderItem={(item, update) => (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Field
+                      label="Diplôme"
+                      value={item.degree}
+                      onChange={(value) => update({ ...item, degree: value })}
+                    />
+                    <Field
+                      label="Libellé du diplôme"
+                      value={item.diplomaLabel}
+                      onChange={(value) =>
+                        update({ ...item, diplomaLabel: value })
+                      }
+                    />
+                    <Field
+                      label="Niveau"
+                      value={item.levelCode}
+                      onChange={(value) => update({ ...item, levelCode: value })}
+                    />
+                    <Field
+                      label="Spécialité"
+                      value={item.specialty}
+                      onChange={(value) => update({ ...item, specialty: value })}
+                    />
+                    <Field
+                      label="Établissement"
+                      value={item.institution}
+                      onChange={(value) =>
+                        update({ ...item, institution: value })
+                      }
+                    />
+                    <Field
+                      label="Lieu"
+                      value={item.location}
+                      onChange={(value) => update({ ...item, location: value })}
+                    />
+                    <Field
+                      label="Date de début"
+                      type="date"
+                      value={item.startDate}
+                      onChange={(value) => update({ ...item, startDate: value })}
+                    />
+                    <Field
+                      label="Date de fin"
+                      type="date"
+                      value={item.endDate}
+                      onChange={(value) => update({ ...item, endDate: value })}
+                    />
+                    <Field
+                      label="Année d'obtention"
+                      value={item.graduationYear}
+                      onChange={(value) =>
+                        update({ ...item, graduationYear: value })
+                      }
+                    />
+                    <Field
+                      label="Mention"
+                      value={item.honors}
+                      onChange={(value) => update({ ...item, honors: value })}
+                    />
+                    <div className="md:col-span-2">
+                      <Field
+                        label="GPA"
+                        value={item.gpa}
+                        onChange={(value) => update({ ...item, gpa: value })}
+                      />
+                    </div>
+                  </div>
+                )}
+                viewItem={() => null}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <CollectionSection<ExperienceDraft>
+                title="Expériences professionnelles"
+                description="Vos expériences professionnelles."
+                icon={Briefcase}
+                iconClassName="icon-background-color-7"
+                items={professionalExperienceDrafts}
+                setItems={(updater) =>
+                  replaceExperienceDrafts('professional', updater)
+                }
+                emptyItem={() => ({ ...emptyExperience(), entryType: 'experience' })}
+                isEditing
+                emptyStateMessage="Aucune expérience professionnelle renseignée."
+                renderItem={(item, update) => (
+                  <ExperienceDraftFields
+                    item={item}
+                    update={update}
+                    type="experience"
+                  />
+                )}
+                viewItem={() => null}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <CollectionSection<ExperienceDraft>
+                title="Stages"
+                description="Vos stages et expériences de type internship."
+                icon={Briefcase}
+                iconClassName="icon-background-color-7"
+                items={internshipExperienceDrafts}
+                setItems={(updater) => replaceExperienceDrafts('internship', updater)}
+                emptyItem={() => ({ ...emptyExperience(), entryType: 'internship' })}
+                isEditing
+                emptyStateMessage="Aucun stage renseigné."
+                renderItem={(item, update) => (
+                  <ExperienceDraftFields
+                    item={item}
+                    update={update}
+                    type="internship"
+                  />
+                )}
+                viewItem={() => null}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <CollectionSection<SkillDraft>
+                title="Compétences"
+                description="Les compétences que vous souhaitez mettre en avant."
+                icon={Globe2}
+                iconClassName="icon-background-color-7"
+                items={currentDraft.skills}
+                setItems={(updater) =>
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          skills:
+                            typeof updater === 'function'
+                              ? updater(current.skills)
+                              : updater,
+                        }
+                      : current,
+                  )
+                }
+                emptyItem={emptySkill}
+                isEditing
+                emptyStateMessage="Aucune compétence renseignée."
+                renderItem={(item, update) => (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <Field
+                      label="Compétence"
+                      value={item.skillLabelRaw}
+                      onChange={(value) =>
+                        update({ ...item, skillLabelRaw: value })
+                      }
+                    />
+                    <Field
+                      label="Niveau"
+                      value={item.level}
+                      onChange={(value) => update({ ...item, level: value })}
+                    />
+                    <Field
+                      label="Années d'expérience"
+                      type="number"
+                      value={item.years}
+                      onChange={(value) => update({ ...item, years: value })}
+                    />
+                    <Field
+                      label="Preuve"
+                      value={item.evidence}
+                      onChange={(value) => update({ ...item, evidence: value })}
+                    />
+                  </div>
+                )}
+                viewItem={() => null}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <CollectionSection<LanguageDraft>
+                title="Langues"
+                description="Les langues que vous maîtrisez."
+                icon={Languages}
+                iconClassName="icon-background-color-7"
+                items={currentDraft.languages}
+                setItems={(updater) =>
+                  setDraft((current) =>
+                    current
+                      ? {
+                          ...current,
+                          languages:
+                            typeof updater === 'function'
+                              ? updater(current.languages)
+                              : updater,
+                        }
+                      : current,
+                  )
+                }
+                emptyItem={emptyLanguage}
+                isEditing
+                emptyStateMessage="Aucune langue renseignée."
+                renderItem={(item, update) => (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <SelectField
+                      label="Langue"
+                      value={item.languageCode}
+                      onChange={(value) =>
+                        update({ ...item, languageCode: value })
+                      }
+                      options={languagesQuery.data ?? []}
+                      placeholder="Choisir une langue"
+                    />
+                    <SelectField
+                      label="Niveau"
+                      value={item.level}
+                      onChange={(value) => update({ ...item, level: value })}
+                      options={languageLevelsQuery.data ?? []}
+                      placeholder="Choisir un niveau"
+                    />
+                    <div className="md:col-span-2">
+                      <Field
+                        label="Preuve"
+                        value={item.evidence}
+                        onChange={(value) =>
+                          update({ ...item, evidence: value })
+                        }
+                      />
+                    </div>
+                  </div>
+                )}
+                viewItem={() => null}
+              />
+
+              <Separator className="bg-primary/40" />
+
+              <section className="space-y-4">
+                <SectionTitle
+                  title="Domaines et technologies qui vous intéressent"
+                  description="Mots-clés du profil candidat utilisés pour retrouver des offres pertinentes."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                />
+                <InterestKeywordsEditor
+                  keywords={interestKeywordsDraft}
+                  inputValue={interestKeywordInput}
+                  onInputChange={setInterestKeywordInput}
+                  onAdd={addInterestKeyword}
+                  onRemove={removeInterestKeyword}
+                />
+              </section>
+
+              <Separator className="bg-primary/40" />
+
+              <section className="space-y-4">
+                <SectionTitle
+                  title="Préférences de recommandation"
+                  description="Paramètres utilisés pour filtrer les offres compatibles."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                />
+                <div className="rounded-2xl border border-border bg-background p-5 md:max-w-sm">
+                  <Label className="text-xs text-muted-foreground">
+                    Score minimum des offres compatibles
+                  </Label>
+                  <Select
+                    value={String(minimumOfferScoreDraft)}
+                    onValueChange={(value) =>
+                      setMinimumOfferScoreDraft(
+                        normalizeCandidateMinimumOfferScore(Number(value)),
+                      )
+                    }
+                  >
+                    <SelectTrigger className="mt-2 h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {candidateOfferScoreOptions.map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option}%
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </section>
+            </>
+          )}
+          {false ? (
+            <>
           <section className="space-y-4">
             <SectionTitle
               title="Informations personnelles"
@@ -2500,6 +3440,8 @@ export default function Profile() {
               </div>
             </div>
           </section>
+            </>
+          ) : null}
         </div>
       </article>
 
@@ -2690,5 +3632,730 @@ function CollectionSection<T extends { id?: string }>({
           ))}
       </div>
     </section>
+  );
+}
+
+type ReadOnlyGridItem = {
+  label: string;
+  value: string | null;
+  fullWidth?: boolean;
+};
+
+function EmptyStateCard({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+      {message}
+    </div>
+  );
+}
+
+function ReadOnlyDataGrid({ items }: { items: ReadOnlyGridItem[] }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {items.map((item) => (
+        <article
+          key={item.label}
+          className={`rounded-2xl border border-border bg-background p-4 ${
+            item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
+          }`}
+        >
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+            {item.label}
+          </p>
+          <p className="mt-2 text-sm leading-6 text-foreground">
+            {cleanCandidateDisplayText(item.value)}
+          </p>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ProfileOverviewSection({
+  displayName,
+  displayLocation,
+  email,
+  primaryLanguageLabel,
+  languageCount,
+}: {
+  displayName: string;
+  displayLocation: string;
+  email: string;
+  primaryLanguageLabel: string | null;
+  languageCount: number;
+}) {
+  const metaItems = [
+    displayLocation
+      ? { icon: MapPin, label: displayLocation }
+      : null,
+    normalizeKeyword(email)
+      ? { icon: Mail, label: email }
+      : null,
+    primaryLanguageLabel
+      ? {
+          icon: Globe2,
+          label: `Langue principale : ${primaryLanguageLabel}`,
+        }
+      : null,
+    {
+      icon: Languages,
+      label:
+        languageCount > 0
+          ? `${languageCount} langue(s) renseignée(s)`
+          : 'Aucune langue renseignée',
+    },
+  ].filter(
+    (
+      item,
+    ): item is {
+      icon: ComponentType<{ className?: string }>;
+      label: string;
+    } => Boolean(item),
+  );
+
+  return (
+    <div className="border-b border-border bg-gradient-to-br from-primary/[0.06] via-background to-accent-soft/50 px-6 py-7 sm:px-8">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
+            Profil candidat
+          </p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
+            {displayName}
+          </h1>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
+            Gardez vos coordonnées, vos expériences, vos compétences et vos
+            préférences à jour pour recevoir des offres plus pertinentes.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {metaItems.map((item) => (
+              <ProfileMetaChip
+                key={item.label}
+                icon={item.icon}
+                label={item.label}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ReadOnlyGridSection({
+  title,
+  description,
+  icon,
+  iconClassName,
+  items,
+}: {
+  title: string;
+  description: string;
+  icon: ComponentType<{ className?: string }>;
+  iconClassName?: string;
+  items: ReadOnlyGridItem[];
+}) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title={title}
+        description={description}
+        icon={icon}
+        iconClassName={iconClassName}
+      />
+      <ReadOnlyDataGrid items={items} />
+    </section>
+  );
+}
+
+function EducationReadOnly({ items }: { items: DisplayEducationItem[] }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Formations et diplômes"
+        description="Vos diplômes, niveaux et établissements renseignés."
+        icon={GraduationCap}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="space-y-4">
+        {items.length > 0 ? (
+          items.map((item, index) => {
+            const period =
+              formatCandidateDateRange(item.startDate, item.endDate) ??
+              cleanProfileText(item.graduationYear);
+            const secondaryLabel = uniqueTextValues(
+              item.diplomaLabel !== item.degree ? item.diplomaLabel : null,
+              item.specialty,
+            ).join(' • ');
+            const metadata = [
+              item.levelCode ? `Niveau : ${item.levelCode}` : null,
+              item.location ? `Lieu : ${item.location}` : null,
+              item.honors ? `Mention : ${item.honors}` : null,
+              item.gpa ? `GPA : ${item.gpa}` : null,
+            ].filter((value): value is string => Boolean(value));
+
+            return (
+              <article
+                key={`education-readonly-${index}`}
+                className="rounded-2xl border border-border bg-background p-5"
+              >
+                <h3 className="text-base font-semibold text-foreground">
+                  {cleanCandidateDisplayText(
+                    item.degree ?? item.diplomaLabel ?? item.levelCode,
+                    'Formation',
+                  )}
+                </h3>
+                {secondaryLabel ? (
+                  <p className="mt-1 text-sm text-foreground">{secondaryLabel}</p>
+                ) : null}
+                {item.institution || period ? (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {uniqueTextValues(item.institution, period).join(' — ')}
+                  </p>
+                ) : null}
+                {metadata.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {metadata.map((value) => (
+                      <SkillTag
+                        key={`${index}-${value}`}
+                        label={value}
+                        variant="outline"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })
+        ) : (
+          <EmptyStateCard message="Aucune formation renseignée." />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ExperienceReadOnlySection({
+  title,
+  description,
+  items,
+  emptyMessage,
+}: {
+  title: string;
+  description: string;
+  items: DisplayExperienceItem[];
+  emptyMessage: string;
+}) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title={title}
+        description={description}
+        icon={Briefcase}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="space-y-4">
+        {items.length > 0 ? (
+          items.map((item, index) => {
+            const period = formatCandidateDateRange(
+              item.startDate,
+              item.endDate,
+              item.isCurrent,
+            );
+            const duration = formatDurationLabel(
+              item.durationMonths,
+              item.durationYears,
+            );
+
+            return (
+              <article
+                key={`${title}-${index}`}
+                className="rounded-2xl border border-border bg-background p-5"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold text-foreground">
+                      {cleanCandidateDisplayText(item.title, title.slice(0, -1))}
+                    </h3>
+                    {item.company || item.location ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {uniqueTextValues(item.company, item.location).join(' • ')}
+                      </p>
+                    ) : null}
+                  </div>
+                  {period || duration ? (
+                    <div className="flex flex-wrap gap-2">
+                      {period ? <SkillTag label={period} variant="outline" /> : null}
+                      {duration ? (
+                        <SkillTag label={duration} variant="outline" />
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+                {item.description ? (
+                  <p className="mt-4 text-sm leading-6 text-foreground">
+                    {item.description}
+                  </p>
+                ) : null}
+                {item.responsibilities.length > 0 ? (
+                  <ul className="mt-4 list-disc space-y-1 pl-5 text-sm text-foreground">
+                    {item.responsibilities.map((responsibility) => (
+                      <li key={responsibility}>{responsibility}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {item.technologies.length > 0 ? (
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {item.technologies.map((technology) => (
+                      <SkillTag
+                        key={`${title}-${index}-${technology}`}
+                        label={technology}
+                        variant="matched"
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                {item.projects.length > 0 ? (
+                  <div className="mt-4 space-y-3">
+                    {item.projects.map((project, projectIndex) => (
+                      <div
+                        key={`${title}-${index}-project-${projectIndex}`}
+                        className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                      >
+                        <p className="text-sm font-medium text-foreground">
+                          {cleanCandidateDisplayText(project.name, 'Projet')}
+                        </p>
+                        {project.description ? (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {project.description}
+                          </p>
+                        ) : null}
+                        {project.technologies.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {project.technologies.map((technology) => (
+                              <SkillTag
+                                key={`${title}-${index}-${projectIndex}-${technology}`}
+                                label={technology}
+                                variant="outline"
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })
+        ) : (
+          <EmptyStateCard message={emptyMessage} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function SkillsReadOnly({
+  skillGroups,
+}: {
+  skillGroups: Array<{ category: string; items: string[] }>;
+}) {
+  const hasMultipleGroups = skillGroups.length > 1;
+
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Compétences"
+        description="Les compétences que vous souhaitez mettre en avant."
+        icon={Globe2}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="rounded-2xl border border-border bg-background p-5">
+        {skillGroups.length > 0 ? (
+          <div className="space-y-4">
+            {skillGroups.map((group) => (
+              <div key={group.category}>
+                {hasMultipleGroups ? (
+                  <p className="text-sm font-medium text-foreground">
+                    {group.category}
+                  </p>
+                ) : null}
+                <div className={hasMultipleGroups ? 'mt-3 flex flex-wrap gap-2' : 'flex flex-wrap gap-2'}>
+                  {group.items.map((label) => (
+                    <SkillTag
+                      key={`${group.category}-${label}`}
+                      label={label}
+                      variant="matched"
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Aucune compétence renseignée.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function LanguagesReadOnly({ items }: { items: DisplayLanguageItem[] }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Langues"
+        description="Les langues que vous maîtrisez."
+        icon={Languages}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="rounded-2xl border border-border bg-background p-5">
+        {items.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {items.map((item, index) => (
+              <SkillTag
+                key={`${item.name}-${item.level ?? index}`}
+                label={item.level ? `${item.name} — ${item.level}` : item.name}
+                variant="outline"
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Aucune langue renseignée.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CertificationsReadOnly({
+  items,
+}: {
+  items: DisplayCertificationItem[];
+}) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Certifications"
+        description="Les certifications associées à votre profil."
+        icon={GraduationCap}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="space-y-4">
+        {items.map((item, index) => (
+          <article
+            key={`certification-readonly-${index}`}
+            className="rounded-2xl border border-border bg-background p-5"
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {cleanCandidateDisplayText(item.name, 'Certification')}
+            </p>
+            {item.issuer || item.date ? (
+              <p className="mt-1 text-sm text-muted-foreground">
+                {uniqueTextValues(item.issuer, formatCandidateDate(item.date)).join(
+                  ' — ',
+                )}
+              </p>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function ProjectsReadOnly({ items }: { items: DisplayProjectItem[] }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Projets"
+        description="Les projets détectés dans votre CV ou associés à votre profil."
+        icon={Briefcase}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="space-y-4">
+        {items.map((project, index) => (
+          <article
+            key={`project-readonly-${index}`}
+            className="rounded-2xl border border-border bg-background p-5"
+          >
+            <p className="text-sm font-semibold text-foreground">
+              {cleanCandidateDisplayText(project.name, 'Projet')}
+            </p>
+            {project.description ? (
+              <p className="mt-2 text-sm leading-6 text-foreground">
+                {project.description}
+              </p>
+            ) : null}
+            {project.technologies.length > 0 ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {project.technologies.map((technology) => (
+                  <SkillTag
+                    key={`${index}-${technology}`}
+                    label={technology}
+                    variant="outline"
+                  />
+                ))}
+              </div>
+            ) : null}
+            {project.url ? (
+              <a
+                href={project.url}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+              >
+                Voir le projet
+              </a>
+            ) : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function InterestsReadOnly({ keywords }: { keywords: string[] }) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Domaines et technologies qui vous intéressent"
+        description="Mots-clés du profil candidat utilisés pour retrouver des offres pertinentes."
+        icon={Globe2}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="rounded-2xl border border-border bg-background p-5">
+        {keywords.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {keywords.map((keyword) => (
+              <SkillTag key={keyword} label={keyword} variant="matched" />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            Aucun mot-clé renseigné.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function RecommendationPreferencesReadOnly({
+  minimumOfferScore,
+}: {
+  minimumOfferScore: number;
+}) {
+  return (
+    <section className="space-y-4">
+      <SectionTitle
+        title="Préférences de recommandation"
+        description="Paramètres utilisés pour filtrer les offres compatibles."
+        icon={Globe2}
+        iconClassName="icon-background-color-7"
+      />
+      <div className="rounded-2xl border border-border bg-background p-5">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+          Score minimum des offres compatibles
+        </p>
+        <p className="mt-2 text-sm font-semibold text-foreground">
+          {minimumOfferScore}%
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function ExperienceDraftFields({
+  item,
+  update,
+  type,
+}: {
+  item: ExperienceDraft;
+  update: (next: ExperienceDraft) => void;
+  type: 'experience' | 'internship';
+}) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2">
+      <Field
+        label={type === 'internship' ? 'Intitulé du stage' : 'Intitulé du poste'}
+        value={item.jobTitleRaw}
+        onChange={(value) =>
+          update({ ...item, jobTitleRaw: value, entryType: type })
+        }
+      />
+      <Field
+        label="Entreprise"
+        value={item.companyName}
+        onChange={(value) =>
+          update({ ...item, companyName: value, entryType: type })
+        }
+      />
+      <Field
+        label="Lieu"
+        value={item.location}
+        onChange={(value) => update({ ...item, location: value, entryType: type })}
+      />
+      <Field
+        label="Secteur"
+        value={item.sector}
+        onChange={(value) => update({ ...item, sector: value, entryType: type })}
+      />
+      <Field
+        label="Date de début"
+        type="date"
+        value={item.startDate}
+        onChange={(value) =>
+          update({ ...item, startDate: value, entryType: type })
+        }
+      />
+      <Field
+        label="Date de fin"
+        type="date"
+        value={item.endDate}
+        onChange={(value) =>
+          update({ ...item, endDate: value, entryType: type })
+        }
+      />
+      <Field
+        label="Durée (mois)"
+        type="number"
+        value={item.durationMonths}
+        onChange={(value) =>
+          update({ ...item, durationMonths: value, entryType: type })
+        }
+      />
+      <Field
+        label="Durée (années)"
+        type="number"
+        value={item.durationYears}
+        onChange={(value) =>
+          update({ ...item, durationYears: value, entryType: type })
+        }
+      />
+      <label className="md:col-span-2 flex items-center gap-2 text-sm text-foreground">
+        <input
+          type="checkbox"
+          checked={item.isCurrent}
+          onChange={(event) =>
+            update({
+              ...item,
+              isCurrent: event.target.checked,
+              entryType: type,
+            })
+          }
+        />
+        En cours actuellement
+      </label>
+      <div className="md:col-span-2">
+        <Label className="text-xs text-muted-foreground">Description</Label>
+        <Textarea
+          value={item.description}
+          onChange={(event) =>
+            update({
+              ...item,
+              description: event.target.value,
+              entryType: type,
+            })
+          }
+          className="mt-1.5 min-h-[110px]"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <Label className="text-xs text-muted-foreground">
+          Responsabilités
+        </Label>
+        <Textarea
+          value={toMultilineValue(item.responsibilities)}
+          onChange={(event) =>
+            update({
+              ...item,
+              responsibilities: splitListValue(event.target.value, /\r?\n/),
+              entryType: type,
+            })
+          }
+          className="mt-1.5 min-h-[110px]"
+          placeholder="Une responsabilité par ligne"
+        />
+      </div>
+      <div className="md:col-span-2">
+        <Field
+          label="Technologies"
+          value={toCommaSeparatedValue(item.technologies)}
+          onChange={(value) =>
+            update({
+              ...item,
+              technologies: splitListValue(value, /,/),
+              entryType: type,
+            })
+          }
+        />
+      </div>
+    </div>
+  );
+}
+
+function InterestKeywordsEditor({
+  keywords,
+  inputValue,
+  onInputChange,
+  onAdd,
+  onRemove,
+}: {
+  keywords: string[];
+  inputValue: string;
+  onInputChange: (value: string) => void;
+  onAdd: () => void;
+  onRemove: (keyword: string) => void;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background p-5">
+      <div className="flex flex-wrap gap-2">
+        {keywords.map((keyword) => (
+          <span
+            key={keyword}
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-muted/30 px-3 py-1.5 text-sm text-foreground"
+          >
+            {keyword}
+            <button
+              type="button"
+              className="text-muted-foreground transition hover:text-foreground"
+              onClick={() => onRemove(keyword)}
+              aria-label={`Supprimer ${keyword}`}
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        ))}
+      </div>
+      {keywords.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          Aucun mot-clé renseigné.
+        </p>
+      ) : null}
+      <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+        <Input
+          value={inputValue}
+          onChange={(event) => onInputChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder="Ajouter un mot-clé"
+          className="h-10"
+        />
+        <Button type="button" variant="outline" onClick={onAdd}>
+          <Plus className="h-4 w-4" />
+          Ajouter
+        </Button>
+      </div>
+    </div>
   );
 }

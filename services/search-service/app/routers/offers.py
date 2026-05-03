@@ -20,7 +20,7 @@ from app.config import settings
 from app.embeddings import embed_text
 from app.es_client import get_client
 from app.pg_pool import get_conn
-from app.queries.offers import build_offers_keyword_only_query, build_offers_search_query
+from app.queries.offers import build_offers_keyword_only_query, build_offers_search_query, build_offers_match_all_query
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -44,7 +44,7 @@ class OfferDetail(BaseModel):
 
 
 class OfferSearchRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=500, description="Texte de recherche")
+    query: str = Field(default="", max_length=500, description="Texte de recherche")
     size: int = Field(default=20, ge=1, le=100)
     from_: int = Field(default=0, ge=0, description="Offset pour la pagination")
     contract_type: Optional[str] = Field(default=None, description="CDI, CDD, STAGE, SIVP...")
@@ -77,47 +77,82 @@ class OfferSearchResponse(BaseModel):
 # Endpoint
 # ---------------------------------------------------------------------------
 
+
+def _is_valid_vector(vector: list[float] | None) -> bool:
+    if not vector:
+        return False
+
+    return any(abs(float(value)) > 1e-12 for value in vector)
+
 @router.post(
     "/search/offers",
     response_model=OfferSearchResponse,
-    summary="Recherche hybride d'offres (keyword + sémantique)",
-    tags=["Search"],
+    summary="Recherche d'offres",
+    tags=["Offers"],
 )
 def search_offers(
     body: OfferSearchRequest,
 ) -> OfferSearchResponse:
     """
-    Recherche hybride sur les offres :
-    - BM25 keyword search sur title, description, skills
-    - kNN vector search sur l'embedding de l'offre
-    - score final = combinaison linéaire des deux signaux
-
-    Le vecteur de la requête est généré à la volée (384 dims, MiniLM-L6-v2).
+    Recherche sur les offres :
+    - query vide        => retourne toutes les offres publiées/actives
+    - embedding invalide => fallback keyword-only
+    - embedding valide  => recherche hybride keyword + vector
     """
     client = get_client()
+
+    query_text = (body.query or "").strip()
     mode = "hybrid"
 
-    # Générer l'embedding de la requête
     try:
-        query_vector = embed_text(body.query)
-        es_query = build_offers_search_query(
-            query_text=body.query,
-            query_vector=query_vector,
-            size=body.size,
-            from_=body.from_,
-            contract_type=body.contract_type,
-            work_mode=body.work_mode,
-            governorate=body.governorate,
-            salary_min=body.salary_min,
-            salary_max=body.salary_max,
-        )
-    except Exception as exc:
-        logger.warning("Embedding indisponible, fallback keyword-only: %s", exc)
-        es_query = build_offers_keyword_only_query(body.query, size=body.size)
-        mode = "keyword_only"
+        if not query_text:
+            es_query = build_offers_match_all_query(
+                size=body.size,
+                from_=body.from_,
+                contract_type=body.contract_type,
+                work_mode=body.work_mode,
+                governorate=body.governorate,
+                salary_min=body.salary_min,
+                salary_max=body.salary_max,
+            )
+            mode = "match_all"
 
-    try:
+        else:
+            query_vector = None
+
+            try:
+                query_vector = embed_text(query_text)
+            except Exception as exc:
+                logger.warning("Embedding indisponible, fallback keyword-only: %s", exc)
+
+            if not _is_valid_vector(query_vector):
+                es_query = build_offers_keyword_only_query(
+                    query_text=query_text,
+                    size=body.size,
+                    from_=body.from_,
+                    contract_type=body.contract_type,
+                    work_mode=body.work_mode,
+                    governorate=body.governorate,
+                    salary_min=body.salary_min,
+                    salary_max=body.salary_max,
+                )
+                mode = "keyword_only"
+            else:
+                es_query = build_offers_search_query(
+                    query_text=query_text,
+                    query_vector=query_vector,
+                    size=body.size,
+                    from_=body.from_,
+                    contract_type=body.contract_type,
+                    work_mode=body.work_mode,
+                    governorate=body.governorate,
+                    salary_min=body.salary_min,
+                    salary_max=body.salary_max,
+                )
+                mode = "hybrid"
+
         resp = client.search(index=settings.es_index_offers, body=es_query)
+
     except Exception as exc:
         logger.error("ES search error: %s", exc)
         raise HTTPException(status_code=503, detail=f"Search unavailable: {exc}")
@@ -126,6 +161,7 @@ def search_offers(
     total = resp["hits"]["total"]["value"]
 
     max_score = resp["hits"]["max_score"] or 1.0
+
     results = [
         OfferHit(
             offer_id=h["_source"].get("offer_id", h["_id"]),
@@ -144,7 +180,7 @@ def search_offers(
     return OfferSearchResponse(
         total=total,
         results=results,
-        query=body.query,
+        query=query_text,
         mode=mode,
     )
 

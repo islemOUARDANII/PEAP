@@ -28,7 +28,7 @@ It powers two distinct search flows: **semantic + keyword search for job offers*
 
 ## 1. Service Overview
 
-The Search Service runs on port **8020** and exposes the following endpoints:
+The Search Service runs on port **8003** and exposes the following endpoints:
 
 | Method | Path | Description |
 |--------|------|-------------|

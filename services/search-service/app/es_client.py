@@ -80,6 +80,20 @@ OFFERS_MAPPING: Dict[str, Any] = {
             # Métadonnées
             "created_at": {"type": "date"},
             "updated_at": {"type": "date"},
+            "governorate_code": {"type": "keyword"},
+            "governorate": {"type": "keyword"},
+            "delegation_code": {"type": "keyword"},
+            "delegation": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "work_mode": {"type": "keyword"},
+            "salary_min": {"type": "float"},
+            "salary_max": {"type": "float"},
+            "occupations": {
+                "type": "text",
+                "analyzer": "text_fr_en",
+                "fields": {"keyword": {"type": "keyword"}},
+            },
+            "languages": {"type": "keyword"},
         }
     },
 }
@@ -119,6 +133,12 @@ CANDIDATES_MAPPING: Dict[str, Any] = {
             # Métadonnées
             "created_at": {"type": "date"},
             "updated_at": {"type": "date"},
+            "governorate_code": {"type": "keyword"},
+            "governorate": {"type": "keyword"},
+            "delegation_code": {"type": "keyword"},
+            "delegation": {"type": "keyword"},
+            "country": {"type": "keyword"},
+            "languages": {"type": "keyword"},
         }
     },
 }

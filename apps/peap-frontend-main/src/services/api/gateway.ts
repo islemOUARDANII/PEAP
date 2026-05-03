@@ -1,4 +1,4 @@
-import { apiJsonRequest, apiRequest } from "./client";
+import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
 
 const toStringValue = (value: unknown, fallback = ""): string =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -16,6 +16,11 @@ const toNumberValue = (value: unknown, fallback = 0): number => {
 const toBooleanValue = (value: unknown): boolean => value === true;
 
 const asArray = <T>(value: T[] | null | undefined): T[] => (Array.isArray(value) ? value : []);
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 
 const joinLocation = (...parts: Array<string | null | undefined>): string =>
   parts
@@ -358,6 +363,35 @@ interface CandidateActiveOffersCountResponse {
   active_offers_count: number;
 }
 
+interface JobSeekerKeywordResponse {
+  id?: string | null;
+  keyword?: string | null;
+  keyword_type?: string | null;
+  keywordType?: string | null;
+  source?: string | null;
+  weight?: number | string | null;
+  [key: string]: unknown;
+}
+
+export interface JobSeekerKeywordRecord {
+  id: string;
+  keyword: string;
+  keywordType?: string | null;
+  source?: string | null;
+  weight?: number | null;
+}
+
+interface CandidateOfferThresholdResponse {
+  min_threshold?: number | string | null;
+  threshold?: number | string | null;
+  offer_threshold?: number | string | null;
+  value?: number | string | null;
+}
+
+export interface CandidateOfferThresholdRecord {
+  minThreshold: number | null;
+}
+
 interface CandidateMatchedOfferResponse {
   result_id: string;
   run_id: string;
@@ -587,7 +621,11 @@ export interface SearchOfferResult {
   contractType?: string | null;
   workMode?: string | null;
   status?: string | null;
+  companyName?: string | null;
   companyId?: string | null;
+  searchScore?: number | null;
+  publishedAt?: string | null;
+  deadlineAt?: string | null;
   score: number;
   createdAt?: string | null;
   raw: Record<string, unknown>;
@@ -1247,19 +1285,110 @@ const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
 });
 
 const mapSearchOffer = (item: SearchOfferResponseItem): SearchOfferResult => ({
-  offerId: toStringValue(item.offer_id),
+  offerId: toStringValue(item.offer_id ?? item.id),
   title: toStringValue(item.title),
   description: item.description ?? null,
   skills: asArray(item.skills).map((skill) => toStringValue(skill)).filter(Boolean),
-  location: item.location ?? null,
+  location:
+    toNullableString(item.location) ??
+    joinLocation(
+      toNullableString(item.delegation_label),
+      toNullableString(item.governorate_label),
+      toNullableString(item.country),
+    ),
   contractType: item.contract_type ?? null,
   workMode: item.work_mode ?? null,
   status: item.status ?? null,
+  companyName:
+    toNullableString(item.employer_name) ??
+    toNullableString(item.company_name) ??
+    toNullableString(item.company) ??
+    toNullableString(item.organization),
   companyId: item.company_id ?? null,
-  score: toNumberValue(item.score),
+  searchScore: Object.prototype.hasOwnProperty.call(item, "score")
+    ? item.score == null
+      ? null
+      : toNumberValue(item.score)
+    : null,
+  publishedAt: toNullableString(item.published_at) ?? toNullableString(item.created_at),
+  deadlineAt: toNullableString(item.deadline_at),
+  score: item.score == null ? 0 : toNumberValue(item.score),
   createdAt: item.created_at ?? null,
   raw: item,
 });
+
+const mapJobSeekerKeyword = (
+  item: JobSeekerKeywordResponse | string,
+  index: number,
+): JobSeekerKeywordRecord | null => {
+  if (typeof item === "string") {
+    const keyword = toNullableString(item);
+    if (!keyword) {
+      return null;
+    }
+
+    return {
+      id: `keyword-${index + 1}`,
+      keyword,
+      keywordType: null,
+      source: null,
+      weight: null,
+    };
+  }
+
+  const keyword =
+    toNullableString(item.keyword) ??
+    toNullableString(item.label) ??
+    toNullableString(item.name);
+
+  if (!keyword) {
+    return null;
+  }
+
+  return {
+    id: toStringValue(item.id, `keyword-${index + 1}`),
+    keyword,
+    keywordType: toNullableString(item.keyword_type ?? item.keywordType),
+    source: toNullableString(item.source),
+    weight: item.weight == null ? null : toNumberValue(item.weight),
+  };
+};
+
+const mapCandidateOfferThreshold = (
+  item: CandidateOfferThresholdResponse | number | string | null,
+): CandidateOfferThresholdRecord | null => {
+  if (item == null) {
+    return null;
+  }
+
+  if (typeof item === "number" || typeof item === "string") {
+    return {
+      minThreshold: toNumberValue(item),
+    };
+  }
+
+  const minThreshold =
+    item.min_threshold ??
+    item.threshold ??
+    item.offer_threshold ??
+    item.value;
+
+  return {
+    minThreshold: minThreshold == null ? null : toNumberValue(minThreshold),
+  };
+};
+
+const normalizeKeywordPayload = (keywords: string[]): string[] =>
+  Array.from(
+    new Set(
+      keywords
+        .map((keyword) => toNullableString(keyword))
+        .filter((keyword): keyword is string => Boolean(keyword)),
+    ),
+  );
+
+const isUnsupportedPayloadError = (error: unknown): error is ApiServiceError =>
+  error instanceof ApiServiceError && [400, 404, 405, 422].includes(error.status);
 
 const mapSearchCandidate = (item: SearchCandidateResponseItem): SearchCandidateResult => ({
   candidateId: toStringValue(item.candidate_id),
@@ -1754,6 +1883,121 @@ export const gatewayApi = {
       });
     },
 
+    async getKeywords(): Promise<JobSeekerKeywordRecord[]> {
+      const payload = await apiRequest<Array<JobSeekerKeywordResponse | string>>(
+        "/candidates/me/keywords",
+        { method: "GET" },
+      );
+
+      const seen = new Set<string>();
+
+      return asArray(payload)
+        .map((item, index) => mapJobSeekerKeyword(item, index))
+        .filter((item): item is JobSeekerKeywordRecord => Boolean(item))
+        .filter((item) => {
+          const key = item.keyword.trim().toLowerCase();
+          if (seen.has(key)) {
+            return false;
+          }
+          seen.add(key);
+          return true;
+        });
+    },
+
+    async replaceKeywords(keywords: string[]): Promise<JobSeekerKeywordRecord[]> {
+      const normalizedKeywords = normalizeKeywordPayload(keywords);
+      const payloadVariants: unknown[] = [
+        { keywords: normalizedKeywords },
+        normalizedKeywords,
+        normalizedKeywords.map((keyword) => ({ keyword })),
+      ];
+
+      let lastError: unknown = null;
+
+      for (const payload of payloadVariants) {
+        try {
+          const response = await apiJsonRequest<Array<JobSeekerKeywordResponse | string>>(
+            "/candidates/me/keywords",
+            "PUT",
+            payload,
+          );
+
+          const seen = new Set<string>();
+
+          return asArray(response)
+            .map((item, index) => mapJobSeekerKeyword(item, index))
+            .filter((item): item is JobSeekerKeywordRecord => Boolean(item))
+            .filter((item) => {
+              const key = item.keyword.trim().toLowerCase();
+              if (seen.has(key)) {
+                return false;
+              }
+              seen.add(key);
+              return true;
+            });
+        } catch (error) {
+          if (!isUnsupportedPayloadError(error) || [404, 405].includes(error.status)) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Impossible de mettre à jour les mots-clés.");
+    },
+
+    updateKeywords(keywords: string[]): Promise<JobSeekerKeywordRecord[]> {
+      return gatewayApi.candidate.replaceKeywords(keywords);
+    },
+
+    async getOfferThreshold(): Promise<CandidateOfferThresholdRecord | null> {
+      const payload = await apiRequest<CandidateOfferThresholdResponse | number | string | null>(
+        "/candidates/me/preferences/offer-threshold",
+        { method: "GET" },
+      );
+
+      return mapCandidateOfferThreshold(payload);
+    },
+
+    async updateOfferThreshold(
+      minThreshold: number,
+    ): Promise<CandidateOfferThresholdRecord | null> {
+      const payloadVariants: unknown[] = [
+        { min_threshold: minThreshold },
+        { threshold: minThreshold },
+        minThreshold,
+      ];
+
+      let lastError: unknown = null;
+
+      for (const payload of payloadVariants) {
+        try {
+          const response = await apiJsonRequest<
+            CandidateOfferThresholdResponse | number | string | null
+          >(
+            "/candidates/me/preferences/offer-threshold",
+            "PUT",
+            payload,
+          );
+
+          return mapCandidateOfferThreshold(response);
+        } catch (error) {
+          if (!isUnsupportedPayloadError(error) || [404, 405].includes(error.status)) {
+            throw error;
+          }
+
+          lastError = error;
+        }
+      }
+
+      throw lastError instanceof Error
+        ? lastError
+        : new Error("Impossible de mettre à jour le seuil des offres.");
+    },
+
     getActiveOffersCount: async (): Promise<number> => {
       const payload = await apiRequest<CandidateActiveOffersCountResponse>(
         "/candidates/me/offers/active-count",
@@ -1764,20 +2008,33 @@ export const gatewayApi = {
     },
 
     getMatchedOffers: async (
-      minScore = 50,
+      minScore?: number,
     ): Promise<CandidateMatchedOffersRecord> => {
       const payload = await apiRequest<CandidateMatchedOffersResponse>(
         "/candidates/me/matched-offers",
         { method: "GET" },
-        {
-          query: {
-            min_score: minScore,
-          },
-        },
+        typeof minScore === "number"
+          ? {
+              query: {
+                min_score: minScore,
+              },
+            }
+          : undefined,
       );
 
       return mapCandidateMatchedOffers(payload);
     },
+
+    applyToOffer: async (payload: {
+      offer_id: string;
+      matching_result_id?: string | null;
+      cover_message?: string | null;
+    }): Promise<Record<string, unknown> | null> =>
+      apiJsonRequest<Record<string, unknown> | null>(
+        "/candidates/me/applications",
+        "POST",
+        payload,
+      ),
 
     async parseCv(cvRecordId: string): Promise<CandidateCvParseResult> {
       const payload = await apiRequest<CandidateCvParseResponse>(
@@ -2006,18 +2263,42 @@ export const gatewayApi = {
     },
   },
   search: {
-    async offers(payload: Record<string, unknown>): Promise<SearchOffersResponse> {
+    async offers(payload: {
+      query?: string;
+      size?: number;
+      filters?: Record<string, unknown>;
+      [key: string]: unknown;
+    }): Promise<SearchOffersResponse> {
       const response = await apiJsonRequest<Record<string, unknown>>(
         "/search/offers",
         "POST",
         payload,
       );
 
+      const data = asRecord(response.data);
+      const meta = asRecord(response.meta);
+      const pagination = asRecord(response.pagination);
+      const resolvedResults =
+        asArray(response.results as SearchOfferResponseItem[] | undefined).length > 0
+          ? asArray(response.results as SearchOfferResponseItem[] | undefined)
+          : asArray(response.items as SearchOfferResponseItem[] | undefined).length > 0
+            ? asArray(response.items as SearchOfferResponseItem[] | undefined)
+            : asArray(data.results as SearchOfferResponseItem[] | undefined).length > 0
+              ? asArray(data.results as SearchOfferResponseItem[] | undefined)
+              : asArray(data.items as SearchOfferResponseItem[] | undefined);
+      const total =
+        response.total ??
+        pagination.total ??
+        meta.total ??
+        data.total ??
+        response.count ??
+        resolvedResults.length;
+
       return {
-        total: toNumberValue(response.total),
+        total: toNumberValue(total, resolvedResults.length),
         mode: toNullableString(response.mode),
         query: toNullableString(response.query),
-        results: asArray(response.results as SearchOfferResponseItem[]).map(mapSearchOffer),
+        results: resolvedResults.map(mapSearchOffer),
         raw: response,
       };
     },

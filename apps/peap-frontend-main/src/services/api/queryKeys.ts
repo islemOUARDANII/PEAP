@@ -53,6 +53,8 @@ export const queryKeys = {
   candidate: {
     dashboard: () => ["candidate", "dashboard"] as const,
     profile: () => ["candidate", "profile"] as const,
+    keywords: () => ["candidate", "profile", "keywords"] as const,
+    offerThreshold: () => ["candidate", "profile", "offer-threshold"] as const,
     bundle: () => ["candidate", "bundle"] as const,
     matches: () => ["candidate", "matches"] as const,
     match: (id?: string) => ["candidate", "matches", id ?? "default"] as const,

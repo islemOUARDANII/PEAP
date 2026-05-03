@@ -103,8 +103,17 @@ LEFT JOIN aneti.job_offer_requirement r
     ON r.offer_id = o.id
 
 WHERE
-    (%(since)s IS NULL OR o.updated_at > %(since)s)
-    AND o.status = 'PUBLISHED'
+    o.status = 'PUBLISHED'
+    AND (
+        %(since)s IS NULL
+        OR o.updated_at > %(since)s
+        OR EXISTS (
+            SELECT 1
+            FROM aneti.job_offer_requirement rr
+            WHERE rr.offer_id = o.id
+              AND rr.updated_at > %(since)s
+        )
+    )
 
 GROUP BY
     o.id,
@@ -316,8 +325,31 @@ LEFT JOIN taxonomy.ref_n_delegat del
     ON del.code_delegation = jsc.delegation_code
 
 WHERE
-    (%(since)s IS NULL OR js.updated_at > %(since)s)
-    AND js.status = 'ACTIVE'
+    js.status = 'ACTIVE'
+    AND (
+        %(since)s IS NULL
+        OR js.updated_at > %(since)s
+        OR EXISTS (
+            SELECT 1 FROM aneti.job_seeker_skill s
+            WHERE s.job_seeker_id = js.id
+              AND s.updated_at > %(since)s
+        )
+        OR EXISTS (
+            SELECT 1 FROM aneti.job_seeker_language l
+            WHERE l.job_seeker_id = js.id
+              AND l.updated_at > %(since)s
+        )
+        OR EXISTS (
+            SELECT 1 FROM aneti.job_seeker_education e
+            WHERE e.job_seeker_id = js.id
+              AND e.updated_at > %(since)s
+        )
+        OR EXISTS (
+            SELECT 1 FROM aneti.job_seeker_experience ex
+            WHERE ex.job_seeker_id = js.id
+              AND ex.updated_at > %(since)s
+        )
+    )
 
 ORDER BY js.updated_at DESC
 """

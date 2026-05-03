@@ -65,13 +65,13 @@ const EMPTY_VALUE_PATTERN =
   /^(non specifie|non spécifié|not specified|null|undefined|n\/a)$/i;
 
 const CATEGORY_LABELS: Record<string, string> = {
-  language: 'Langages',
-  languages: 'Langages',
-  programming_language: 'Langages',
-  framework: 'Frameworks / bibliothèques',
-  frameworks: 'Frameworks / bibliothèques',
-  library: 'Frameworks / bibliothèques',
-  libraries: 'Frameworks / bibliothèques',
+  language: 'Développement',
+  languages: 'Développement',
+  programming_language: 'Développement',
+  framework: 'Développement',
+  frameworks: 'Développement',
+  library: 'Développement',
+  libraries: 'Développement',
   database: 'Bases de données',
   databases: 'Bases de données',
   db: 'Bases de données',
@@ -328,10 +328,10 @@ const inferSkillCategory = (label: string, rawCategory?: string | null): string 
 
   const normalizedLabel = label.toLowerCase();
   if (/(python|java|javascript|typescript|c\+\+|c#|php|ruby|go|rust|sql)/i.test(normalizedLabel)) {
-    return 'Langages';
+    return 'Développement';
   }
   if (/(react|angular|vue|django|flask|spring|laravel|next|node|express|pandas)/i.test(normalizedLabel)) {
-    return 'Frameworks / bibliothèques';
+    return 'Développement';
   }
   if (/(postgres|mysql|mongodb|oracle|redis|sqlite|cassandra|elasticsearch)/i.test(normalizedLabel)) {
     return 'Bases de données';
