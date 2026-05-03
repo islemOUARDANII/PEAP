@@ -26,8 +26,10 @@ import {
   Cell,
   LabelList,
 } from 'recharts';
-import { CustomValueLabel } from '@/components/common/ReCharts';
+import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
 import { chartsConfig } from '@/app/constants';
+import { mockDataChart } from '@/mocks/mockParsedCv';
+import { useMemo, useState } from 'react';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -35,6 +37,9 @@ export default function ProviderDashboard() {
   const top = dashboard?.topOffers ?? [];
   const recent = dashboard?.recentCandidates ?? [];
   const matchingActivity = dashboard?.matchingActivity ?? [];
+  // const data = useMemo(() => mockDataChart, []);
+
+  const [chartData, setChartData] = useState(mockDataChart);
 
   if (isLoading) {
     return <ProviderDashboardSkeleton />;
@@ -91,7 +96,7 @@ export default function ProviderDashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 ">
-        <div className="lg:col-span-2 panel p-5 card-border-3">
+        <div className="lg:col-span-2 panel p-5 card-border-top">
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">
@@ -103,18 +108,18 @@ export default function ProviderDashboard() {
             </div>
           </div>
           <div className="h-64">
-            <ResponsiveContainer>
+            <ResponsiveContainer width="100%" height="100%">
               <BarChart
-                data={matchingActivity}
+                data={chartData}
                 margin={{ left: -16, right: 8, top: 8, bottom: 0 }}
               >
                 <CartesianGrid
-                  strokeDasharray="3 3"
+                  strokeDasharray="4 4"
                   stroke="hsl(var(--border))"
                   vertical={false}
                 />
                 <XAxis
-                  dataKey="day"
+                  dataKey="offerId"
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={11}
                   tickLine={false}
@@ -126,14 +131,14 @@ export default function ProviderDashboard() {
                   tickLine={false}
                   axisLine={false}
                 />
-                <Tooltip
+                {/* <Tooltip
                   contentStyle={{
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',
                     borderRadius: 8,
                     fontSize: 12,
                   }}
-                />
+                /> */}
                 {/* <Bar
                   dataKey="matches"
                   fill="hsl(var(--accent))"
@@ -145,7 +150,7 @@ export default function ProviderDashboard() {
                   radius={[4, 4, 0, 0]}
                 /> */}
 
-                <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
+                {/* <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
                   <LabelList dataKey="matches" content={<CustomValueLabel />} />
                   <Cell
                     key={`cell-matches`}
@@ -161,13 +166,73 @@ export default function ProviderDashboard() {
                     key={`cell-applications`}
                     fill={chartsConfig.chartProvider.colors[1]}
                   />
+                </Bar> */}
+                {/* <Bar dataKey="matches" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="matches" content={<CustomValueLabel />} />
+                  {mockDataChart.map((entry, index) => (
+                    <Cell
+                      key={`cell-matches-${index}`}
+                      fill={chartsConfig.chartProvider.colors[index]}
+                    />
+                  ))}
+                </Bar>
+
+                <Bar dataKey="applications" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="applications"
+                    content={<CustomValueLabel />}
+                  />
+                  {mockDataChart.map((entry, index) => (
+                    <Cell
+                      key={`cell-app-${index}`}
+                      fill={chartsConfig.chartProvider.colors[index + 11]}
+                    />
+                  ))}
+                </Bar> */}
+                {/* <Tooltip
+                  isAnimationActive={false}
+                  cursor={{ fill: 'transparent' }}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                /> */}
+                <Tooltip
+                  content={<CustomTooltip />}
+                  wrapperStyle={{ pointerEvents: 'none' }}
+                  isAnimationActive={false}
+                />
+                <Bar
+                  dataKey="matches"
+                  fill="hsl(var(--primary))"
+                  radius={[4, 4, 0, 0]}
+                  barSize={30}
+                >
+                  <LabelList
+                    dataKey="matches"
+                    content={<CustomValueLabel color="hsl(var(--primary))" />}
+                  />
+                </Bar>
+
+                <Bar
+                  dataKey="applications"
+                  fill="hsl(var(--accent))"
+                  radius={[4, 4, 0, 0]}
+                  barSize={30}
+                >
+                  <LabelList
+                    dataKey="applications"
+                    content={<CustomValueLabel color="hsl(var(--accent))" />}
+                  />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="panel p-5 card-border-3">
+        <div className="panel p-5 card-border-top">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-foreground">
               Top offers by visibility

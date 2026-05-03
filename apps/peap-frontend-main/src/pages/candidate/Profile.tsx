@@ -441,24 +441,26 @@ const apiErrorMessage = (error: unknown, fallback: string): string => {
 };
 
 const toStringOrEmpty = (value: unknown): string =>
-  typeof value === "string" ? value : value == null ? "" : String(value);
+  typeof value === 'string' ? value : value == null ? '' : String(value);
 
-const splitFullName = (fullName: unknown): { firstName: string; lastName: string } => {
+const splitFullName = (
+  fullName: unknown,
+): { firstName: string; lastName: string } => {
   const text = toStringOrEmpty(fullName).trim();
 
   if (!text) {
-    return { firstName: "", lastName: "" };
+    return { firstName: '', lastName: '' };
   }
 
   const parts = text.split(/\s+/);
 
   if (parts.length === 1) {
-    return { firstName: parts[0], lastName: "" };
+    return { firstName: parts[0], lastName: '' };
   }
 
   return {
-    firstName: parts.slice(0, -1).join(" "),
-    lastName: parts.at(-1) ?? "",
+    firstName: parts.slice(0, -1).join(' '),
+    lastName: parts.at(-1) ?? '',
   };
 };
 
@@ -467,16 +469,16 @@ const extractCandidateLocationCodes = (
 ): { governorateCode: string; delegationCode: string } => {
   const geo = mappedPayload.geo_normalization as
     | {
-      candidate_location?: {
-        governorate?: { code?: string | null };
-        delegation?: { code?: string | null };
-      };
-    }
+        candidate_location?: {
+          governorate?: { code?: string | null };
+          delegation?: { code?: string | null };
+        };
+      }
     | undefined;
 
   return {
-    governorateCode: geo?.candidate_location?.governorate?.code ?? "",
-    delegationCode: geo?.candidate_location?.delegation?.code ?? "",
+    governorateCode: geo?.candidate_location?.governorate?.code ?? '',
+    delegationCode: geo?.candidate_location?.delegation?.code ?? '',
   };
 };
 
@@ -485,30 +487,36 @@ function applyParsedCvToDraft(
   parseResult: CandidateCvParseResult,
 ): ProfileDraft {
   const patch: ExtractedProfilePatch =
-    (parseResult.extractedProfilePatch as ExtractedProfilePatch | undefined) ?? {};
+    (parseResult.extractedProfilePatch as ExtractedProfilePatch | undefined) ??
+    {};
   const identity = patch.identity ?? {};
 
   const mappedPayload = parseResult.mappedPayload ?? {};
-  const { governorateCode, delegationCode } = extractCandidateLocationCodes(mappedPayload);
+  const { governorateCode, delegationCode } =
+    extractCandidateLocationCodes(mappedPayload);
 
   const parsedPayload = parseResult.parsedPayload ?? {};
   const cvData = parsedPayload.cv_data as Record<string, unknown> | undefined;
-  const personalInfo = cvData?.personal_info as Record<string, unknown> | undefined;
+  const personalInfo = cvData?.personal_info as
+    | Record<string, unknown>
+    | undefined;
 
   const fullName = splitFullName(
-    identity.full_name
-    ?? identity.name
-    ?? personalInfo?.full_name
-    ?? personalInfo?.name,
+    identity.full_name ??
+      identity.name ??
+      personalInfo?.full_name ??
+      personalInfo?.name,
   );
 
-  const parsedGeo = parsedPayload.geo_normalization as GeoNormalization | undefined;
-  const mappedGeo = mappedPayload.geo_normalization as GeoNormalization | undefined;
+  const parsedGeo = parsedPayload.geo_normalization as
+    | GeoNormalization
+    | undefined;
+  const mappedGeo = mappedPayload.geo_normalization as
+    | GeoNormalization
+    | undefined;
 
   const candidateLocation =
-    parsedGeo?.candidate_location ??
-    mappedGeo?.candidate_location ??
-    null;
+    parsedGeo?.candidate_location ?? mappedGeo?.candidate_location ?? null;
 
   const displayLocation =
     candidateLocation?.display_location ||
@@ -518,27 +526,27 @@ function applyParsedCvToDraft(
     ...current,
 
     firstName:
-      toStringOrEmpty(identity.first_name)
-      || fullName.firstName
-      || current.firstName,
+      toStringOrEmpty(identity.first_name) ||
+      fullName.firstName ||
+      current.firstName,
 
     lastName:
-      toStringOrEmpty(identity.last_name)
-      || fullName.lastName
-      || current.lastName,
+      toStringOrEmpty(identity.last_name) ||
+      fullName.lastName ||
+      current.lastName,
 
     birthDate: toStringOrEmpty(identity.birth_date) || current.birthDate,
     nationality: toStringOrEmpty(identity.nationality) || current.nationality,
 
     email:
-      toStringOrEmpty(identity.email)
-      || toStringOrEmpty(personalInfo?.email)
-      || current.email,
+      toStringOrEmpty(identity.email) ||
+      toStringOrEmpty(personalInfo?.email) ||
+      current.email,
 
     phone:
-      toStringOrEmpty(identity.phone)
-      || toStringOrEmpty(personalInfo?.phone)
-      || current.phone,
+      toStringOrEmpty(identity.phone) ||
+      toStringOrEmpty(personalInfo?.phone) ||
+      current.phone,
 
     address: displayLocation || current.address,
     governorateCode: governorateCode || current.governorateCode,
@@ -547,28 +555,26 @@ function applyParsedCvToDraft(
     education: patch.education.map((item) => ({
       levelCode: toStringOrEmpty(item.level_code ?? item.levelCode),
       diplomaLabel: toStringOrEmpty(
-        item.diploma_label
-        ?? item.diplomaLabel
-        ?? item.degree
-        ?? item.raw_degree,
+        item.diploma_label ??
+          item.diplomaLabel ??
+          item.degree ??
+          item.raw_degree,
       ),
       specialty: toStringOrEmpty(
-        item.specialty
-        ?? item.specialty_label
-        ?? item.field,
+        item.specialty ?? item.specialty_label ?? item.field,
       ),
       institution: toStringOrEmpty(item.institution),
       graduationYear: toStringOrEmpty(
-        item.graduation_year
-        ?? item.graduationYear
-        ?? item.end_date,
+        item.graduation_year ?? item.graduationYear ?? item.end_date,
       ),
     })),
 
     experience: (patch.experience ?? []).map((item) => ({
-      jobTitleRaw: toStringOrEmpty(item.title ?? item.job_title ?? item.jobTitleRaw),
+      jobTitleRaw: toStringOrEmpty(
+        item.title ?? item.job_title ?? item.jobTitleRaw,
+      ),
       companyName: toStringOrEmpty(item.company ?? item.company_name),
-      sector: "",
+      sector: '',
       startDate: toStringOrEmpty(item.start_date),
       endDate: toStringOrEmpty(item.end_date),
       description: toStringOrEmpty(item.description),
@@ -579,14 +585,16 @@ function applyParsedCvToDraft(
         item.skill_label_raw ?? item.name ?? item.label ?? item.skill,
       ),
       level: toStringOrEmpty(item.level),
-      years: "",
-      evidence: "CV",
+      years: '',
+      evidence: 'CV',
     })),
 
     languages: (patch.languages ?? []).map((item) => ({
-      languageCode: toStringOrEmpty(item.language_code ?? item.code ?? item.name),
+      languageCode: toStringOrEmpty(
+        item.language_code ?? item.code ?? item.name,
+      ),
       level: toStringOrEmpty(item.level),
-      evidence: "CV",
+      evidence: 'CV',
     })),
   };
 }
@@ -761,13 +769,13 @@ export default function Profile() {
   });
 
   const languagesQuery = useQuery({
-    queryKey: ["referentials", "languages"],
+    queryKey: ['referentials', 'languages'],
     queryFn: () => gatewayApi.referentials.languages(),
     staleTime: 5 * 60_000,
   });
 
   const languageLevelsQuery = useQuery({
-    queryKey: ["referentials", "language-levels"],
+    queryKey: ['referentials', 'language-levels'],
     queryFn: () => gatewayApi.referentials.languageLevels(),
     staleTime: 5 * 60_000,
   });
@@ -831,7 +839,6 @@ export default function Profile() {
       queryFn: () => gatewayApi.candidate.getBundle(),
     });
 
-
   const handleCancel = () => {
     if (bundle) {
       setDraft(toDraft(bundle));
@@ -849,13 +856,13 @@ export default function Profile() {
       const headers = new Headers();
 
       if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
+        headers.set('Authorization', `Bearer ${token}`);
       }
 
       const response = await fetch(
-        `${appEnv.apiBaseUrl.replace(/\/+$/, "")}${gatewayApi.candidate.getCurrentCvViewUrl()}`,
+        `${appEnv.apiBaseUrl.replace(/\/+$/, '')}${gatewayApi.candidate.getCurrentCvViewUrl()}`,
         {
-          method: "GET",
+          method: 'GET',
           headers,
         },
       );
@@ -1240,11 +1247,10 @@ export default function Profile() {
               </p>
             </div>
           </div>
-
         </div>
 
-        <div className="space-y-8 px-6 py-7 sm:px-8">
-          <section className="space-y-4">
+        <div className="space-y-4 px-8 mb-8">
+          <section className="space-y-4 px-6 py-7 sm:px-8">
             <SectionTitle
               title="Informations personnelles"
               description="Vos informations personnelles et vos coordonnées."
@@ -1352,12 +1358,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                        ...current,
-                        governorateCode: value,
-                        delegationCode: '',
-                        preferredGovernorate:
-                          current.preferredGovernorate || value,
-                      }
+                          ...current,
+                          governorateCode: value,
+                          delegationCode: '',
+                          preferredGovernorate:
+                            current.preferredGovernorate || value,
+                        }
                       : current,
                   )
                 }
@@ -1402,482 +1408,317 @@ export default function Profile() {
             </div>
           </section>
 
-          <Separator className="bg-primary/40" />
-
-          <section className="space-y-4">
-            <SectionTitle
-              title="Préférences"
-              description="Vos préférences de contrat, de mobilité et de salaire."
-              icon={Globe2}
+          {/* <Separator className="bg-primary/40" /> */}
+          <div className="profile-border-left-orange">
+            <CollectionSection<EducationDraft>
+              title="Formation"
+              description="Vos diplômes, spécialités et établissements."
+              icon={GraduationCap}
               iconClassName="icon-background-color-7"
-            />
-            <div className="grid gap-4 md:grid-cols-2">
-              <OptionSelect
-                label="Type de contrat souhaité"
-                value={currentDraft.preferredContractType}
-                onChange={(value) =>
-                  setDraft((current) =>
-                    current
-                      ? { ...current, preferredContractType: value }
-                      : current,
-                  )
-                }
-                options={contractTypesQuery.data ?? []}
-                placeholder="Sélectionner"
-                disabled={!isEditing}
-              />
-              <OptionSelect
-                label="Gouvernorat souhaité"
-                value={currentDraft.preferredGovernorate}
-                onChange={(value) =>
-                  setDraft((current) =>
-                    current
-                      ? { ...current, preferredGovernorate: value }
-                      : current,
-                  )
-                }
-                options={governoratesQuery.data ?? []}
-                placeholder="Sélectionner"
-                disabled={!isEditing}
-              />
-              <Field
-                label="Rayon de mobilité (km)"
-                type="number"
-                value={currentDraft.mobilityRadiusKm}
-                onChange={(value) =>
-                  setDraft((current) =>
-                    current ? { ...current, mobilityRadiusKm: value } : current,
-                  )
-                }
-                disabled={!isEditing}
-              />
-              <Field
-                label="Mobilité élargie"
-                value={formatBooleanLabel(currentDraft.acceptsRelocation)}
-                onChange={() => undefined}
-                disabled
-              />
-              <Field
-                label="Salaire minimum souhaité"
-                type="number"
-                value={currentDraft.desiredSalaryMin}
-                onChange={(value) =>
-                  setDraft((current) =>
-                    current ? { ...current, desiredSalaryMin: value } : current,
-                  )
-                }
-                disabled={!isEditing}
-              />
-              <Field
-                label="Salaire maximum souhaité"
-                type="number"
-                value={currentDraft.desiredSalaryMax}
-                onChange={(value) =>
-                  setDraft((current) =>
-                    current ? { ...current, desiredSalaryMax: value } : current,
-                  )
-                }
-                disabled={!isEditing}
-              />
-            </div>
-            {isEditing ? (
-              <label className="flex items-center gap-2 text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={currentDraft.acceptsRelocation}
-                  onChange={(event) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                          ...current,
-                          acceptsRelocation: event.target.checked,
-                        }
-                        : current,
-                    )
-                  }
-                />
-                Accepte la mobilité élargie
-              </label>
-            ) : null}
-          </section>
-
-          <Separator className="bg-primary/40" />
-
-          <CollectionSection<EducationDraft>
-            title="Formation"
-            description="Vos diplômes, spécialités et établissements."
-            icon={GraduationCap}
-            iconClassName="icon-background-color-7"
-            items={currentDraft?.education}
-            setItems={(updater) =>
-              setDraft((current) =>
-                current
-                  ? {
-                    ...current,
-                    education:
-                      typeof updater === 'function'
-                        ? updater(current.education)
-                        : updater,
-                  }
-                  : current,
-              )
-            }
-            emptyItem={emptyEducation}
-            isEditing={isEditing}
-            emptyStateMessage="Aucune formation renseignée."
-            renderItem={(item, update) => (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field
-                  label="Niveau"
-                  value={item.levelCode}
-                  onChange={(value) => update({ ...item, levelCode: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Diplôme"
-                  value={item.diplomaLabel}
-                  onChange={(value) => update({ ...item, diplomaLabel: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Spécialité"
-                  value={item.specialty}
-                  onChange={(value) => update({ ...item, specialty: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Établissement"
-                  value={item.institution}
-                  onChange={(value) => update({ ...item, institution: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Année d'obtention"
-                  type="number"
-                  value={item.graduationYear}
-                  onChange={(value) =>
-                    update({ ...item, graduationYear: value })
-                  }
-                  disabled={!isEditing}
-                />
-              </div>
-            )}
-            viewItem={(item) => (
-              <>
-                <h3 className="text-base font-semibold text-foreground">
-                  {item.diplomaLabel || item.levelCode || 'Formation'}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {[item.institution, item.specialty, item.graduationYear]
-                    .filter(Boolean)
-                    .join(' - ')}
-                </p>
-              </>
-            )}
-          />
-
-          <Separator className="bg-primary/40" />
-
-          <CollectionSection<ExperienceDraft>
-            title="Expérience"
-            description="Vos expériences professionnelles et vos stages."
-            icon={Briefcase}
-            iconClassName="icon-background-color-7"
-            items={currentDraft?.experience}
-            setItems={(updater) =>
-              setDraft((current) =>
-                current
-                  ? {
-                    ...current,
-                    experience:
-                      typeof updater === 'function'
-                        ? updater(current.experience)
-                        : updater,
-                  }
-                  : current,
-              )
-            }
-            emptyItem={emptyExperience}
-            isEditing={isEditing}
-            emptyStateMessage="Aucune expérience renseignée."
-            renderItem={(item, update) => (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field
-                  label="Intitulé du poste"
-                  value={item.jobTitleRaw}
-                  onChange={(value) => update({ ...item, jobTitleRaw: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Entreprise"
-                  value={item.companyName}
-                  onChange={(value) => update({ ...item, companyName: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Secteur"
-                  value={item.sector}
-                  onChange={(value) => update({ ...item, sector: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Date de début"
-                  type="date"
-                  value={item.startDate}
-                  onChange={(value) => update({ ...item, startDate: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Date de fin"
-                  type="date"
-                  value={item.endDate}
-                  onChange={(value) => update({ ...item, endDate: value })}
-                  disabled={!isEditing}
-                />
-                <div className="md:col-span-2">
-                  <Label className="text-xs text-muted-foreground">
-                    Description
-                  </Label>
-                  <Textarea
-                    value={item.description}
-                    onChange={(event) =>
-                      update({ ...item, description: event.target.value })
+              items={currentDraft?.education}
+              setItems={(updater) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        education:
+                          typeof updater === 'function'
+                            ? updater(current.education)
+                            : updater,
+                      }
+                    : current,
+                )
+              }
+              emptyItem={emptyEducation}
+              isEditing={isEditing}
+              emptyStateMessage="Aucune formation renseignée."
+              renderItem={(item, update) => (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    label="Niveau"
+                    value={item.levelCode}
+                    onChange={(value) => update({ ...item, levelCode: value })}
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Diplôme"
+                    value={item.diplomaLabel}
+                    onChange={(value) =>
+                      update({ ...item, diplomaLabel: value })
                     }
-                    className="mt-1.5 min-h-[96px]"
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Spécialité"
+                    value={item.specialty}
+                    onChange={(value) => update({ ...item, specialty: value })}
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Établissement"
+                    value={item.institution}
+                    onChange={(value) =>
+                      update({ ...item, institution: value })
+                    }
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Année d'obtention"
+                    type="number"
+                    value={item.graduationYear}
+                    onChange={(value) =>
+                      update({ ...item, graduationYear: value })
+                    }
                     disabled={!isEditing}
                   />
                 </div>
-              </div>
-            )}
-            renderListView={() => (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-border bg-background p-5">
+              )}
+              viewItem={(item) => (
+                <>
                   <h3 className="text-base font-semibold text-foreground">
-                    Expériences professionnelles
+                    {item.diplomaLabel || item.levelCode || 'Formation'}
                   </h3>
-                  <div className="mt-4 space-y-4">
-                    {professionalExperiences.length > 0 ? (
-                      professionalExperiences.map((item, index) => (
-                        <div
-                          key={item.id ?? `professional-${index}`}
-                          className="rounded-2xl border border-border bg-surface-muted/30 p-4"
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            {item.jobTitleRaw || 'Expérience professionnelle'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {[item.companyName, item.sector]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </p>
-                          {formatExperiencePeriod(
-                            item.startDate,
-                            item.endDate,
-                          ) ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {formatExperiencePeriod(item.startDate, item.endDate)}
-                            </p>
-                          ) : null}
-                          {item.description ? (
-                            <p className="mt-3 text-sm leading-6 text-foreground">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Aucune expérience professionnelle renseignée.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-2xl border border-border bg-background p-5">
-                  <h3 className="text-base font-semibold text-foreground">
-                    Stages
-                  </h3>
-                  <div className="mt-4 space-y-4">
-                    {internshipExperiences.length > 0 ? (
-                      internshipExperiences.map((item, index) => (
-                        <div
-                          key={item.id ?? `internship-${index}`}
-                          className="rounded-2xl border border-border bg-surface-muted/30 p-4"
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            {item.jobTitleRaw || 'Stage'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {[item.companyName, item.sector]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </p>
-                          {formatExperiencePeriod(
-                            item.startDate,
-                            item.endDate,
-                          ) ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {formatExperiencePeriod(item.startDate, item.endDate)}
-                            </p>
-                          ) : null}
-                          {item.description ? (
-                            <p className="mt-3 text-sm leading-6 text-foreground">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Aucun stage renseigné.
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-            viewItem={(item) => (
-              <>
-                <h3 className="text-base font-semibold text-foreground">
-                  {item.jobTitleRaw || 'Expérience'}
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {[item.companyName, item.sector].filter(Boolean).join(' • ')}
-                </p>
-                <p className="mt-2 text-sm leading-6 text-foreground">
-                  {item.description || 'Aucune description renseignée.'}
-                </p>
-              </>
-            )}
-          />
-
-          <Separator className="bg-primary/40" />
-
-          <CollectionSection<SkillDraft>
-            title="Compétences"
-            description="Les compétences que vous souhaitez mettre en avant."
-            icon={Globe2}
-            items={currentDraft?.skills}
-            iconClassName="icon-background-color-7"
-            setItems={(updater) =>
-              setDraft((current) =>
-                current
-                  ? {
-                    ...current,
-                    skills:
-                      typeof updater === 'function'
-                        ? updater(current.skills)
-                        : updater,
-                  }
-                  : current,
-              )
-            }
-            emptyItem={emptySkill}
-            isEditing={isEditing}
-            emptyStateMessage="Aucune compétence renseignée."
-            renderItem={(item, update) => (
-              <div className="grid gap-3 md:grid-cols-2">
-                <Field
-                  label="Compétence"
-                  value={item.skillLabelRaw}
-                  onChange={(value) =>
-                    update({ ...item, skillLabelRaw: value })
-                  }
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Niveau"
-                  value={item.level}
-                  onChange={(value) => update({ ...item, level: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Années d'expérience"
-                  type="number"
-                  value={item.years}
-                  onChange={(value) => update({ ...item, years: value })}
-                  disabled={!isEditing}
-                />
-                <Field
-                  label="Preuve"
-                  value={item.evidence}
-                  onChange={(value) => update({ ...item, evidence: value })}
-                  disabled={!isEditing}
-                />
-              </div>
-            )}
-            renderListView={(items) => (
-              <div className="rounded-2xl border border-border bg-background p-5">
-                <div className="flex flex-wrap gap-2">
-                  {items.map((item, index) => (
-                    <SkillTag
-                      key={item.id ?? `skill-${index}`}
-                      label={item.skillLabelRaw || 'Compétence'}
-                      variant="matched"
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {[item.institution, item.specialty, item.graduationYear]
+                      .filter(Boolean)
+                      .join(' - ')}
+                  </p>
+                </>
+              )}
+            />
+            <Separator className="bg-accent/70" />
+            <CollectionSection<ExperienceDraft>
+              title="Expérience"
+              description="Vos expériences professionnelles et vos stages."
+              icon={Briefcase}
+              iconClassName="icon-background-color-7"
+              items={currentDraft?.experience}
+              setItems={(updater) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        experience:
+                          typeof updater === 'function'
+                            ? updater(current.experience)
+                            : updater,
+                      }
+                    : current,
+                )
+              }
+              emptyItem={emptyExperience}
+              isEditing={isEditing}
+              emptyStateMessage="Aucune expérience renseignée."
+              renderItem={(item, update) => (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    label="Intitulé du poste"
+                    value={item.jobTitleRaw}
+                    onChange={(value) =>
+                      update({ ...item, jobTitleRaw: value })
+                    }
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Entreprise"
+                    value={item.companyName}
+                    onChange={(value) =>
+                      update({ ...item, companyName: value })
+                    }
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Secteur"
+                    value={item.sector}
+                    onChange={(value) => update({ ...item, sector: value })}
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Date de début"
+                    type="date"
+                    value={item.startDate}
+                    onChange={(value) => update({ ...item, startDate: value })}
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Date de fin"
+                    type="date"
+                    value={item.endDate}
+                    onChange={(value) => update({ ...item, endDate: value })}
+                    disabled={!isEditing}
+                  />
+                  <div className="md:col-span-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Description
+                    </Label>
+                    <Textarea
+                      value={item.description}
+                      onChange={(event) =>
+                        update({ ...item, description: event.target.value })
+                      }
+                      className="mt-1.5 min-h-[96px]"
+                      disabled={!isEditing}
                     />
-                  ))}
+                  </div>
                 </div>
-              </div>
-            )}
-            viewItem={(item) => (
-              <div className="flex flex-wrap gap-2">
-                <SkillTag
-                  label={item.skillLabelRaw || 'Compétence'}
-                  variant="matched"
-                />
-                {item.level ? <SkillTag label={item.level} /> : null}
-                {item.years ? (
-                  <SkillTag label={`${item.years} an(s)`} />
-                ) : null}
-              </div>
-            )}
-          />
+              )}
+              renderListView={() => (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-background p-5">
+                    <h3 className="text-base font-semibold text-foreground">
+                      Expériences professionnelles
+                    </h3>
+                    <div className="mt-4 space-y-4">
+                      {professionalExperiences.length > 0 ? (
+                        professionalExperiences.map((item, index) => (
+                          <div
+                            key={item.id ?? `professional-${index}`}
+                            className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                          >
+                            <p className="text-sm font-semibold text-foreground">
+                              {item.jobTitleRaw || 'Expérience professionnelle'}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {[item.companyName, item.sector]
+                                .filter(Boolean)
+                                .join(' • ')}
+                            </p>
+                            {formatExperiencePeriod(
+                              item.startDate,
+                              item.endDate,
+                            ) ? (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {formatExperiencePeriod(
+                                  item.startDate,
+                                  item.endDate,
+                                )}
+                              </p>
+                            ) : null}
+                            {item.description ? (
+                              <p className="mt-3 text-sm leading-6 text-foreground">
+                                {item.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Aucune expérience professionnelle renseignée.
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-          <Separator className="bg-primary/40" />
+                  <div className="rounded-2xl border border-border bg-background p-5">
+                    <h3 className="text-base font-semibold text-foreground">
+                      Stages
+                    </h3>
+                    <div className="mt-4 space-y-4">
+                      {internshipExperiences.length > 0 ? (
+                        internshipExperiences.map((item, index) => (
+                          <div
+                            key={item.id ?? `internship-${index}`}
+                            className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                          >
+                            <p className="text-sm font-semibold text-foreground">
+                              {item.jobTitleRaw || 'Stage'}
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              {[item.companyName, item.sector]
+                                .filter(Boolean)
+                                .join(' • ')}
+                            </p>
+                            {formatExperiencePeriod(
+                              item.startDate,
+                              item.endDate,
+                            ) ? (
+                              <p className="mt-2 text-xs text-muted-foreground">
+                                {formatExperiencePeriod(
+                                  item.startDate,
+                                  item.endDate,
+                                )}
+                              </p>
+                            ) : null}
+                            {item.description ? (
+                              <p className="mt-3 text-sm leading-6 text-foreground">
+                                {item.description}
+                              </p>
+                            ) : null}
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Aucun stage renseigné.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+              viewItem={(item) => (
+                <>
+                  <h3 className="text-base font-semibold text-foreground">
+                    {item.jobTitleRaw || 'Expérience'}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {[item.companyName, item.sector]
+                      .filter(Boolean)
+                      .join(' • ')}
+                  </p>
+                  <p className="mt-2 text-sm leading-6 text-foreground">
+                    {item.description || 'Aucune description renseignée.'}
+                  </p>
+                </>
+              )}
+            />
 
-          <CollectionSection<LanguageDraft>
-            title="Langues"
-            description="Les langues que vous maîtrisez."
-            icon={Languages}
-            items={currentDraft?.languages}
-            iconClassName="icon-background-color-7"
-            setItems={(updater) =>
-              setDraft((current) =>
-                current
-                  ? {
-                    ...current,
-                    languages:
-                      typeof updater === 'function'
-                        ? updater(current.languages)
-                        : updater,
-                  }
-                  : current,
-              )
-            }
-            emptyItem={emptyLanguage}
-            isEditing={isEditing}
-            emptyStateMessage="Aucune langue renseignée."
-            renderItem={(item, update) => (
-              <div className="grid gap-3 md:grid-cols-2">
-                <SelectField
-                  label="Langue"
-                  value={item.languageCode}
-                  onChange={(value) => update({ ...item, languageCode: value })}
-                  options={languagesQuery.data ?? []}
-                  disabled={!isEditing}
-                  placeholder="Choisir une langue"
-                />
+            <Separator className="bg-accent/70" />
 
-                <SelectField
-                  label="Niveau"
-                  value={item.level}
-                  onChange={(value) => update({ ...item, level: value })}
-                  options={languageLevelsQuery.data ?? []}
-                  disabled={!isEditing}
-                  placeholder="Choisir un niveau"
-                />
-
-                <div className="md:col-span-2">
+            <CollectionSection<SkillDraft>
+              title="Compétences"
+              description="Les compétences que vous souhaitez mettre en avant."
+              icon={Globe2}
+              items={currentDraft?.skills}
+              iconClassName="icon-background-color-7"
+              setItems={(updater) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        skills:
+                          typeof updater === 'function'
+                            ? updater(current.skills)
+                            : updater,
+                      }
+                    : current,
+                )
+              }
+              emptyItem={emptySkill}
+              isEditing={isEditing}
+              emptyStateMessage="Aucune compétence renseignée."
+              renderItem={(item, update) => (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <Field
+                    label="Compétence"
+                    value={item.skillLabelRaw}
+                    onChange={(value) =>
+                      update({ ...item, skillLabelRaw: value })
+                    }
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Niveau"
+                    value={item.level}
+                    onChange={(value) => update({ ...item, level: value })}
+                    disabled={!isEditing}
+                  />
+                  <Field
+                    label="Années d'expérience"
+                    type="number"
+                    value={item.years}
+                    onChange={(value) => update({ ...item, years: value })}
+                    disabled={!isEditing}
+                  />
                   <Field
                     label="Preuve"
                     value={item.evidence}
@@ -1885,178 +1726,365 @@ export default function Profile() {
                     disabled={!isEditing}
                   />
                 </div>
-              </div>
-            )}
-            renderListView={(items) => (
-              <div className="rounded-2xl border border-border bg-background p-5">
-                <div className="flex flex-wrap gap-2">
-                  {items.map((item, index) => {
-                    const bundleLanguage = bundle?.languages.find(
-                      (language) => language.id === item.id,
-                    );
-                    const languageOption = languagesQuery.data?.find(
-                      (option) => option.code === item.languageCode,
-                    );
-                    const levelOption = languageLevelsQuery.data?.find(
-                      (option) => option.code === item.level,
-                    );
-
-                    const label = `${formatLanguageLabel(
-                      item.languageCode,
-                      bundleLanguage?.languageLabelFr ??
-                        bundleLanguage?.languageLabelEn ??
-                        languageOption?.label,
-                    )} - ${formatLanguageLevelLabel(
-                      item.level,
-                      bundleLanguage?.levelLabelFr ??
-                        bundleLanguage?.levelLabelEn ??
-                        levelOption?.label,
-                    )}`;
-
-                    return (
+              )}
+              renderListView={(items) => (
+                <div className="rounded-2xl border border-border bg-background p-5">
+                  <div className="flex flex-wrap gap-2">
+                    {items.map((item, index) => (
                       <SkillTag
-                        key={item.id ?? `language-${index}`}
-                        label={label}
-                        variant="outline"
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-            viewItem={(item) => {
-              const bundleLanguage = bundle?.languages.find(
-                (language) => language.id === item.id,
-              );
-              const languageOption = languagesQuery.data?.find(
-                (option) => option.code === item.languageCode,
-              );
-
-              const levelOption = languageLevelsQuery.data?.find(
-                (option) => option.code === item.level,
-              );
-
-              const label = `${formatLanguageLabel(
-                item.languageCode,
-                bundleLanguage?.languageLabelFr ??
-                  bundleLanguage?.languageLabelEn ??
-                  languageOption?.label,
-              )} - ${formatLanguageLevelLabel(
-                item.level,
-                bundleLanguage?.levelLabelFr ??
-                  bundleLanguage?.levelLabelEn ??
-                  levelOption?.label,
-              )}`;
-
-              return (
-                <div className="flex flex-wrap gap-2">
-                  <SkillTag label={label || 'Langue'} />
-                  {item.evidence ? <SkillTag label={item.evidence} /> : null}
-                </div>
-              );
-            }}
-          />
-
-          <Separator className="bg-primary/40" />
-
-          <section className="space-y-4">
-            <SectionTitle
-              title="Compétences détectées depuis le CV"
-              description="Un aperçu des informations extraites automatiquement de votre CV."
-              icon={Languages}
-              iconClassName="icon-background-color-7"
-            />
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
-                <p className="text-sm font-semibold text-foreground">
-                  Compétences détectées
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {bundle?.skills.length ? (
-                    bundle.skills.map((skill) => (
-                      <SkillTag
-                        key={skill.id}
-                        label={inferSkillLabel(skill)}
+                        key={item.id ?? `skill-${index}`}
+                        label={item.skillLabelRaw || 'Compétence'}
                         variant="matched"
                       />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Aucune compétence n'est encore enregistrée. Importez un CV
-                      ou ajoutez-les manuellement.
-                    </p>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
-
-              <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
-                <p className="text-sm font-semibold text-foreground">
-                  Compétences numériques
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {codingSkillLabels.length ? (
-                    codingSkillLabels.map((skill) => (
-                      <SkillTag key={skill} label={skill} variant="matched" />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Les compétences techniques apparaîtront ici lorsqu'elles
-                      seront détectées dans votre profil.
-                    </p>
-                  )}
+              )}
+              viewItem={(item) => (
+                <div className="flex flex-wrap gap-2">
+                  <SkillTag
+                    label={item.skillLabelRaw || 'Compétence'}
+                    variant="matched"
+                  />
+                  {item.level ? <SkillTag label={item.level} /> : null}
+                  {item.years ? (
+                    <SkillTag label={`${item.years} an(s)`} />
+                  ) : null}
                 </div>
-              </div>
-            </div>
-          </section>
-
-          <Separator className="bg-primary/40" />
-
-          <section className="space-y-4">
-            <SectionTitle
-              title="Domaines et technologies qui vous intéressent"
-              description="Préférences temporaires côté front, en attendant leur persistance via l'API."
-              icon={Globe2}
-              iconClassName="icon-background-color-7"
+              )}
             />
 
-            <div className="rounded-2xl border border-border bg-background p-5">
-              <div className="flex flex-wrap gap-2">
-                {candidateInterestKeywords.map((keyword) => (
-                  <SkillTag key={keyword} label={keyword} variant="matched" />
-                ))}
-              </div>
+            <Separator className="bg-accent/70" />
 
-              <div className="mt-6 grid gap-3 md:max-w-xs">
-                <Label className="text-xs text-muted-foreground">
-                  Score minimum des offres
-                </Label>
-                <Select
-                  value={String(minimumOfferScore)}
-                  onValueChange={(value) => {
-                    const nextScore = Number(value);
-                    setMinimumOfferScore(nextScore);
-                    // Ce seuil servira plus tard à filtrer les offres recommandées via l'API.
-                    setStoredCandidateMinimumOfferScore(nextScore);
-                  }}
-                >
-                  <SelectTrigger className="h-10">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {candidateOfferScoreOptions.map((option) => (
-                      <SelectItem key={option} value={String(option)}>
-                        {option}%
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Ce seuil est actuellement conservé uniquement dans votre
-                  navigateur.
-                </p>
+            <CollectionSection<LanguageDraft>
+              title="Langues"
+              description="Les langues que vous maîtrisez."
+              icon={Languages}
+              items={currentDraft?.languages}
+              iconClassName="icon-background-color-7"
+              setItems={(updater) =>
+                setDraft((current) =>
+                  current
+                    ? {
+                        ...current,
+                        languages:
+                          typeof updater === 'function'
+                            ? updater(current.languages)
+                            : updater,
+                      }
+                    : current,
+                )
+              }
+              emptyItem={emptyLanguage}
+              isEditing={isEditing}
+              emptyStateMessage="Aucune langue renseignée."
+              renderItem={(item, update) => (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <SelectField
+                    label="Langue"
+                    value={item.languageCode}
+                    onChange={(value) =>
+                      update({ ...item, languageCode: value })
+                    }
+                    options={languagesQuery.data ?? []}
+                    disabled={!isEditing}
+                    placeholder="Choisir une langue"
+                  />
+
+                  <SelectField
+                    label="Niveau"
+                    value={item.level}
+                    onChange={(value) => update({ ...item, level: value })}
+                    options={languageLevelsQuery.data ?? []}
+                    disabled={!isEditing}
+                    placeholder="Choisir un niveau"
+                  />
+
+                  <div className="md:col-span-2">
+                    <Field
+                      label="Preuve"
+                      value={item.evidence}
+                      onChange={(value) => update({ ...item, evidence: value })}
+                      disabled={!isEditing}
+                    />
+                  </div>
+                </div>
+              )}
+              renderListView={(items) => (
+                <div className="rounded-2xl border border-border bg-background p-5">
+                  <div className="flex flex-wrap gap-2">
+                    {items.map((item, index) => {
+                      const bundleLanguage = bundle?.languages.find(
+                        (language) => language.id === item.id,
+                      );
+                      const languageOption = languagesQuery.data?.find(
+                        (option) => option.code === item.languageCode,
+                      );
+                      const levelOption = languageLevelsQuery.data?.find(
+                        (option) => option.code === item.level,
+                      );
+
+                      const label = `${formatLanguageLabel(
+                        item.languageCode,
+                        bundleLanguage?.languageLabelFr ??
+                          bundleLanguage?.languageLabelEn ??
+                          languageOption?.label,
+                      )} - ${formatLanguageLevelLabel(
+                        item.level,
+                        bundleLanguage?.levelLabelFr ??
+                          bundleLanguage?.levelLabelEn ??
+                          levelOption?.label,
+                      )}`;
+
+                      return (
+                        <SkillTag
+                          key={item.id ?? `language-${index}`}
+                          label={label}
+                          variant="outline"
+                        />
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              viewItem={(item) => {
+                const bundleLanguage = bundle?.languages.find(
+                  (language) => language.id === item.id,
+                );
+                const languageOption = languagesQuery.data?.find(
+                  (option) => option.code === item.languageCode,
+                );
+
+                const levelOption = languageLevelsQuery.data?.find(
+                  (option) => option.code === item.level,
+                );
+
+                const label = `${formatLanguageLabel(
+                  item.languageCode,
+                  bundleLanguage?.languageLabelFr ??
+                    bundleLanguage?.languageLabelEn ??
+                    languageOption?.label,
+                )} - ${formatLanguageLevelLabel(
+                  item.level,
+                  bundleLanguage?.levelLabelFr ??
+                    bundleLanguage?.levelLabelEn ??
+                    levelOption?.label,
+                )}`;
+
+                return (
+                  <div className="flex flex-wrap gap-2">
+                    <SkillTag label={label || 'Langue'} />
+                    {item.evidence ? <SkillTag label={item.evidence} /> : null}
+                  </div>
+                );
+              }}
+            />
+          </div>
+          {/* <Separator className="bg-primary/40" /> */}
+          <div className="profile-border-left-19">
+            <section className="space-y-4 px-6 py-7 sm:px-8">
+              <SectionTitle
+                title="Compétences détectées depuis le CV"
+                description="Un aperçu des informations extraites automatiquement de votre CV."
+                icon={Languages}
+                iconClassName="icon-background-color-19"
+              />
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
+                  <p className="text-sm font-semibold text-foreground">
+                    Compétences détectées
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {bundle?.skills.length ? (
+                      bundle.skills.map((skill) => (
+                        <SkillTag
+                          key={skill.id}
+                          label={inferSkillLabel(skill)}
+                          variant="matched"
+                        />
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Aucune compétence n'est encore enregistrée. Importez un
+                        CV ou ajoutez-les manuellement.
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
+                  <p className="text-sm font-semibold text-foreground">
+                    Compétences numériques
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {codingSkillLabels.length ? (
+                      codingSkillLabels.map((skill) => (
+                        <SkillTag key={skill} label={skill} variant="matched" />
+                      ))
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Les compétences techniques apparaîtront ici lorsqu'elles
+                        seront détectées dans votre profil.
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          </section>
+            </section>
+
+            <Separator className="profile-background-color-19-opacity-70" />
+
+            <section className="space-y-4 px-6 py-7 sm:px-8">
+              <SectionTitle
+                title="Domaines et technologies qui vous intéressent"
+                description="Préférences temporaires côté front, en attendant leur persistance via l'API."
+                icon={Globe2}
+                iconClassName="icon-background-color-19"
+              />
+
+              <div className="rounded-2xl border border-border bg-background p-5">
+                <div className="flex flex-wrap gap-2">
+                  {candidateInterestKeywords.map((keyword) => (
+                    <SkillTag key={keyword} label={keyword} variant="matched" />
+                  ))}
+                </div>
+
+                <div className="mt-6 grid gap-3 md:max-w-xs">
+                  <Label className="text-xs text-muted-foreground">
+                    Score minimum des offres
+                  </Label>
+                  <Select
+                    value={String(minimumOfferScore)}
+                    onValueChange={(value) => {
+                      const nextScore = Number(value);
+                      setMinimumOfferScore(nextScore);
+                      // Ce seuil servira plus tard à filtrer les offres recommandées via l'API.
+                      setStoredCandidateMinimumOfferScore(nextScore);
+                    }}
+                  >
+                    <SelectTrigger className="h-10">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {candidateOfferScoreOptions.map((option) => (
+                        <SelectItem key={option} value={String(option)}>
+                          {option}%
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Ce seuil est actuellement conservé uniquement dans votre
+                    navigateur.
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div className="profile-border-left-20">
+            <section className="space-y-4 px-6 py-7 sm:px-8">
+              <SectionTitle
+                title="Préférences"
+                description="Vos préférences de contrat, de mobilité et de salaire."
+                icon={Globe2}
+                iconClassName="icon-background-color-20"
+              />
+              <div className="grid gap-4 md:grid-cols-2">
+                <OptionSelect
+                  label="Type de contrat souhaité"
+                  value={currentDraft.preferredContractType}
+                  onChange={(value) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, preferredContractType: value }
+                        : current,
+                    )
+                  }
+                  options={contractTypesQuery.data ?? []}
+                  placeholder="Sélectionner"
+                  disabled={!isEditing}
+                />
+                <OptionSelect
+                  label="Gouvernorat souhaité"
+                  value={currentDraft.preferredGovernorate}
+                  onChange={(value) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, preferredGovernorate: value }
+                        : current,
+                    )
+                  }
+                  options={governoratesQuery.data ?? []}
+                  placeholder="Sélectionner"
+                  disabled={!isEditing}
+                />
+                <Field
+                  label="Rayon de mobilité (km)"
+                  type="number"
+                  value={currentDraft.mobilityRadiusKm}
+                  onChange={(value) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, mobilityRadiusKm: value }
+                        : current,
+                    )
+                  }
+                  disabled={!isEditing}
+                />
+                <Field
+                  label="Mobilité élargie"
+                  value={formatBooleanLabel(currentDraft.acceptsRelocation)}
+                  onChange={() => undefined}
+                  disabled
+                />
+                <Field
+                  label="Salaire minimum souhaité"
+                  type="number"
+                  value={currentDraft.desiredSalaryMin}
+                  onChange={(value) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, desiredSalaryMin: value }
+                        : current,
+                    )
+                  }
+                  disabled={!isEditing}
+                />
+                <Field
+                  label="Salaire maximum souhaité"
+                  type="number"
+                  value={currentDraft.desiredSalaryMax}
+                  onChange={(value) =>
+                    setDraft((current) =>
+                      current
+                        ? { ...current, desiredSalaryMax: value }
+                        : current,
+                    )
+                  }
+                  disabled={!isEditing}
+                />
+              </div>
+              {isEditing ? (
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <input
+                    type="checkbox"
+                    checked={currentDraft.acceptsRelocation}
+                    onChange={(event) =>
+                      setDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
+                          : current,
+                      )
+                    }
+                  />
+                  Accepte la mobilité élargie
+                </label>
+              ) : null}
+            </section>
+          </div>
         </div>
       </article>
 
@@ -2169,8 +2197,8 @@ function CollectionSection<T extends { id?: string }>({
   icon: ComponentType<{ className?: string }>;
   items: T[];
   setItems:
-  | Dispatch<SetStateAction<T[]>>
-  | ((next: SetStateAction<T[]>) => void);
+    | Dispatch<SetStateAction<T[]>>
+    | ((next: SetStateAction<T[]>) => void);
   emptyItem: () => T;
   isEditing: boolean;
   renderItem: (item: T, update: (next: T) => void) => ReactNode;
@@ -2196,7 +2224,7 @@ function CollectionSection<T extends { id?: string }>({
   };
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-4 px-6 py-7 sm:px-8">
       <div className="flex items-center justify-between gap-3">
         <SectionTitle
           title={title}
@@ -2222,29 +2250,29 @@ function CollectionSection<T extends { id?: string }>({
         {!isEditing && renderListView
           ? renderListView(items)
           : items?.map((item, index) => (
-            <article
-              key={item.id ?? `${title}-${index}`}
-              className="rounded-2xl border border-border bg-background p-5"
-            >
-              {isEditing ? (
-                <div className="space-y-4">
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeItem(index)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+              <article
+                key={item.id ?? `${title}-${index}`}
+                className="rounded-2xl border border-border bg-background p-5"
+              >
+                {isEditing ? (
+                  <div className="space-y-4">
+                    <div className="flex justify-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeItem(index)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    {renderItem(item, (next) => updateItem(index, next))}
                   </div>
-                  {renderItem(item, (next) => updateItem(index, next))}
-                </div>
-              ) : (
-                viewItem(item)
-              )}
-            </article>
-          ))}
+                ) : (
+                  viewItem(item)
+                )}
+              </article>
+            ))}
       </div>
     </section>
   );

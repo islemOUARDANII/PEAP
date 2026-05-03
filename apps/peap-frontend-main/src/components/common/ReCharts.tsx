@@ -1,14 +1,15 @@
 export const CustomValueLabel = (props) => {
-  const { x, y, width, height, value } = props;
+  const { x, y, width, value, color } = props;
   return (
     <text
-      x={x + width}
-      y={y + height / 2}
-      dx={-25}
+      x={x + width / 2}
+      y={y}
+      dy={-10}
       textAnchor="middle"
       dominantBaseline="middle"
-      fontSize={14}
-      fill="#fff"
+      fontSize={12}
+      fontWeight={'600'}
+      fill={color}
     >
       {value}
     </text>
@@ -20,12 +21,16 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
   if (active && payload && payload.length) {
     return (
       <div className="bg-popover border border-border rounded-lg shadow-lg p-3">
-        <p className="font-medium text-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground">
-          Count:{' '}
-          <span className="font-semibold text-foreground">
-            {payload[0].value}
-          </span>
+        <p className="text-sm font-medium text-foreground">
+          Offer Id : {label}
+        </p>
+        <p className="text-xs text-primary">
+          {'● '}Matches:{' '}
+          <span className="font-semibold text-primary">{payload[0].value}</span>
+        </p>
+        <p className="text-xs text-accent">
+          {'● '}Application:{' '}
+          <span className="font-semibold text-accent">{payload[1].value}</span>
         </p>
       </div>
     );

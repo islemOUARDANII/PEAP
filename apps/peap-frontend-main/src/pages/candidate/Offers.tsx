@@ -4,6 +4,7 @@ import {
   Briefcase,
   Building2,
   CheckCircle2,
+  CircleSlash,
   GraduationCap,
   Lightbulb,
   Loader2,
@@ -122,10 +123,10 @@ function OfferEmptyState() {
 
 function MatchingUnavailableState() {
   return (
-    <div className="panel flex flex-col items-center justify-center gap-3 p-10 text-center card-border-top">
-      <Sparkles className="h-8 w-8 text-accent" />
+    <div className="panel flex flex-col items-center justify-center gap-3 p-10 text-center card-border-6">
+      <CircleSlash className="h-8 w-8 text-accent" />
       <div>
-        <p className="text-lg font-semibold text-foreground">
+        <p className="text-md font-medium text-foreground">
           {candidateMatchingUnavailableMessage}
         </p>
       </div>
