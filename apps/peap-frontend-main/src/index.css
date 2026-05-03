@@ -768,6 +768,16 @@
   transition: border 0.1s ease-in-out
 }
 
+.light-link-border-left-primary {
+  color: hsl(var(--primary));
+}
+
+.light-link-border-left-primary:hover {
+  border-left: 3px solid hsl(var(--primary));
+  color: hsl(var(--primary));
+  transition: border 0.1s ease-in-out
+}
+
 .row-border-left:hover {
   border-left: 6px solid hsl(var(--accent)) !important;
 }

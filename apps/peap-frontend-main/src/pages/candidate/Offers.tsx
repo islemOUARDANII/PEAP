@@ -1051,8 +1051,7 @@ export default function CandidateOffers() {
         </div>
       </div>
       <Dialog
-        // open={Boolean(selectedOffer)}
-        open={true}
+        open={Boolean(selectedOffer)}
         onOpenChange={(open) => {
           if (!open) {
             setSelectedOffer(null);

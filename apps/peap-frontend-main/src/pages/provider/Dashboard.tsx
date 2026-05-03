@@ -239,7 +239,7 @@ export default function ProviderDashboard() {
             </h2>
             <Link
               to="/provider/offers"
-              className="text-xs text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-3"
+              className="text-xs text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-primary"
             >
               All <ChevronRight className="h-3 w-3" />
             </Link>
@@ -258,7 +258,7 @@ export default function ProviderDashboard() {
                     {j.title}
                   </Link>
                   <p className="text-xs text-muted-foreground font-mono">
-                    {j.id} · {j.matched} matches
+                    {j.anetiIdentifier} · {j.matched} matches
                   </p>
                 </div>
                 <StatusPill label={j.status} tone={statusToTone(j.status)} />
