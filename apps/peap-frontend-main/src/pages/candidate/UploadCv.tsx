@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, FileUp, Loader2, RefreshCw, SearchCheck, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import CandidateProfileOnboardingCard from "@/components/common/CandidateProfileOnboardingCard";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatusPill, statusToTone } from "@/components/common/StatusPill";
 import { Button } from "@/components/ui/button";
@@ -11,6 +12,11 @@ import { gatewayApi, type CandidateCvParseResult, type CandidateCvRecord } from 
 import { queryKeys } from "@/services/api/queryKeys";
 import { appEnv } from "@/config/env";
 import { readStoredSession } from "@/services/auth/sessionStorage";
+import {
+  invalidateCandidatePortalQueries,
+  isJobSeekerProfileNotFoundError,
+  shouldRetryCandidateProfileQuery,
+} from "@/services/candidate/candidateProfileOnboarding";
 
 const formatDate = (value: string | null | undefined): string => {
   if (!value) {
@@ -106,22 +112,17 @@ export default function UploadCv() {
   const bundleQuery = useQuery({
     queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
+    retry: shouldRetryCandidateProfileQuery,
   });
+  const isMissingCandidateProfile = isJobSeekerProfileNotFoundError(
+    bundleQuery.error,
+  );
 
   const records = bundleQuery.data?.cvRecords ?? [];
   const currentCv = bundleQuery.data?.currentCv ?? null;
 
   const refreshAll = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.bundle() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.profile() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.cvRecords() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.dashboard() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.matches() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.jobOffers() }),
-      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.recommendations() }),
-      queryClient.invalidateQueries({ queryKey: ["search", "offers"] }),
-    ]);
+    await invalidateCandidatePortalQueries(queryClient);
   };
 
   const handleUpload = async (file: File | null) => {
@@ -195,6 +196,10 @@ export default function UploadCv() {
         </div>
       </div>
     );
+  }
+
+  if (isMissingCandidateProfile) {
+    return <CandidateProfileOnboardingCard />;
   }
 
   if (bundleQuery.isError) {

@@ -1,6 +1,9 @@
 import { ApiServiceError } from "./client";
 
-const missingCandidateProfileMessage = "no canonical candidate profile is linked to this account";
+const missingCandidateProfileMessages = [
+  "no canonical candidate profile is linked to this account",
+  "job seeker profile not found",
+];
 
 const flattenErrorText = (value: unknown): string => {
   if (typeof value === "string") {
@@ -24,5 +27,7 @@ export function isMissingCandidateProfileError(error: unknown): boolean {
   }
 
   const searchableText = `${error.message} ${flattenErrorText(error.details)}`.toLowerCase();
-  return searchableText.includes(missingCandidateProfileMessage);
+  return missingCandidateProfileMessages.some((message) =>
+    searchableText.includes(message),
+  );
 }

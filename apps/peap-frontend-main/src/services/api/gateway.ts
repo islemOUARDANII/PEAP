@@ -1703,6 +1703,12 @@ export const gatewayApi = {
     },
   },
   candidate: {
+    async hasProfile(): Promise<boolean> {
+      await apiRequest<CandidateProfileResponse>("/candidates/me", {
+        method: "GET",
+      });
+      return true;
+    },
     async getBundle(): Promise<CandidateProfileBundle> {
       const [profile, education, experience, skills, languages, preference, cvRecords] =
         await Promise.all([

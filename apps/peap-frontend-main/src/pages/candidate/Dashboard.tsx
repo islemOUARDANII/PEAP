@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import ErrorCard from '@/components/common/ErrorCard';
 import LoadingCard from '@/components/common/LoadingCard';
 import { PageHeader } from '@/components/common/PageHeader';
+import CandidateProfileOnboardingCard from '@/components/common/CandidateProfileOnboardingCard';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
 import { SkillTag } from '@/components/common/SkillTag';
 import { StatusPill } from '@/components/common/StatusPill';
@@ -37,6 +38,10 @@ import {
   cleanText,
   formatDate,
 } from '@/services/candidate/candidateOfferUtils';
+import {
+  isJobSeekerProfileNotFoundError,
+  shouldRetryCandidateProfileQuery,
+} from '@/services/candidate/candidateProfileOnboarding';
 
 const PROFILE_COMPLETION_SECTION_ID = 'completion-profil';
 
@@ -107,36 +112,72 @@ const buildProfileCompletionItems = (
   ];
 };
 
+const renderDashboardCount = (query: {
+  data?: { total?: number };
+  isLoading: boolean;
+  isFetching: boolean;
+  isError: boolean;
+}): string | number => {
+  if (typeof query.data?.total === 'number') {
+    return query.data.total;
+  }
+
+  if (query.isLoading || query.isFetching) {
+    return '...';
+  }
+
+  if (query.isError) {
+    return '--';
+  }
+
+  return 0;
+};
+
 export default function CandidateDashboard() {
   const navigate = useNavigate();
 
   const bundleQuery = useQuery({
     queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
+    retry: shouldRetryCandidateProfileQuery,
   });
+  const isMissingCandidateProfile = isJobSeekerProfileNotFoundError(
+    bundleQuery.error,
+  );
+  const hasCandidateProfile = Boolean(bundleQuery.data);
 
   const keywordsQuery = useQuery({
-    queryKey: [...queryKeys.candidate.profile(), 'keywords'],
+    queryKey: queryKeys.candidate.keywords(),
     queryFn: () => gatewayApi.candidate.getKeywords(),
+    enabled: hasCandidateProfile,
     staleTime: 5 * 60_000,
   });
 
   const interestingOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'interesting'],
-    queryFn: () => getInterestingOffers(),
+    queryKey: queryKeys.candidate.offersInteresting(),
+    queryFn: getInterestingOffers,
+    enabled: hasCandidateProfile,
     staleTime: 5 * 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
   const recommendedOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'recommended'],
-    queryFn: () => getRecommendedOffers(),
+    queryKey: queryKeys.candidate.offersRecommended(),
+    queryFn: getRecommendedOffers,
+    enabled: hasCandidateProfile,
     staleTime: 5 * 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
   const allOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'all'],
-    queryFn: () => getAllPublishedOffers(),
+    queryKey: queryKeys.candidate.offersAll(),
+    queryFn: getAllPublishedOffers,
+    enabled: hasCandidateProfile,
     staleTime: 5 * 60_000,
+    refetchOnMount: 'always',
+    refetchOnWindowFocus: false,
   });
 
   const bundle = bundleQuery.data;
@@ -179,6 +220,10 @@ export default function CandidateDashboard() {
     return <LoadingCard text="Chargement du tableau de bord candidat..." />;
   }
 
+  if (isMissingCandidateProfile) {
+    return <CandidateProfileOnboardingCard />;
+  }
+
   if (bundleQuery.isError) {
     return (
       <ErrorCard
@@ -216,13 +261,7 @@ export default function CandidateDashboard() {
         <DashboardActionCard
           icon={Search}
           title="Offres qui peuvent vous intéresser"
-          value={
-            interestingOffersQuery.isLoading
-              ? '...'
-              : interestingOffersQuery.isError
-                ? '--'
-                : (interestingOffersQuery.data?.total ?? 0)
-          }
+          value={renderDashboardCount(interestingOffersQuery)}
           hint={
             interestingOffersQuery.isError
               ? SEARCH_UNAVAILABLE_MESSAGE
@@ -236,13 +275,7 @@ export default function CandidateDashboard() {
         <DashboardActionCard
           icon={Sparkles}
           title="Offres recommandées"
-          value={
-            recommendedOffersQuery.isLoading
-              ? '...'
-              : recommendedOffersQuery.isError
-                ? '--'
-                : (recommendedOffersQuery.data?.total ?? 0)
-          }
+          value={renderDashboardCount(recommendedOffersQuery)}
           hint={
             recommendedOffersQuery.isError
               ? MATCHING_UNAVAILABLE_MESSAGE
@@ -257,13 +290,7 @@ export default function CandidateDashboard() {
         <DashboardActionCard
           icon={Layers3}
           title="Toutes les offres actives"
-          value={
-            allOffersQuery.isLoading
-              ? '...'
-              : allOffersQuery.isError
-                ? '--'
-                : (allOffersQuery.data?.total ?? 0)
-          }
+          value={renderDashboardCount(allOffersQuery)}
           hint={
             allOffersQuery.isError
               ? SEARCH_UNAVAILABLE_MESSAGE

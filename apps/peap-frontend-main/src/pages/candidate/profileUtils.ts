@@ -46,6 +46,7 @@ export type DisplayExperienceItem = {
 export type DisplaySkillItem = {
   label: string;
   category: string;
+  level: string | null;
 };
 
 export type DisplayLanguageItem = {
@@ -103,6 +104,7 @@ const LANGUAGE_LABELS: Record<string, string> = {
 const LEVEL_LABELS: Record<string, string> = {
   native: 'Langue maternelle',
   fluent: 'Courant',
+  expert: 'Expert',
   advanced: 'Avancé',
   intermediate: 'Intermédiaire',
   beginner: 'Débutant',
@@ -365,6 +367,7 @@ const buildSkillFromRecord = (item: CandidateSkillRecord): DisplaySkillItem | nu
   return {
     label,
     category: inferSkillCategory(label, item.category),
+    level: formatLevelLabel(item.level ?? ''),
   };
 };
 
@@ -384,6 +387,9 @@ const buildSkillFromPatch = (item: PatchItem): DisplaySkillItem | null => {
     category: inferSkillCategory(
       label,
       cleanText(item.category) ?? cleanText(metadata?.category),
+    ),
+    level: formatLevelLabel(
+      extractText(item.level, ['label', 'name']) ?? '',
     ),
   };
 };
@@ -564,7 +570,20 @@ export const buildSkillItems = (
     .filter((item): item is DisplaySkillItem => Boolean(item));
 
   const source = preferParsed && parsedItems.length > 0 ? parsedItems : apiItems;
-  return uniqueBy(source, (item) => item.label.toLowerCase());
+  const uniqueItems = new Map<string, DisplaySkillItem>();
+
+  for (const item of source) {
+    const key = item.label.toLowerCase();
+    const existing = uniqueItems.get(key);
+
+    if (!existing || (!existing.level && item.level)) {
+      uniqueItems.set(key, item);
+    }
+  }
+
+  return Array.from(uniqueItems.values()).sort((left, right) =>
+    left.label.localeCompare(right.label, 'fr'),
+  );
 };
 
 export const buildLanguageItems = (

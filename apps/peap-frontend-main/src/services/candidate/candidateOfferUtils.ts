@@ -1,6 +1,22 @@
 const EMPTY_TEXT_PATTERN =
   /^(non specifie|non spécifié|not specified|null|undefined|n\/a|\[object object\])$/i;
 
+export type CandidateOfferSearchMode =
+  | 'keyword'
+  | 'skill'
+  | 'company'
+  | 'location';
+
+export const candidateOfferSearchModes: Array<{
+  value: CandidateOfferSearchMode;
+  label: string;
+}> = [
+  { value: 'keyword', label: 'Mot-clÃ©' },
+  { value: 'skill', label: 'CompÃ©tence' },
+  { value: 'company', label: 'Entreprise' },
+  { value: 'location', label: 'Localisation' },
+];
+
 const CONTRACT_TYPE_LABELS: Record<string, string> = {
   cdi: 'CDI',
   cdd: 'CDD',
@@ -27,6 +43,9 @@ const toRecord = (value: unknown): Record<string, unknown> | null =>
     : null;
 
 const uniqueStrings = (values: string[]): string[] => Array.from(new Set(values));
+
+const normalizeSearchToken = (value: unknown): string =>
+  cleanText(value)?.toLocaleLowerCase('fr') ?? '';
 
 const humanizeCode = (value: string): string =>
   value
@@ -228,4 +247,50 @@ export const extractTextList = (
   });
 
   return uniqueStrings(values);
+};
+
+export const matchesOfferSearch = (
+  offer: {
+    title: string;
+    companyName?: string | null;
+    description?: string | null;
+    location?: string | null;
+    skills?: string[];
+  },
+  query: string,
+  mode: CandidateOfferSearchMode,
+): boolean => {
+  const normalizedQuery = normalizeSearchToken(query);
+  if (!normalizedQuery) {
+    return true;
+  }
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  if (tokens.length === 0) {
+    return true;
+  }
+
+  const fieldsByMode: Record<CandidateOfferSearchMode, string[]> = {
+    keyword: [
+      offer.title,
+      offer.companyName ?? '',
+      offer.description ?? '',
+      offer.location ?? '',
+      ...(offer.skills ?? []),
+    ],
+    skill: offer.skills ?? [],
+    company: [offer.companyName ?? ''],
+    location: [offer.location ?? ''],
+  };
+
+  const haystack = fieldsByMode[mode]
+    .map((value) => normalizeSearchToken(value))
+    .filter(Boolean)
+    .join(' ');
+
+  if (!haystack) {
+    return false;
+  }
+
+  return tokens.every((token) => haystack.includes(token));
 };

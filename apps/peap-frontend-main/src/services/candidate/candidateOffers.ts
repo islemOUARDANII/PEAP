@@ -5,6 +5,7 @@ import {
   type SearchOfferResult,
 } from '@/services/api/gateway';
 import {
+  type CandidateOfferSearchMode,
   cleanText,
   extractOfferSkills,
   extractTextList,
@@ -15,7 +16,8 @@ import {
 } from './candidateOfferUtils';
 import { getStoredCandidateMinimumOfferScore } from './candidatePortalPreferences';
 
-export const SEARCH_UNAVAILABLE_MESSAGE = 'Recherche indisponible pour le moment.';
+export const SEARCH_UNAVAILABLE_MESSAGE =
+  'Le service de recherche est indisponible pour le moment.';
 export const MATCHING_UNAVAILABLE_MESSAGE = 'Matching indisponible pour le moment.';
 export const MISSING_KEYWORDS_MESSAGE =
   'Ajoutez des centres d’intérêt pour obtenir des offres pertinentes.';
@@ -75,6 +77,21 @@ export interface CandidateRecommendedOffersData {
   total: number;
   offers: CandidateRecommendedOfferSummary[];
   message: string | null;
+}
+
+export interface CandidateSearchOffersData {
+  total: number;
+  offers: CandidateSearchOfferSummary[];
+  query: string;
+  mode: CandidateOfferSearchMode;
+  message: string | null;
+}
+
+export interface CandidateOfferSearchParams {
+  query: string;
+  size?: number;
+  mode?: CandidateOfferSearchMode;
+  filters?: Record<string, unknown>;
 }
 
 const DEFAULT_SEARCH_SIZE = 100;
@@ -230,16 +247,56 @@ const resolveSearchTotal = (
   offers: CandidateSearchOfferSummary[],
 ): number => (reportedTotal > 0 ? reportedTotal : offers.length);
 
-export async function getAllPublishedOffers(): Promise<CandidateAllPublishedOffersData> {
-  const response = await gatewayApi.search.offers({
-    query: '',
-    size: DEFAULT_SEARCH_SIZE,
-  });
+const buildOfferSearchPayload = ({
+  query,
+  size = DEFAULT_SEARCH_SIZE,
+  mode = 'keyword',
+  filters,
+}: CandidateOfferSearchParams): Record<string, unknown> => {
+  const normalizedQuery = query.trim();
+
+  return {
+    query: normalizedQuery,
+    size,
+    ...(mode === 'company' && normalizedQuery
+      ? { company_name: normalizedQuery }
+      : {}),
+    ...(mode === 'location' && normalizedQuery
+      ? { governorate: normalizedQuery }
+      : {}),
+    ...(filters ? { filters } : {}),
+  };
+};
+
+export async function searchCandidateOffers({
+  query,
+  size = DEFAULT_SEARCH_SIZE,
+  mode = 'keyword',
+  filters,
+}: CandidateOfferSearchParams): Promise<CandidateSearchOffersData> {
+  const response = await gatewayApi.search.offers(
+    buildOfferSearchPayload({ query, size, mode, filters }),
+  );
   const offers = response.results.map(mapSearchOffer);
 
   return {
     total: resolveSearchTotal(response.total, offers),
     offers,
+    query: query.trim(),
+    mode,
+    message: null,
+  };
+}
+
+export async function getAllPublishedOffers(): Promise<CandidateAllPublishedOffersData> {
+  const response = await searchCandidateOffers({
+    query: '',
+    size: DEFAULT_SEARCH_SIZE,
+  });
+
+  return {
+    total: response.total,
+    offers: response.offers,
     message: null,
   };
 }
@@ -262,15 +319,14 @@ export async function getInterestingOffers(): Promise<CandidateInterestingOffers
     };
   }
 
-  const response = await gatewayApi.search.offers({
+  const response = await searchCandidateOffers({
     query,
     size: DEFAULT_SEARCH_SIZE,
   });
-  const offers = response.results.map(mapSearchOffer);
 
   return {
-    total: resolveSearchTotal(response.total, offers),
-    offers,
+    total: response.total,
+    offers: response.offers,
     keywords,
     query,
     message: null,

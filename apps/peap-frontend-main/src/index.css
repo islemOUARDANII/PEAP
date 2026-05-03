@@ -932,3 +932,11 @@
   border-color: #475569;
   transition: border 0.08s ease-in-out
 }
+
+.profile-border-left-3 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #3B82F6;
+  transition: border 0.08s ease-in-out
+}

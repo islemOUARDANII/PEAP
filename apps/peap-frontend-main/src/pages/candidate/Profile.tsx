@@ -28,6 +28,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import CandidateProfileOnboardingCard from '@/components/common/CandidateProfileOnboardingCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { SkillTag } from '@/components/common/SkillTag';
 import { Button } from '@/components/ui/button';
@@ -81,6 +82,7 @@ import {
   formatDate as formatCandidateDate,
   formatDateRange as formatCandidateDateRange,
   formatDurationLabel,
+  formatLevelLabel as formatCandidateLevelLabel,
   formatLanguageLabel as formatCandidateLanguageLabel,
   groupSkillsByCategory,
   type DisplayCertificationItem,
@@ -88,8 +90,16 @@ import {
   type DisplayExperienceItem,
   type DisplayLanguageItem,
   type DisplayProjectItem,
+  type DisplaySkillItem,
 } from './profileUtils';
 import { PercentageScore } from '@/components/common/PercentageScore';
+import {
+  getCandidatePortalErrorMessage,
+  invalidateCandidatePortalQueries,
+  isJobSeekerProfileNotFoundError,
+  shouldRetryCandidateProfileQuery,
+  uploadAndParseCandidateCv,
+} from '@/services/candidate/candidateProfileOnboarding';
 
 interface EducationDraft {
   id?: string;
@@ -332,17 +342,12 @@ const toNullableNumber = (value: string): number | null => {
 
 const hasEducationValue = (item: EducationDraft): boolean =>
   [
-    item.levelCode,
     item.degree,
     item.diplomaLabel,
     item.specialty,
     item.institution,
-    item.startDate,
-    item.endDate,
     item.graduationYear,
-    item.location,
     item.honors,
-    item.gpa,
   ].some((value) => value.trim());
 
 const hasExperienceValue = (item: ExperienceDraft): boolean =>
@@ -362,12 +367,10 @@ const hasExperienceValue = (item: ExperienceDraft): boolean =>
   ].some((value) => value.trim());
 
 const hasSkillValue = (item: SkillDraft): boolean =>
-  [item.skillLabelRaw, item.level, item.years, item.evidence].some((value) =>
-    value.trim(),
-  );
+  [item.skillLabelRaw, item.level].some((value) => value.trim());
 
 const hasLanguageValue = (item: LanguageDraft): boolean =>
-  [item.languageCode, item.level, item.evidence].some((value) => value.trim());
+  [item.languageCode, item.level].some((value) => value.trim());
 
 const isEndpointUnavailableError = (error: unknown): boolean =>
   error instanceof ApiServiceError && [404, 405, 501].includes(error.status);
@@ -464,6 +467,93 @@ const formatCountryLabel = (
   };
 
   return countryLabels[normalized] ?? cleanCandidateDisplayText(value, '');
+};
+
+const skillLevelOptions: ReferentialOption[] = [
+  { code: 'beginner', label: 'Débutant' },
+  { code: 'intermediate', label: 'Intermédiaire' },
+  { code: 'advanced', label: 'Avancé' },
+  { code: 'expert', label: 'Expert' },
+];
+
+const normalizeComparableText = (
+  value: string | null | undefined,
+): string | null => {
+  const normalized = cleanProfileText(value);
+  return normalized ? normalized.toLocaleLowerCase('fr') : null;
+};
+
+const findMatchingOption = (
+  options: ReferentialOption[],
+  ...candidates: Array<string | null | undefined>
+): ReferentialOption | null => {
+  const normalizedCandidates = Array.from(
+    new Set(
+      candidates
+        .map((candidate) => normalizeComparableText(candidate))
+        .filter((candidate): candidate is string => Boolean(candidate)),
+    ),
+  );
+
+  if (normalizedCandidates.length === 0) {
+    return null;
+  }
+
+  return (
+    options.find((option) => {
+      const optionCode = normalizeComparableText(option.code);
+      const optionLabel = normalizeComparableText(option.label);
+
+      return normalizedCandidates.some(
+        (candidate) => candidate === optionCode || candidate === optionLabel,
+      );
+    }) ?? null
+  );
+};
+
+const buildOptionsWithCurrentValue = (
+  options: ReferentialOption[],
+  value: string | null | undefined,
+  fallbackLabel?: string | null,
+): ReferentialOption[] => {
+  const normalizedValue = cleanProfileText(value);
+  if (!normalizedValue || findMatchingOption(options, value, fallbackLabel)) {
+    return options;
+  }
+
+  return [
+    {
+      code: normalizedValue,
+      label:
+        cleanProfileText(fallbackLabel) ??
+        cleanCandidateDisplayText(value, normalizedValue),
+    },
+    ...options,
+  ];
+};
+
+const resolveOptionValue = (
+  options: ReferentialOption[],
+  value: string | null | undefined,
+  fallbackLabel?: string | null,
+): string =>
+  findMatchingOption(options, value, fallbackLabel)?.code ??
+  cleanProfileText(value) ??
+  '';
+
+const extractEducationYear = (item: DisplayEducationItem): string | null => {
+  const graduationYear = cleanProfileText(item.graduationYear);
+  if (graduationYear) {
+    return graduationYear;
+  }
+
+  const endDate = cleanProfileText(item.endDate);
+  if (!endDate) {
+    return null;
+  }
+
+  const yearMatch = endDate.match(/\b(19|20)\d{2}\b/);
+  return yearMatch ? yearMatch[0] : null;
 };
 
 async function syncDraftCollection<
@@ -989,6 +1079,7 @@ export default function Profile() {
   const bundleQuery = useQuery({
     queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
+    retry: shouldRetryCandidateProfileQuery,
   });
   const governoratesQuery = useQuery({
     queryKey: ['referentials', 'governorates'],
@@ -1010,6 +1101,11 @@ export default function Profile() {
   const contractTypesQuery = useQuery({
     queryKey: ['referentials', 'contract-types'],
     queryFn: () => gatewayApi.referentials.contractTypes(),
+    staleTime: 5 * 60_000,
+  });
+  const diplomasQuery = useQuery({
+    queryKey: ['referentials', 'diplomas'],
+    queryFn: () => gatewayApi.referentials.diplomas(),
     staleTime: 5 * 60_000,
   });
 
@@ -1037,6 +1133,7 @@ export default function Profile() {
         throw error;
       }
     },
+    enabled: bundleQuery.isSuccess,
     staleTime: 5 * 60_000,
     retry: false,
   });
@@ -1055,11 +1152,15 @@ export default function Profile() {
         throw error;
       }
     },
+    enabled: bundleQuery.isSuccess,
     staleTime: 5 * 60_000,
     retry: false,
   });
 
   const bundle = bundleQuery.data;
+  const isMissingCandidateProfile = isJobSeekerProfileNotFoundError(
+    bundleQuery.error,
+  );
   const savedInterestKeywords = useMemo(
     () =>
       keywordsQuery.data
@@ -1161,6 +1262,7 @@ export default function Profile() {
         : null,
     [currentDraft?.primaryLanguage],
   );
+  const diplomaOptions = diplomasQuery.data ?? [];
 
   const displayName = useMemo(() => {
     const draftName = [currentDraft?.firstName, currentDraft?.lastName]
@@ -1227,7 +1329,6 @@ export default function Profile() {
       ),
     [bundle?.skills, latestParseResult, preferParsedView],
   );
-
   const skillGroups = useMemo(
     () => groupSkillsByCategory(skillItems),
     [skillItems],
@@ -1263,40 +1364,8 @@ export default function Profile() {
       ? parsedInterestKeywords
       : savedInterestKeywords;
 
-  const refreshCandidateViews = async () => {
-    await Promise.all([
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.dashboard(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.profile(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.keywords(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.offerThreshold(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.bundle(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.cvRecords(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.matches(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.jobOffers(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.candidate.recommendations(),
-      }),
-      queryClient.invalidateQueries({
-        queryKey: ['search', 'offers'],
-      }),
-    ]);
-  };
+  const refreshCandidateViews = async () =>
+    invalidateCandidatePortalQueries(queryClient);
 
   const refetchCandidateBundle = async () =>
     queryClient.fetchQuery({
@@ -1439,14 +1508,13 @@ export default function Profile() {
     setIsParsingCv(false);
 
     try {
-      const record = await gatewayApi.candidate.uploadCv(file);
-
-      setIsUploadingCv(false);
-      setIsParsingCv(true);
-
-      toast.success('CV importé. Analyse en cours...');
-
-      const parseResult = await gatewayApi.candidate.parseCv(record.id);
+      const { parseResult } = await uploadAndParseCandidateCv(file, {
+        onUploaded: () => {
+          setIsUploadingCv(false);
+          setIsParsingCv(true);
+          toast.success('CV importé. Analyse en cours...');
+        },
+      });
       setLatestParseResult(parseResult);
 
       setDraft((current) =>
@@ -1469,7 +1537,10 @@ export default function Profile() {
       );
     } catch (error) {
       toast.error(
-        apiErrorMessage(error, "Impossible d'uploader ou d'analyser le CV"),
+        getCandidatePortalErrorMessage(
+          error,
+          "Impossible d'uploader ou d'analyser le CV",
+        ),
       );
     } finally {
       setIsUploadingCv(false);
@@ -1481,19 +1552,28 @@ export default function Profile() {
     }
   };
 
-  const buildEducationPayload = (item: EducationDraft) => ({
-    level_code: item.levelCode || null,
-    degree: item.degree || null,
-    diploma_label: item.diplomaLabel || item.degree || null,
-    specialty: item.specialty || null,
-    institution: item.institution || null,
-    start_date: item.startDate || null,
-    end_date: item.endDate || null,
-    graduation_year: toNullableYear(item.graduationYear),
-    location: item.location || null,
-    honors: item.honors || null,
-    gpa: item.gpa || null,
-  });
+  const buildEducationPayload = (item: EducationDraft) => {
+    const diplomaOption = findMatchingOption(
+      diplomaOptions,
+      item.degree,
+      item.diplomaLabel,
+    );
+
+    return {
+      level_code: diplomaOption ? null : item.levelCode || null,
+      degree: diplomaOption?.code ?? item.degree ?? null,
+      diploma_label:
+        diplomaOption?.label ?? item.diplomaLabel ?? item.degree ?? null,
+      specialty: item.specialty || null,
+      institution: item.institution || null,
+      start_date: item.startDate || null,
+      end_date: item.endDate || null,
+      graduation_year: toNullableYear(item.graduationYear),
+      location: item.location || null,
+      honors: item.honors || null,
+      gpa: item.gpa || null,
+    };
+  };
 
   const buildExperiencePayload = (item: ExperienceDraft) => ({
     job_title_raw:
@@ -1698,6 +1778,10 @@ export default function Profile() {
     return <LoadingCard text="Chargement de votre profil..." />;
   }
 
+  if (isMissingCandidateProfile) {
+    return <CandidateProfileOnboardingCard />;
+  }
+
   if (bundleQuery.isError) {
     return (
       <ErrorCard
@@ -1713,7 +1797,7 @@ export default function Profile() {
 
   return (
     <div className="relative space-y-6">
-      {isUploadingCv || isParsingCv ? (
+      {/* {isUploadingCv || isParsingCv ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm">
           <div className="rounded-2xl border border-border bg-background px-6 py-5 text-center shadow-lg">
             <div className="flex items-center justify-center gap-3 text-foreground">
@@ -1729,7 +1813,7 @@ export default function Profile() {
             </p>
           </div>
         </div>
-      ) : null}
+      ) : null} */}
       <PageHeader
         title="Mon profil"
         description="Retrouvez vos informations, vos compétences et vos préférences au même endroit."
@@ -1778,6 +1862,7 @@ export default function Profile() {
                 variant="outline"
                 size="sm"
                 onClick={startEditing}
+                disabled={isUploadingCv || isParsingCv}
               >
                 <Pencil className="h-4 w-4" />
                 Modifier
@@ -1797,7 +1882,7 @@ export default function Profile() {
                   type="button"
                   size="sm"
                   onClick={() => void handleSave()}
-                  disabled={isSaving}
+                  disabled={isUploadingCv || isParsingCv || isSaving}
                   className="bg-accent text-accent-foreground hover:bg-accent/90"
                 >
                   <Save className="h-4 w-4" />
@@ -1823,20 +1908,13 @@ export default function Profile() {
           {!isEditing ? (
             <>
               <ReadOnlyGridSection
-                title="Informations personnelles"
-                description="Vos informations personnelles et vos coordonnées."
+                title="Informations complémentaires"
+                description="Les informations utiles en complément des éléments déjà visibles dans l'en-tête."
                 icon={UserRound}
                 iconClassName="icon-background-color-3"
+                emptyMessage="Aucune information complémentaire renseignée."
                 items={[
-                  { label: 'Prénom', value: currentDraft.firstName },
-                  { label: 'Nom', value: currentDraft.lastName },
-                  { label: 'E-mail', value: currentDraft.email },
                   { label: 'Téléphone', value: currentDraft.phone },
-                  {
-                    label: 'Adresse',
-                    value: displayLocation || currentDraft.address,
-                    fullWidth: true,
-                  },
                   { label: 'Nationalité', value: currentDraft.nationality },
                   {
                     label: 'Date de naissance',
@@ -1849,14 +1927,63 @@ export default function Profile() {
                   { label: 'Passeport', value: currentDraft.passportNumber },
                 ]}
               />
+              <div className="profile-border-left-orange">
+                <EducationReadOnly items={educationItems} />
+
+                <Separator className="bg-accent/70" />
+
+                <ExperienceReadOnlySection
+                  title="Expériences professionnelles"
+                  description="Vos expériences professionnelles renseignées."
+                  items={professionalExperiences}
+                  emptyMessage="Aucune expérience professionnelle renseignée."
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <ExperienceReadOnlySection
+                  title="Stages"
+                  description="Vos stages et expériences de type internship."
+                  items={internshipExperiences}
+                  emptyMessage="Aucun stage renseigné."
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <SkillsReadOnly items={skillItems} />
+
+                <Separator className="bg-accent/70" />
+
+                <LanguagesReadOnly items={languageItems} />
+
+                {certificationItems.length > 0 ? (
+                  <>
+                    <Separator className="bg-accent/70" />
+                    <CertificationsReadOnly items={certificationItems} />
+                  </>
+                ) : null}
+
+                {projectItems.length > 0 ? (
+                  <>
+                    <Separator className="bg-accent/70" />
+                    <ProjectsReadOnly items={projectItems} />
+                  </>
+                ) : null}
+              </div>
+              {/* <Separator className="bg-accent/70" /> */}
+
+              <div className="profile-border-left-19">
+                <InterestsReadOnly keywords={visibleInterestKeywords} />
+              </div>
 
               {/* <Separator className="bg-primary/40" /> */}
-              <div className="profile-border-left-orange">
+              <div className="profile-border-left-20">
                 <ReadOnlyGridSection
                   title="Préférences professionnelles"
-                  description="Vos préférences de contrat, de mobilité et de salaire."
+                  description="Vos critères de contrat, de mobilité et de rémunération."
                   icon={Globe2}
-                  iconClassName="icon-background-color-7"
+                  iconClassName="icon-background-color-20"
+                  emptyMessage="Aucune préférence professionnelle renseignée."
                   items={[
                     {
                       label: 'Type de contrat souhaité',
@@ -1890,65 +2017,16 @@ export default function Profile() {
                     },
                   ]}
                 />
-
-                <Separator className="bg-accent/70" />
-
-                <EducationReadOnly items={educationItems} />
-
-                <Separator className="bg-accent/70" />
-
-                <ExperienceReadOnlySection
-                  title="Expériences professionnelles"
-                  description="Vos expériences professionnelles renseignées."
-                  items={professionalExperiences}
-                  emptyMessage="Aucune expérience professionnelle renseignée."
-                />
-
-                <Separator className="bg-accent/70" />
-
-                <ExperienceReadOnlySection
-                  title="Stages"
-                  description="Vos stages et expériences de type internship."
-                  items={internshipExperiences}
-                  emptyMessage="Aucun stage renseigné."
-                />
-
-                <Separator className="bg-accent/70" />
-
-                <SkillsReadOnly skillGroups={skillGroups} />
-
-                <Separator className="bg-accent/70" />
-
-                <LanguagesReadOnly items={languageItems} />
-
-                {certificationItems.length > 0 ? (
-                  <>
-                    <Separator className="bg-primary/40" />
-                    <CertificationsReadOnly items={certificationItems} />
-                  </>
-                ) : null}
-
-                {projectItems.length > 0 ? (
-                  <>
-                    <Separator className="bg-primary/40" />
-                    <ProjectsReadOnly items={projectItems} />
-                  </>
-                ) : null}
               </div>
               {/* <Separator className="bg-primary/40" /> */}
-              <div className="profile-border-left-19">
-                <InterestsReadOnly keywords={visibleInterestKeywords} />
-              </div>
-              {/* <Separator className="bg-primary/40" /> */}
-              {/* <div className="profile-border-left-20">
-                <RecommendationPreferencesReadOnly
+
+              {/* <RecommendationPreferencesReadOnly
                   minimumOfferScore={savedMinimumOfferScore}
-                />
-              </div> */}
+                /> */}
             </>
           ) : (
             <>
-              <section className="space-y-4">
+              <section className="space-y-4 px-6 py-6 sm:px-8">
                 <SectionTitle
                   title="Informations personnelles"
                   description="Mettez à jour vos informations personnelles et vos coordonnées."
@@ -2100,416 +2178,408 @@ export default function Profile() {
                 </div>
               </section>
 
-              <Separator className="bg-primary/40" />
-
-              <section className="space-y-4">
-                <SectionTitle
-                  title="Préférences professionnelles"
-                  description="Vos préférences de contrat, de mobilité et de salaire."
-                  icon={Globe2}
+              <div className="profile-border-left-orange">
+                <CollectionSection<EducationDraft>
+                  title="Formations et diplômes"
+                  description="Vos diplômes, niveaux et établissements renseignés."
+                  icon={GraduationCap}
                   iconClassName="icon-background-color-7"
-                />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <OptionSelect
-                    label="Type de contrat souhaité"
-                    value={currentDraft.preferredContractType}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, preferredContractType: value }
-                          : current,
-                      )
-                    }
-                    options={contractTypesQuery.data ?? []}
-                    placeholder="Sélectionner"
-                  />
-                  <OptionSelect
-                    label="Gouvernorat souhaité"
-                    value={currentDraft.preferredGovernorate}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, preferredGovernorate: value }
-                          : current,
-                      )
-                    }
-                    options={governoratesQuery.data ?? []}
-                    placeholder="Sélectionner"
-                  />
-                  <Field
-                    label="Rayon de mobilité (km)"
-                    type="number"
-                    value={currentDraft.mobilityRadiusKm}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, mobilityRadiusKm: value }
-                          : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Salaire minimum souhaité"
-                    type="number"
-                    value={currentDraft.desiredSalaryMin}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, desiredSalaryMin: value }
-                          : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Salaire maximum souhaité"
-                    type="number"
-                    value={currentDraft.desiredSalaryMax}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, desiredSalaryMax: value }
-                          : current,
-                      )
-                    }
-                  />
-                </div>
-                <label className="flex items-center gap-2 text-sm text-foreground">
-                  <input
-                    type="checkbox"
-                    checked={currentDraft.acceptsRelocation}
-                    onChange={(event) =>
-                      setDraft((current) =>
-                        current
-                          ? {
-                              ...current,
-                              acceptsRelocation: event.target.checked,
+                  items={currentDraft.education}
+                  setItems={(updater) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            education:
+                              typeof updater === 'function'
+                                ? updater(current.education)
+                                : updater,
+                          }
+                        : current,
+                    )
+                  }
+                  emptyItem={emptyEducation}
+                  isEditing
+                  emptyStateMessage="Aucune formation renseignée."
+                  renderItem={(item, update) => {
+                    const currentDiplomaOptions = buildOptionsWithCurrentValue(
+                      diplomaOptions,
+                      item.degree,
+                      item.diplomaLabel,
+                    );
+
+                    return (
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <OptionSelect
+                          label="Diplôme"
+                          value={resolveOptionValue(
+                            diplomaOptions,
+                            item.degree,
+                            item.diplomaLabel,
+                          )}
+                          onChange={(value) => {
+                            const selectedOption = currentDiplomaOptions.find(
+                              (option) => option.code === value,
+                            );
+
+                            update({
+                              ...item,
+                              degree: value,
+                              diplomaLabel: selectedOption?.label ?? '',
+                            });
+                          }}
+                          options={currentDiplomaOptions}
+                          placeholder="Choisir un diplôme"
+                        />
+                        <Field
+                          label="Spécialité"
+                          value={item.specialty}
+                          onChange={(value) =>
+                            update({ ...item, specialty: value })
+                          }
+                        />
+                        <Field
+                          label="Établissement"
+                          value={item.institution}
+                          onChange={(value) =>
+                            update({ ...item, institution: value })
+                          }
+                        />
+                        <Field
+                          label="Année d'obtention"
+                          type="number"
+                          value={item.graduationYear}
+                          onChange={(value) =>
+                            update({ ...item, graduationYear: value })
+                          }
+                        />
+                        <div className="md:col-span-2">
+                          <Field
+                            label="Mention"
+                            value={item.honors}
+                            onChange={(value) =>
+                              update({ ...item, honors: value })
                             }
-                          : current,
-                      )
-                    }
-                  />
-                  Accepte la mobilité élargie
-                </label>
-              </section>
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                  viewItem={() => null}
+                />
 
-              <Separator className="bg-primary/40" />
+                <Separator className="bg-accent/70" />
 
-              <CollectionSection<EducationDraft>
-                title="Formations et diplômes"
-                description="Vos diplômes, niveaux et établissements renseignés."
-                icon={GraduationCap}
-                iconClassName="icon-background-color-7"
-                items={currentDraft.education}
-                setItems={(updater) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          education:
-                            typeof updater === 'function'
-                              ? updater(current.education)
-                              : updater,
-                        }
-                      : current,
-                  )
-                }
-                emptyItem={emptyEducation}
-                isEditing
-                emptyStateMessage="Aucune formation renseignée."
-                renderItem={(item, update) => (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Field
-                      label="Diplôme"
-                      value={item.degree}
-                      onChange={(value) => update({ ...item, degree: value })}
+                <CollectionSection<ExperienceDraft>
+                  title="Expériences professionnelles"
+                  description="Vos expériences professionnelles."
+                  icon={Briefcase}
+                  iconClassName="icon-background-color-7"
+                  items={professionalExperienceDrafts}
+                  setItems={(updater) =>
+                    replaceExperienceDrafts('professional', updater)
+                  }
+                  emptyItem={() => ({
+                    ...emptyExperience(),
+                    entryType: 'experience',
+                  })}
+                  isEditing
+                  emptyStateMessage="Aucune expérience professionnelle renseignée."
+                  renderItem={(item, update) => (
+                    <ExperienceDraftFields
+                      item={item}
+                      update={update}
+                      type="experience"
                     />
-                    <Field
-                      label="Libellé du diplôme"
-                      value={item.diplomaLabel}
-                      onChange={(value) =>
-                        update({ ...item, diplomaLabel: value })
-                      }
+                  )}
+                  viewItem={() => null}
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <CollectionSection<ExperienceDraft>
+                  title="Stages"
+                  description="Vos stages et expériences de type internship."
+                  icon={Briefcase}
+                  iconClassName="icon-background-color-7"
+                  items={internshipExperienceDrafts}
+                  setItems={(updater) =>
+                    replaceExperienceDrafts('internship', updater)
+                  }
+                  emptyItem={() => ({
+                    ...emptyExperience(),
+                    entryType: 'internship',
+                  })}
+                  isEditing
+                  emptyStateMessage="Aucun stage renseigné."
+                  renderItem={(item, update) => (
+                    <ExperienceDraftFields
+                      item={item}
+                      update={update}
+                      type="internship"
                     />
-                    <Field
-                      label="Niveau"
-                      value={item.levelCode}
-                      onChange={(value) =>
-                        update({ ...item, levelCode: value })
-                      }
-                    />
-                    <Field
-                      label="Spécialité"
-                      value={item.specialty}
-                      onChange={(value) =>
-                        update({ ...item, specialty: value })
-                      }
-                    />
-                    <Field
-                      label="Établissement"
-                      value={item.institution}
-                      onChange={(value) =>
-                        update({ ...item, institution: value })
-                      }
-                    />
-                    <Field
-                      label="Lieu"
-                      value={item.location}
-                      onChange={(value) => update({ ...item, location: value })}
-                    />
-                    <Field
-                      label="Date de début"
-                      type="date"
-                      value={item.startDate}
-                      onChange={(value) =>
-                        update({ ...item, startDate: value })
-                      }
-                    />
-                    <Field
-                      label="Date de fin"
-                      type="date"
-                      value={item.endDate}
-                      onChange={(value) => update({ ...item, endDate: value })}
-                    />
-                    <Field
-                      label="Année d'obtention"
-                      value={item.graduationYear}
-                      onChange={(value) =>
-                        update({ ...item, graduationYear: value })
-                      }
-                    />
-                    <Field
-                      label="Mention"
-                      value={item.honors}
-                      onChange={(value) => update({ ...item, honors: value })}
-                    />
-                    <div className="md:col-span-2">
+                  )}
+                  viewItem={() => null}
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <CollectionSection<SkillDraft>
+                  title="Compétences"
+                  description="Les compétences que vous souhaitez mettre en avant."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                  items={currentDraft.skills}
+                  setItems={(updater) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            skills:
+                              typeof updater === 'function'
+                                ? updater(current.skills)
+                                : updater,
+                          }
+                        : current,
+                    )
+                  }
+                  emptyItem={emptySkill}
+                  isEditing
+                  emptyStateMessage="Aucune compétence renseignée."
+                  renderItem={(item, update) => (
+                    <div className="grid gap-3 md:grid-cols-2">
                       <Field
-                        label="GPA"
-                        value={item.gpa}
-                        onChange={(value) => update({ ...item, gpa: value })}
-                      />
-                    </div>
-                  </div>
-                )}
-                viewItem={() => null}
-              />
-
-              <Separator className="bg-primary/40" />
-
-              <CollectionSection<ExperienceDraft>
-                title="Expériences professionnelles"
-                description="Vos expériences professionnelles."
-                icon={Briefcase}
-                iconClassName="icon-background-color-7"
-                items={professionalExperienceDrafts}
-                setItems={(updater) =>
-                  replaceExperienceDrafts('professional', updater)
-                }
-                emptyItem={() => ({
-                  ...emptyExperience(),
-                  entryType: 'experience',
-                })}
-                isEditing
-                emptyStateMessage="Aucune expérience professionnelle renseignée."
-                renderItem={(item, update) => (
-                  <ExperienceDraftFields
-                    item={item}
-                    update={update}
-                    type="experience"
-                  />
-                )}
-                viewItem={() => null}
-              />
-
-              <Separator className="bg-primary/40" />
-
-              <CollectionSection<ExperienceDraft>
-                title="Stages"
-                description="Vos stages et expériences de type internship."
-                icon={Briefcase}
-                iconClassName="icon-background-color-7"
-                items={internshipExperienceDrafts}
-                setItems={(updater) =>
-                  replaceExperienceDrafts('internship', updater)
-                }
-                emptyItem={() => ({
-                  ...emptyExperience(),
-                  entryType: 'internship',
-                })}
-                isEditing
-                emptyStateMessage="Aucun stage renseigné."
-                renderItem={(item, update) => (
-                  <ExperienceDraftFields
-                    item={item}
-                    update={update}
-                    type="internship"
-                  />
-                )}
-                viewItem={() => null}
-              />
-
-              <Separator className="bg-primary/40" />
-
-              <CollectionSection<SkillDraft>
-                title="Compétences"
-                description="Les compétences que vous souhaitez mettre en avant."
-                icon={Globe2}
-                iconClassName="icon-background-color-7"
-                items={currentDraft.skills}
-                setItems={(updater) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          skills:
-                            typeof updater === 'function'
-                              ? updater(current.skills)
-                              : updater,
-                        }
-                      : current,
-                  )
-                }
-                emptyItem={emptySkill}
-                isEditing
-                emptyStateMessage="Aucune compétence renseignée."
-                renderItem={(item, update) => (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Field
-                      label="Compétence"
-                      value={item.skillLabelRaw}
-                      onChange={(value) =>
-                        update({ ...item, skillLabelRaw: value })
-                      }
-                    />
-                    <Field
-                      label="Niveau"
-                      value={item.level}
-                      onChange={(value) => update({ ...item, level: value })}
-                    />
-                    <Field
-                      label="Années d'expérience"
-                      type="number"
-                      value={item.years}
-                      onChange={(value) => update({ ...item, years: value })}
-                    />
-                    <Field
-                      label="Preuve"
-                      value={item.evidence}
-                      onChange={(value) => update({ ...item, evidence: value })}
-                    />
-                  </div>
-                )}
-                viewItem={() => null}
-              />
-
-              <Separator className="bg-primary/40" />
-
-              <CollectionSection<LanguageDraft>
-                title="Langues"
-                description="Les langues que vous maîtrisez."
-                icon={Languages}
-                iconClassName="icon-background-color-7"
-                items={currentDraft.languages}
-                setItems={(updater) =>
-                  setDraft((current) =>
-                    current
-                      ? {
-                          ...current,
-                          languages:
-                            typeof updater === 'function'
-                              ? updater(current.languages)
-                              : updater,
-                        }
-                      : current,
-                  )
-                }
-                emptyItem={emptyLanguage}
-                isEditing
-                emptyStateMessage="Aucune langue renseignée."
-                renderItem={(item, update) => (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <SelectField
-                      label="Langue"
-                      value={item.languageCode}
-                      onChange={(value) =>
-                        update({ ...item, languageCode: value })
-                      }
-                      options={languagesQuery.data ?? []}
-                      placeholder="Choisir une langue"
-                    />
-                    <SelectField
-                      label="Niveau"
-                      value={item.level}
-                      onChange={(value) => update({ ...item, level: value })}
-                      options={languageLevelsQuery.data ?? []}
-                      placeholder="Choisir un niveau"
-                    />
-                    <div className="md:col-span-2">
-                      <Field
-                        label="Preuve"
-                        value={item.evidence}
+                        label="Compétence"
+                        value={item.skillLabelRaw}
                         onChange={(value) =>
-                          update({ ...item, evidence: value })
+                          update({ ...item, skillLabelRaw: value })
                         }
                       />
+                      <OptionSelect
+                        label="Niveau"
+                        value={resolveOptionValue(
+                          skillLevelOptions,
+                          item.level,
+                        )}
+                        onChange={(value) => update({ ...item, level: value })}
+                        options={buildOptionsWithCurrentValue(
+                          skillLevelOptions,
+                          item.level,
+                          formatCandidateLevelLabel(item.level),
+                        )}
+                        placeholder="Choisir un niveau"
+                      />
                     </div>
+                  )}
+                  viewItem={() => null}
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <CollectionSection<LanguageDraft>
+                  title="Langues"
+                  description="Les langues que vous maîtrisez."
+                  icon={Languages}
+                  iconClassName="icon-background-color-7"
+                  items={currentDraft.languages}
+                  setItems={(updater) =>
+                    setDraft((current) =>
+                      current
+                        ? {
+                            ...current,
+                            languages:
+                              typeof updater === 'function'
+                                ? updater(current.languages)
+                                : updater,
+                          }
+                        : current,
+                    )
+                  }
+                  emptyItem={emptyLanguage}
+                  isEditing
+                  emptyStateMessage="Aucune langue renseignée."
+                  renderItem={(item, update) => (
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <OptionSelect
+                        label="Langue"
+                        value={resolveOptionValue(
+                          languagesQuery.data ?? [],
+                          item.languageCode,
+                          formatCandidateLanguageLabel(item.languageCode),
+                        )}
+                        onChange={(value) =>
+                          update({ ...item, languageCode: value })
+                        }
+                        options={buildOptionsWithCurrentValue(
+                          languagesQuery.data ?? [],
+                          item.languageCode,
+                          formatCandidateLanguageLabel(item.languageCode),
+                        )}
+                        placeholder="Choisir une langue"
+                      />
+                      <OptionSelect
+                        label="Niveau"
+                        value={resolveOptionValue(
+                          languageLevelsQuery.data ?? [],
+                          item.level,
+                          formatCandidateLevelLabel(item.level),
+                        )}
+                        onChange={(value) => update({ ...item, level: value })}
+                        options={buildOptionsWithCurrentValue(
+                          languageLevelsQuery.data ?? [],
+                          item.level,
+                          formatCandidateLevelLabel(item.level),
+                        )}
+                        placeholder="Choisir un niveau"
+                      />
+                    </div>
+                  )}
+                  viewItem={() => null}
+                />
+              </div>
+              <div className="profile-border-left-19">
+                <section className="space-y-4 px-6 py-6 sm:px-8">
+                  <SectionTitle
+                    title="Domaines et technologies qui vous intéressent"
+                    description="Mots-clés du profil candidat utilisés pour retrouver des offres pertinentes."
+                    icon={Globe2}
+                    iconClassName="icon-background-color-19"
+                  />
+                  <InterestKeywordsEditor
+                    keywords={interestKeywordsDraft}
+                    inputValue={interestKeywordInput}
+                    onInputChange={setInterestKeywordInput}
+                    onAdd={addInterestKeyword}
+                    onRemove={removeInterestKeyword}
+                  />
+                </section>
+              </div>
+              <div className="profile-border-left-20">
+                <section className="space-y-4 px-6 py-6 sm:px-8">
+                  <SectionTitle
+                    title="Préférences professionnelles"
+                    description="Vos préférences de contrat, de mobilité et de salaire."
+                    icon={Globe2}
+                    iconClassName="icon-background-color-20"
+                  />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <OptionSelect
+                      label="Type de contrat souhaité"
+                      value={currentDraft.preferredContractType}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, preferredContractType: value }
+                            : current,
+                        )
+                      }
+                      options={contractTypesQuery.data ?? []}
+                      placeholder="Sélectionner"
+                    />
+                    <OptionSelect
+                      label="Gouvernorat souhaité"
+                      value={currentDraft.preferredGovernorate}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, preferredGovernorate: value }
+                            : current,
+                        )
+                      }
+                      options={governoratesQuery.data ?? []}
+                      placeholder="Sélectionner"
+                    />
+                    <Field
+                      label="Rayon de mobilité (km)"
+                      type="number"
+                      value={currentDraft.mobilityRadiusKm}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, mobilityRadiusKm: value }
+                            : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Salaire minimum souhaité"
+                      type="number"
+                      value={currentDraft.desiredSalaryMin}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, desiredSalaryMin: value }
+                            : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Salaire maximum souhaité"
+                      type="number"
+                      value={currentDraft.desiredSalaryMax}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, desiredSalaryMax: value }
+                            : current,
+                        )
+                      }
+                    />
                   </div>
-                )}
-                viewItem={() => null}
-              />
-
-              <Separator className="bg-primary/40" />
-
-              <section className="space-y-4">
-                <SectionTitle
-                  title="Domaines et technologies qui vous intéressent"
-                  description="Mots-clés du profil candidat utilisés pour retrouver des offres pertinentes."
-                  icon={Globe2}
-                  iconClassName="icon-background-color-7"
-                />
-                <InterestKeywordsEditor
-                  keywords={interestKeywordsDraft}
-                  inputValue={interestKeywordInput}
-                  onInputChange={setInterestKeywordInput}
-                  onAdd={addInterestKeyword}
-                  onRemove={removeInterestKeyword}
-                />
-              </section>
-
-              <Separator className="bg-primary/40" />
-
-              <section className="space-y-4">
-                <SectionTitle
-                  title="Préférences de recommandation"
-                  description="Paramètres utilisés pour filtrer les offres compatibles."
-                  icon={Globe2}
-                  iconClassName="icon-background-color-7"
-                />
-                <div className="rounded-2xl border border-border bg-background p-5 md:max-w-sm">
-                  <Label className="text-xs text-muted-foreground">
-                    Score minimum des offres compatibles
-                  </Label>
-                  <Select
-                    value={String(minimumOfferScoreDraft)}
-                    onValueChange={(value) =>
-                      setMinimumOfferScoreDraft(
-                        normalizeCandidateMinimumOfferScore(Number(value)),
-                      )
-                    }
-                  >
-                    <SelectTrigger className="mt-2 h-10">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {candidateOfferScoreOptions.map((option) => (
-                        <SelectItem key={option} value={String(option)}>
-                          {option}%
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </section>
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <input
+                      type="checkbox"
+                      checked={currentDraft.acceptsRelocation}
+                      onChange={(event) =>
+                        setDraft((current) =>
+                          current
+                            ? {
+                                ...current,
+                                acceptsRelocation: event.target.checked,
+                              }
+                            : current,
+                        )
+                      }
+                    />
+                    Accepte la mobilité élargie
+                  </label>
+                </section>
+              </div>
+              {/* <Separator className="bg-primary/40" /> */}
+              <div className="profile-border-left-3">
+                <section className="space-y-4 px-6 py-6 sm:px-8 flex justify-between items-center">
+                  <SectionTitle
+                    title="Préférences de recommandation"
+                    description="Paramètres utilisés pour filtrer les offres compatibles."
+                    icon={Globe2}
+                    iconClassName="icon-background-color-3"
+                  />
+                  <div className="rounded-2xl border border-border bg-background p-5 md:max-w-sm">
+                    <Label className="text-xs text-muted-foreground">
+                      Score minimum des offres compatibles
+                    </Label>
+                    <Select
+                      value={String(minimumOfferScoreDraft)}
+                      onValueChange={(value) =>
+                        setMinimumOfferScoreDraft(
+                          normalizeCandidateMinimumOfferScore(Number(value)),
+                        )
+                      }
+                    >
+                      <SelectTrigger className="mt-2 h-10">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {candidateOfferScoreOptions.map((option) => (
+                          <SelectItem key={option} value={String(option)}>
+                            {option}%
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </section>
+              </div>
             </>
           )}
           {false ? (
@@ -3728,11 +3798,11 @@ function CollectionSection<T extends { id?: string }>({
           : items?.map((item, index) => (
               <article
                 key={item.id ?? `${title}-${index}`}
-                className="rounded-2xl border border-border bg-background p-5"
+                className="rounded-2xl border border-border bg-background p-5 border-color-aneti-blue border-left-aneti"
               >
                 {isEditing ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
+                  <div className="space-y-4 relative">
+                    <div className="absolute right-[-10px] top-[-30px]">
                       <Button
                         type="button"
                         variant="ghost"
@@ -3805,6 +3875,11 @@ function ProfileOverviewSection({
   languageCount: number;
   minimumOfferScore?: number;
 }) {
+  const languageCountLabel =
+    languageCount > 0
+      ? `${languageCount} ${languageCount > 1 ? 'langues renseignées' : 'langue renseignée'}`
+      : 'Aucune langue renseignée';
+
   const metaItems = [
     displayLocation ? { icon: MapPin, label: displayLocation } : null,
     normalizeKeyword(email) ? { icon: Mail, label: email } : null,
@@ -3816,10 +3891,7 @@ function ProfileOverviewSection({
       : null,
     {
       icon: Languages,
-      label:
-        languageCount > 0
-          ? `${languageCount} langue(s) renseignée(s)`
-          : 'Aucune langue renseignée',
+      label: languageCountLabel,
     },
   ].filter(
     (
@@ -3841,8 +3913,8 @@ function ProfileOverviewSection({
             {displayName}
           </h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-muted-foreground sm:text-base">
-            Gardez vos coordonnées, vos expériences, vos compétences et vos
-            préférences à jour pour recevoir des offres plus pertinentes.
+            Présentez l'essentiel de votre parcours et de vos préférences pour
+            recevoir des offres plus pertinentes.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {metaItems.map((item) => (
@@ -3878,13 +3950,17 @@ function ReadOnlyGridSection({
   icon,
   iconClassName,
   items,
+  emptyMessage = 'Aucune information renseignée.',
 }: {
   title: string;
   description: string;
   icon: ComponentType<{ className?: string }>;
   iconClassName?: string;
   items: ReadOnlyGridItem[];
+  emptyMessage?: string;
 }) {
+  const visibleItems = items.filter((item) => normalizeKeyword(item.value));
+
   return (
     <section className="space-y-4 px-6 py-6 sm:px-8">
       <SectionTitle
@@ -3893,7 +3969,11 @@ function ReadOnlyGridSection({
         icon={icon}
         iconClassName={iconClassName}
       />
-      <ReadOnlyDataGrid items={items} />
+      {visibleItems.length > 0 ? (
+        <ReadOnlyDataGrid items={visibleItems} />
+      ) : (
+        <EmptyStateCard message={emptyMessage} />
+      )}
     </section>
   );
 }
@@ -3903,25 +3983,17 @@ function EducationReadOnly({ items }: { items: DisplayEducationItem[] }) {
     <section className="space-y-4 px-6 py-6 sm:px-8">
       <SectionTitle
         title="Formations et diplômes"
-        description="Vos diplômes, niveaux et établissements renseignés."
+        description="Les diplômes, spécialités et établissements les plus utiles à retenir."
         icon={GraduationCap}
         iconClassName="icon-background-color-7"
       />
       <div className="space-y-4">
         {items.length > 0 ? (
           items.map((item, index) => {
-            const period =
-              formatCandidateDateRange(item.startDate, item.endDate) ??
-              cleanProfileText(item.graduationYear);
-            const secondaryLabel = uniqueTextValues(
-              item.diplomaLabel !== item.degree ? item.diplomaLabel : null,
-              item.specialty,
-            ).join(' • ');
+            const graduationYear = extractEducationYear(item);
             const metadata = [
-              item.levelCode ? `Niveau : ${item.levelCode}` : null,
-              item.location ? `Lieu : ${item.location}` : null,
+              graduationYear ? `Année d'obtention : ${graduationYear}` : null,
               item.honors ? `Mention : ${item.honors}` : null,
-              item.gpa ? `GPA : ${item.gpa}` : null,
             ].filter((value): value is string => Boolean(value));
 
             return (
@@ -3931,18 +4003,18 @@ function EducationReadOnly({ items }: { items: DisplayEducationItem[] }) {
               >
                 <h3 className="text-base font-semibold text-foreground">
                   {cleanCandidateDisplayText(
-                    item.degree ?? item.diplomaLabel ?? item.levelCode,
+                    item.diplomaLabel ?? item.degree,
                     'Formation',
                   )}
                 </h3>
-                {secondaryLabel ? (
+                {item.specialty ? (
                   <p className="mt-1 text-sm text-foreground">
-                    {secondaryLabel}
+                    {item.specialty}
                   </p>
                 ) : null}
-                {item.institution || period ? (
+                {item.institution ? (
                   <p className="mt-1 text-sm text-muted-foreground">
-                    {uniqueTextValues(item.institution, period).join(' — ')}
+                    {item.institution}
                   </p>
                 ) : null}
                 {metadata.length > 0 ? (
@@ -4095,13 +4167,7 @@ function ExperienceReadOnlySection({
   );
 }
 
-function SkillsReadOnly({
-  skillGroups,
-}: {
-  skillGroups: Array<{ category: string; items: string[] }>;
-}) {
-  const hasMultipleGroups = skillGroups.length > 1;
-
+function SkillsReadOnly({ items }: { items: DisplaySkillItem[] }) {
   return (
     <section className="space-y-4 px-6 py-6 sm:px-8">
       <SectionTitle
@@ -4111,31 +4177,22 @@ function SkillsReadOnly({
         iconClassName="icon-background-color-7"
       />
       <div className="rounded-2xl border border-border bg-background p-5">
-        {skillGroups.length > 0 ? (
-          <div className="space-y-4">
-            {skillGroups.map((group) => (
-              <div key={group.category}>
-                {hasMultipleGroups ? (
-                  <p className="text-sm font-medium text-foreground">
-                    {group.category}
+        {items.length > 0 ? (
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {items.map((item) => (
+              <article
+                key={`${item.label}-${item.level ?? 'no-level'}`}
+                className="rounded-2xl border border-border bg-surface-muted/20 p-4"
+              >
+                <p className="text-sm font-semibold text-foreground">
+                  {item.label}
+                </p>
+                {item.level ? (
+                  <p className="mt-1 text-xs uppercase tracking-[0.16em] text-muted-foreground">
+                    {item.level}
                   </p>
                 ) : null}
-                <div
-                  className={
-                    hasMultipleGroups
-                      ? 'mt-3 flex flex-wrap gap-2'
-                      : 'flex flex-wrap gap-2'
-                  }
-                >
-                  {group.items.map((label) => (
-                    <SkillTag
-                      key={`${group.category}-${label}`}
-                      label={label}
-                      variant="matched"
-                    />
-                  ))}
-                </div>
-              </div>
+              </article>
             ))}
           </div>
         ) : (
@@ -4159,13 +4216,16 @@ function LanguagesReadOnly({ items }: { items: DisplayLanguageItem[] }) {
       />
       <div className="rounded-2xl border border-border bg-background p-5">
         {items.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {items.map((item, index) => (
-              <SkillTag
+              <article
                 key={`${item.name}-${item.level ?? index}`}
-                label={item.level ? `${item.name} — ${item.level}` : item.name}
-                variant="outline"
-              />
+                className="rounded-2xl border border-border bg-surface-muted/20 p-4"
+              >
+                <p className="text-sm font-semibold text-foreground">
+                  {item.level ? `${item.name} — ${item.level}` : item.name}
+                </p>
+              </article>
             ))}
           </div>
         ) : (
