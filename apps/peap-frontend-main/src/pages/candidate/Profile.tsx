@@ -737,11 +737,11 @@ const extractCandidateLocationCodes = (
 ): { governorateCode: string; delegationCode: string } => {
   const geo = mappedPayload.geo_normalization as
     | {
-        candidate_location?: {
-          governorate?: { code?: string | null };
-          delegation?: { code?: string | null };
-        };
-      }
+      candidate_location?: {
+        governorate?: { code?: string | null };
+        delegation?: { code?: string | null };
+      };
+    }
     | undefined;
 
   return {
@@ -771,9 +771,9 @@ function applyParsedCvToDraft(
 
   const fullName = splitFullName(
     identity.full_name ??
-      identity.name ??
-      personalInfo?.full_name ??
-      personalInfo?.name,
+    identity.name ??
+    personalInfo?.full_name ??
+    personalInfo?.name,
   );
 
   const parsedGeo = parsedPayload.geo_normalization as
@@ -796,13 +796,13 @@ function applyParsedCvToDraft(
       : undefined;
   const parsedPrimaryLanguage = toStringOrEmpty(
     identity.primary_language ??
-      personalInfo?.primary_language ??
-      (firstParsedLanguage &&
+    personalInfo?.primary_language ??
+    (firstParsedLanguage &&
       typeof firstParsedLanguage === 'object' &&
       !Array.isArray(firstParsedLanguage)
-        ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
-          (firstParsedLanguage as Record<string, unknown>).code)
-        : undefined),
+      ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
+        (firstParsedLanguage as Record<string, unknown>).code)
+      : undefined),
   );
 
   return {
@@ -841,9 +841,9 @@ function applyParsedCvToDraft(
       degree: toStringOrEmpty(item.degree ?? item.raw_degree),
       diplomaLabel: toStringOrEmpty(
         item.diploma_label ??
-          item.diplomaLabel ??
-          item.degree ??
-          item.raw_degree,
+        item.diplomaLabel ??
+        item.degree ??
+        item.raw_degree,
       ),
       specialty: toStringOrEmpty(
         item.specialty ?? item.specialty_label ?? item.field,
@@ -885,15 +885,15 @@ function applyParsedCvToDraft(
       description: toStringOrEmpty(item.description),
       responsibilities: Array.isArray(item.responsibilities)
         ? item.responsibilities
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       technologies: Array.isArray(item.technologies)
         ? item.technologies
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       projects: Array.isArray(item.projects) ? item.projects : [],
       entryType: toStringOrEmpty(item.entry_type ?? item.entryType),
@@ -1173,7 +1173,7 @@ export default function Profile() {
     () =>
       normalizeCandidateMinimumOfferScore(
         offerThresholdQuery.data?.minThreshold ??
-          getStoredCandidateMinimumOfferScore(),
+        getStoredCandidateMinimumOfferScore(),
       ),
     [offerThresholdQuery.data?.minThreshold],
   );
@@ -1993,7 +1993,7 @@ export default function Profile() {
 
                 <Separator className="bg-accent/70" />
 
-              <SkillsReadOnly items={skillItems} />
+                <SkillsReadOnly items={skillItems} />
 
                 <Separator className="bg-accent/70" />
 
@@ -2006,64 +2006,65 @@ export default function Profile() {
                   </>
                 ) : null}
 
-              {projectItems.length > 0 ? (
-                <>
-                  <Separator className="bg-primary/40" />
-                  <ProjectsReadOnly items={projectItems} />
-                </>
-              ) : null}
+                {projectItems.length > 0 ? (
+                  <>
+                    <Separator className="bg-primary/40" />
+                    <ProjectsReadOnly items={projectItems} />
+                  </>
+                ) : null}
 
-              <Separator className="bg-primary/40" />
+                <Separator className="bg-primary/40" />
 
-              <InterestsReadOnly keywords={visibleInterestKeywords} />
+                <InterestsReadOnly keywords={visibleInterestKeywords} />
 
-              <Separator className="bg-primary/40" />
+                <Separator className="bg-primary/40" />
 
-              <ReadOnlyGridSection
-                title="Préférences professionnelles"
-                description="Vos critères de contrat, de mobilité et de rémunération."
-                icon={Globe2}
-                iconClassName="icon-background-color-7"
-                emptyMessage="Aucune préférence professionnelle renseignée."
-                items={[
-                  {
-                    label: 'Type de contrat souhaité',
-                    value: preferredContractTypeLabel,
-                  },
-                  {
-                    label: 'Gouvernorat souhaité',
-                    value: preferredGovernorateLabel,
-                  },
-                  {
-                    label: 'Rayon de mobilité',
-                    value: currentDraft.mobilityRadiusKm
-                      ? `${currentDraft.mobilityRadiusKm} km`
-                      : null,
-                  },
-                  {
-                    label: 'Mobilité élargie',
-                    value: formatBooleanLabel(currentDraft.acceptsRelocation),
-                  },
-                  {
-                    label: 'Salaire minimum souhaité',
-                    value: currentDraft.desiredSalaryMin
-                      ? `${currentDraft.desiredSalaryMin}`
-                      : null,
-                  },
-                  {
-                    label: 'Salaire maximum souhaité',
-                    value: currentDraft.desiredSalaryMax
-                      ? `${currentDraft.desiredSalaryMax}`
-                      : null,
-                  },
-                ]}
-              />
+                <ReadOnlyGridSection
+                  title="Préférences professionnelles"
+                  description="Vos critères de contrat, de mobilité et de rémunération."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                  emptyMessage="Aucune préférence professionnelle renseignée."
+                  items={[
+                    {
+                      label: 'Type de contrat souhaité',
+                      value: preferredContractTypeLabel,
+                    },
+                    {
+                      label: 'Gouvernorat souhaité',
+                      value: preferredGovernorateLabel,
+                    },
+                    {
+                      label: 'Rayon de mobilité',
+                      value: currentDraft.mobilityRadiusKm
+                        ? `${currentDraft.mobilityRadiusKm} km`
+                        : null,
+                    },
+                    {
+                      label: 'Mobilité élargie',
+                      value: formatBooleanLabel(currentDraft.acceptsRelocation),
+                    },
+                    {
+                      label: 'Salaire minimum souhaité',
+                      value: currentDraft.desiredSalaryMin
+                        ? `${currentDraft.desiredSalaryMin}`
+                        : null,
+                    },
+                    {
+                      label: 'Salaire maximum souhaité',
+                      value: currentDraft.desiredSalaryMax
+                        ? `${currentDraft.desiredSalaryMax}`
+                        : null,
+                    },
+                  ]}
+                />
 
-              <Separator className="bg-primary/40" />
+                <Separator className="bg-primary/40" />
 
-              <RecommendationPreferencesReadOnly
-                minimumOfferScore={savedMinimumOfferScore}
-              />
+                <RecommendationPreferencesReadOnly
+                  minimumOfferScore={savedMinimumOfferScore}
+                />
+              </div>
             </>
           ) : (
             <>
@@ -2170,12 +2171,12 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
-                            }
+                            ...current,
+                            governorateCode: value,
+                            delegationCode: '',
+                            preferredGovernorate:
+                              current.preferredGovernorate || value,
+                          }
                           : current,
                       )
                     }
@@ -2300,9 +2301,9 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              acceptsRelocation: event.target.checked,
-                            }
+                            ...current,
+                            acceptsRelocation: event.target.checked,
+                          }
                           : current,
                       )
                     }
@@ -2323,12 +2324,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          education:
-                            typeof updater === 'function'
-                              ? updater(current.education)
-                              : updater,
-                        }
+                        ...current,
+                        education:
+                          typeof updater === 'function'
+                            ? updater(current.education)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -2464,12 +2465,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          skills:
-                            typeof updater === 'function'
-                              ? updater(current.skills)
-                              : updater,
-                        }
+                        ...current,
+                        skills:
+                          typeof updater === 'function'
+                            ? updater(current.skills)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -2513,12 +2514,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          languages:
-                            typeof updater === 'function'
-                              ? updater(current.languages)
-                              : updater,
-                        }
+                        ...current,
+                        languages:
+                          typeof updater === 'function'
+                            ? updater(current.languages)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -2732,12 +2733,12 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
-                            }
+                            ...current,
+                            governorateCode: value,
+                            delegationCode: '',
+                            preferredGovernorate:
+                              current.preferredGovernorate || value,
+                          }
                           : current,
                       )
                     }
@@ -2879,9 +2880,9 @@ export default function Profile() {
                         setDraft((current) =>
                           current
                             ? {
-                                ...current,
-                                acceptsRelocation: event.target.checked,
-                              }
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
                             : current,
                         )
                       }
@@ -2903,12 +2904,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          education:
-                            typeof updater === 'function'
-                              ? updater(current.education)
-                              : updater,
-                        }
+                        ...current,
+                        education:
+                          typeof updater === 'function'
+                            ? updater(current.education)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -2989,7 +2990,7 @@ export default function Profile() {
                                 'Formation'}
                             </h3>
                             {item.diplomaLabel &&
-                            item.diplomaLabel !== item.degree ? (
+                              item.diplomaLabel !== item.degree ? (
                               <p className="mt-1 text-sm text-foreground">
                                 {item.diplomaLabel}
                               </p>
@@ -3048,12 +3049,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          experience:
-                            typeof updater === 'function'
-                              ? updater(current.experience)
-                              : updater,
-                        }
+                        ...current,
+                        experience:
+                          typeof updater === 'function'
+                            ? updater(current.experience)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3286,12 +3287,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          skills:
-                            typeof updater === 'function'
-                              ? updater(current.skills)
-                              : updater,
-                        }
+                        ...current,
+                        skills:
+                          typeof updater === 'function'
+                            ? updater(current.skills)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3381,12 +3382,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          languages:
-                            typeof updater === 'function'
-                              ? updater(current.languages)
-                              : updater,
-                        }
+                        ...current,
+                        languages:
+                          typeof updater === 'function'
+                            ? updater(current.languages)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3465,13 +3466,13 @@ export default function Profile() {
                   const label = `${formatLanguageLabel(
                     item.languageCode,
                     bundleLanguage?.languageLabelFr ??
-                      bundleLanguage?.languageLabelEn ??
-                      languageOption?.label,
+                    bundleLanguage?.languageLabelEn ??
+                    languageOption?.label,
                   )} - ${formatLanguageLevelLabel(
                     item.level,
                     bundleLanguage?.levelLabelFr ??
-                      bundleLanguage?.levelLabelEn ??
-                      levelOption?.label,
+                    bundleLanguage?.levelLabelEn ??
+                    levelOption?.label,
                   )}`;
 
                   return (
@@ -3779,8 +3780,8 @@ function CollectionSection<T extends { id?: string }>({
   icon: ComponentType<{ className?: string }>;
   items: T[];
   setItems:
-    | Dispatch<SetStateAction<T[]>>
-    | ((next: SetStateAction<T[]>) => void);
+  | Dispatch<SetStateAction<T[]>>
+  | ((next: SetStateAction<T[]>) => void);
   emptyItem: () => T;
   isEditing: boolean;
   renderItem: (item: T, update: (next: T) => void) => ReactNode;
@@ -3832,29 +3833,29 @@ function CollectionSection<T extends { id?: string }>({
         {!isEditing && renderListView
           ? renderListView(items)
           : items?.map((item, index) => (
-              <article
-                key={item.id ?? `${title}-${index}`}
-                className="rounded-2xl border border-border bg-background p-5"
-              >
-                {isEditing ? (
-                  <div className="space-y-4">
-                    <div className="flex justify-end">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {renderItem(item, (next) => updateItem(index, next))}
+            <article
+              key={item.id ?? `${title}-${index}`}
+              className="rounded-2xl border border-border bg-background p-5"
+            >
+              {isEditing ? (
+                <div className="space-y-4">
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                ) : (
-                  viewItem(item)
-                )}
-              </article>
-            ))}
+                  {renderItem(item, (next) => updateItem(index, next))}
+                </div>
+              ) : (
+                viewItem(item)
+              )}
+            </article>
+          ))}
       </div>
     </section>
   );
@@ -3880,9 +3881,8 @@ function ReadOnlyDataGrid({ items }: { items: ReadOnlyGridItem[] }) {
       {items.map((item) => (
         <article
           key={item.label}
-          className={`rounded-2xl border border-border bg-background p-4 ${
-            item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
-          }`}
+          className={`rounded-2xl border border-border bg-background p-4 ${item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
+            }`}
         >
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {item.label}
@@ -3921,9 +3921,9 @@ function ProfileOverviewSection({
     normalizeKeyword(email) ? { icon: Mail, label: email } : null,
     primaryLanguageLabel
       ? {
-          icon: Globe2,
-          label: `Langue principale : ${primaryLanguageLabel}`,
-        }
+        icon: Globe2,
+        label: `Langue principale : ${primaryLanguageLabel}`,
+      }
       : null,
     {
       icon: Languages,
