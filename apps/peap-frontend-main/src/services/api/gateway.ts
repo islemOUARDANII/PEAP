@@ -76,9 +76,15 @@ export interface CandidateEducationRecord {
   levelCode?: string | null;
   levelLabel?: string | null;
   diplomaLabel?: string | null;
+  degree?: string | null;
   specialty?: string | null;
   institution?: string | null;
+  startDate?: string | null;
+  endDate?: string | null;
   graduationYear?: number | null;
+  location?: string | null;
+  honors?: string | null;
+  gpa?: string | null;
   rtmcEducationNodeId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -89,9 +95,15 @@ interface CandidateEducationResponse {
   level_code?: string | null;
   level_label?: string | null;
   diploma_label?: string | null;
+  degree?: string | null;
   specialty?: string | null;
   institution?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
   graduation_year?: number | null;
+  location?: string | null;
+  honors?: string | null;
+  gpa?: number | string | null;
   rtmc_education_node_id?: string | null;
   created_at: string;
   updated_at: string;
@@ -103,10 +115,17 @@ export interface CandidateExperienceRecord {
   jobTitleRaw?: string | null;
   companyName?: string | null;
   sector?: string | null;
+  location?: string | null;
   startDate?: string | null;
   endDate?: string | null;
+  isCurrent?: boolean;
   durationMonths?: number | null;
+  durationYears?: number | null;
   description?: string | null;
+  responsibilities?: string[] | null;
+  technologies?: string[] | null;
+  projects?: Array<Record<string, unknown> | string> | null;
+  entryType?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,10 +136,17 @@ interface CandidateExperienceResponse {
   job_title_raw?: string | null;
   company_name?: string | null;
   sector?: string | null;
+  location?: string | null;
   start_date?: string | null;
   end_date?: string | null;
+  is_current?: boolean;
   duration_months?: number | null;
+  duration_years?: number | string | null;
   description?: string | null;
+  responsibilities?: string[] | null;
+  technologies?: string[] | null;
+  projects?: Array<Record<string, unknown> | string> | null;
+  entry_type?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -131,6 +157,8 @@ export interface CandidateSkillRecord {
   skillLabelRaw?: string | null;
   skillNodeLabel?: string | null;
   skillNodeType?: string | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
   level?: string | null;
   years?: number | null;
   evidence?: string | null;
@@ -145,6 +173,8 @@ interface CandidateSkillResponse {
   skill_label_raw?: string | null;
   skill_node_label?: string | null;
   skill_node_type?: string | null;
+  category?: string | null;
+  metadata?: Record<string, unknown> | null;
   level?: string | null;
   years?: number | string | null;
   evidence?: string | null;
@@ -253,8 +283,15 @@ export interface CandidateCvParseResult {
     identity: Record<string, unknown>;
     education: Array<Record<string, unknown>>;
     experience: Array<Record<string, unknown>>;
+    stages: Array<Record<string, unknown>>;
     skills: Array<Record<string, unknown>>;
     languages: Array<Record<string, unknown>>;
+    certifications: Array<Record<string, unknown>>;
+    projects: Array<Record<string, unknown>>;
+    interests: Array<Record<string, unknown> | string>;
+    preferences: Record<string, unknown>;
+    geoNormalization: Record<string, unknown>;
+    cvMetadata: Record<string, unknown>;
   };
   warnings: string[];
   parserVersion: string;
@@ -270,8 +307,15 @@ interface CandidateCvParseResponse {
     identity?: Record<string, unknown>;
     education?: Array<Record<string, unknown>>;
     experience?: Array<Record<string, unknown>>;
+    stages?: Array<Record<string, unknown>>;
     skills?: Array<Record<string, unknown>>;
     languages?: Array<Record<string, unknown>>;
+    certifications?: Array<Record<string, unknown>>;
+    projects?: Array<Record<string, unknown>>;
+    interests?: Array<Record<string, unknown> | string>;
+    preferences?: Record<string, unknown>;
+    geo_normalization?: Record<string, unknown>;
+    cv_metadata?: Record<string, unknown>;
   };
   warnings?: string[];
   parser_version: string;
@@ -308,6 +352,82 @@ export interface CandidateProfileBundle {
   preference?: CandidatePreferenceRecord | null;
   currentCv?: CandidateCvRecord | null;
   cvRecords: CandidateCvRecord[];
+}
+
+interface CandidateActiveOffersCountResponse {
+  active_offers_count: number;
+}
+
+interface CandidateMatchedOfferResponse {
+  result_id: string;
+  run_id: string;
+  offer_id: string;
+  title?: string | null;
+  employer_name?: string | null;
+  description?: string | null;
+  status?: string | null;
+  contract_type?: string | null;
+  work_mode?: string | null;
+  country?: string | null;
+  governorate_code?: string | null;
+  governorate_label?: string | null;
+  delegation_code?: string | null;
+  delegation_label?: string | null;
+  published_at?: string | null;
+  deadline_at?: string | null;
+  score_global: number;
+  score_percent: number;
+  rank: number;
+  explanation_short?: string | null;
+  explanation_json?: Record<string, unknown> | null;
+  has_gaps?: boolean;
+}
+
+interface CandidateMatchedOffersResponse {
+  model_code: string;
+  model_version_id: string;
+  run_id: string;
+  min_score: number;
+  active_offers_count: number;
+  total_results: number;
+  matched_count: number;
+  offers: CandidateMatchedOfferResponse[];
+}
+
+export interface CandidateMatchedOfferRecord {
+  resultId: string;
+  runId: string;
+  offerId: string;
+  title: string;
+  employerName: string;
+  description: string | null;
+  status: string | null;
+  contractType: string | null;
+  workMode: string | null;
+  country: string | null;
+  governorateCode: string | null;
+  governorateLabel: string | null;
+  delegationCode: string | null;
+  delegationLabel: string | null;
+  publishedAt: string | null;
+  deadlineAt: string | null;
+  scoreGlobal: number;
+  scorePercent: number;
+  rank: number;
+  explanationShort: string | null;
+  explanationJson: Record<string, unknown>;
+  hasGaps: boolean;
+}
+
+export interface CandidateMatchedOffersRecord {
+  modelCode: string;
+  modelVersionId: string;
+  runId: string;
+  minScore: number;
+  activeOffersCount: number;
+  totalResults: number;
+  matchedCount: number;
+  offers: CandidateMatchedOfferRecord[];
 }
 
 interface EmployerProfileResponse {
@@ -970,10 +1090,16 @@ const mapCandidateEducation = (item: CandidateEducationResponse): CandidateEduca
   id: item.id,
   levelCode: item.level_code ?? null,
   levelLabel: item.level_label ?? null,
-  diplomaLabel: item.diploma_label ?? null,
+  diplomaLabel: item.diploma_label ?? item.degree ?? null,
+  degree: item.degree ?? item.diploma_label ?? null,
   specialty: item.specialty ?? null,
   institution: item.institution ?? null,
+  startDate: item.start_date ?? null,
+  endDate: item.end_date ?? null,
   graduationYear: item.graduation_year ?? null,
+  location: item.location ?? null,
+  honors: item.honors ?? null,
+  gpa: item.gpa == null ? null : String(item.gpa),
   rtmcEducationNodeId: item.rtmc_education_node_id ?? null,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
@@ -985,10 +1111,18 @@ const mapCandidateExperience = (item: CandidateExperienceResponse): CandidateExp
   jobTitleRaw: item.job_title_raw ?? null,
   companyName: item.company_name ?? null,
   sector: item.sector ?? null,
+  location: item.location ?? null,
   startDate: item.start_date ?? null,
   endDate: item.end_date ?? null,
+  isCurrent: item.is_current ?? false,
   durationMonths: item.duration_months ?? null,
+  durationYears:
+    item.duration_years == null ? null : toNumberValue(item.duration_years),
   description: item.description ?? null,
+  responsibilities: asArray(item.responsibilities),
+  technologies: asArray(item.technologies),
+  projects: asArray(item.projects),
+  entryType: item.entry_type ?? null,
   createdAt: item.created_at,
   updatedAt: item.updated_at,
 });
@@ -999,6 +1133,11 @@ const mapCandidateSkill = (item: CandidateSkillResponse): CandidateSkillRecord =
   skillLabelRaw: item.skill_label_raw ?? null,
   skillNodeLabel: item.skill_node_label ?? null,
   skillNodeType: item.skill_node_type ?? null,
+  category:
+    item.category ??
+    toNullableString((item.metadata as Record<string, unknown> | null)?.category) ??
+    null,
+  metadata: item.metadata ?? null,
   level: item.level ?? null,
   years: item.years == null ? null : toNumberValue(item.years),
   evidence: item.evidence ?? null,
@@ -1328,6 +1467,46 @@ const mapAuditEvent = (item: AuditEventResponse): AuditEventRecord => ({
   metadata: item.metadata ?? {},
 });
 
+const mapCandidateMatchedOffer = (
+  item: CandidateMatchedOfferResponse,
+): CandidateMatchedOfferRecord => ({
+  resultId: item.result_id,
+  runId: item.run_id,
+  offerId: item.offer_id,
+  title: toStringValue(item.title, "Offre non renseignée"),
+  employerName: toStringValue(item.employer_name, "Entreprise non renseignée"),
+  description: item.description ?? null,
+  status: item.status ?? null,
+  contractType: item.contract_type ?? null,
+  workMode: item.work_mode ?? null,
+  country: item.country ?? null,
+  governorateCode: item.governorate_code ?? null,
+  governorateLabel: item.governorate_label ?? null,
+  delegationCode: item.delegation_code ?? null,
+  delegationLabel: item.delegation_label ?? null,
+  publishedAt: item.published_at ?? null,
+  deadlineAt: item.deadline_at ?? null,
+  scoreGlobal: toNumberValue(item.score_global),
+  scorePercent: toNumberValue(item.score_percent),
+  rank: toNumberValue(item.rank),
+  explanationShort: item.explanation_short ?? null,
+  explanationJson: item.explanation_json ?? {},
+  hasGaps: Boolean(item.has_gaps),
+});
+
+const mapCandidateMatchedOffers = (
+  payload: CandidateMatchedOffersResponse,
+): CandidateMatchedOffersRecord => ({
+  modelCode: payload.model_code,
+  modelVersionId: payload.model_version_id,
+  runId: payload.run_id,
+  minScore: toNumberValue(payload.min_score),
+  activeOffersCount: toNumberValue(payload.active_offers_count),
+  totalResults: toNumberValue(payload.total_results),
+  matchedCount: toNumberValue(payload.matched_count),
+  offers: asArray(payload.offers).map(mapCandidateMatchedOffer),
+});
+
 export const gatewayApi = {
   referentials: {
     async list(path: string, query?: Record<string, string | number | boolean | null | undefined>) {
@@ -1574,6 +1753,32 @@ export const gatewayApi = {
         method: "DELETE",
       });
     },
+
+    getActiveOffersCount: async (): Promise<number> => {
+      const payload = await apiRequest<CandidateActiveOffersCountResponse>(
+        "/candidates/me/offers/active-count",
+        { method: "GET" },
+      );
+
+      return toNumberValue(payload.active_offers_count);
+    },
+
+    getMatchedOffers: async (
+      minScore = 50,
+    ): Promise<CandidateMatchedOffersRecord> => {
+      const payload = await apiRequest<CandidateMatchedOffersResponse>(
+        "/candidates/me/matched-offers",
+        { method: "GET" },
+        {
+          query: {
+            min_score: minScore,
+          },
+        },
+      );
+
+      return mapCandidateMatchedOffers(payload);
+    },
+
     async parseCv(cvRecordId: string): Promise<CandidateCvParseResult> {
       const payload = await apiRequest<CandidateCvParseResponse>(
         `/candidates/me/cv/${encodeURIComponent(cvRecordId)}/parse`,
@@ -1590,8 +1795,16 @@ export const gatewayApi = {
           identity: payload.extracted_profile_patch?.identity ?? {},
           education: payload.extracted_profile_patch?.education ?? [],
           experience: payload.extracted_profile_patch?.experience ?? [],
+          stages: payload.extracted_profile_patch?.stages ?? [],
           skills: payload.extracted_profile_patch?.skills ?? [],
           languages: payload.extracted_profile_patch?.languages ?? [],
+          certifications: payload.extracted_profile_patch?.certifications ?? [],
+          projects: payload.extracted_profile_patch?.projects ?? [],
+          interests: payload.extracted_profile_patch?.interests ?? [],
+          preferences: payload.extracted_profile_patch?.preferences ?? {},
+          geoNormalization:
+            payload.extracted_profile_patch?.geo_normalization ?? {},
+          cvMetadata: payload.extracted_profile_patch?.cv_metadata ?? {},
         },
         warnings: payload.warnings ?? [],
         parserVersion: payload.parser_version,

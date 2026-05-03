@@ -161,7 +161,12 @@ export default function ProviderDashboard() {
                     key={`cell-applications`}
                     fill={chartsConfig.chartProvider.colors[1]}
                   />
+                  <Cell
+                    key={`cell-applications`}
+                    fill={chartsConfig.chartProvider.colors[1]}
+                  />
                 </Bar>
+
               </BarChart>
             </ResponsiveContainer>
           </div>

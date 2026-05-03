@@ -42,11 +42,11 @@ import {
 } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
 import { Textarea } from '@/components/ui/textarea';
+import { queryKeys } from '@/services/api/queryKeys';
 import {
   gatewayApi,
   inferCandidateDisplayName,
   inferCandidateLocation,
-  inferSkillLabel,
   type CandidateEducationRecord,
   type CandidateExperienceRecord,
   type CandidateLanguageRecord,
@@ -61,19 +61,46 @@ import { readStoredSession } from '@/services/auth/sessionStorage';
 import ErrorCard from '@/components/common/ErrorCard';
 import LoadingCard from '@/components/common/LoadingCard';
 import {
-  candidateInterestKeywords,
+  candidatePortalPreferencesEventName,
   candidateOfferScoreOptions,
+  getStoredCandidateInterestKeywords,
   getStoredCandidateMinimumOfferScore,
   setStoredCandidateMinimumOfferScore,
 } from '@/services/candidate/candidatePortalPreferences';
+import {
+  buildCertificationItems,
+  buildEducationItems,
+  buildExperienceSections,
+  buildInterestKeywords,
+  buildLanguageItems,
+  buildProjectItems,
+  buildSkillItems,
+  cleanDisplayText as cleanCandidateDisplayText,
+  formatDate as formatCandidateDate,
+  formatDateRange as formatCandidateDateRange,
+  formatDurationLabel,
+  formatLanguageLabel as formatCandidateLanguageLabel,
+  groupSkillsByCategory,
+  type DisplayCertificationItem,
+  type DisplayEducationItem,
+  type DisplayExperienceItem,
+  type DisplayLanguageItem,
+  type DisplayProjectItem,
+} from './profileUtils';
 
 interface EducationDraft {
   id?: string;
   levelCode: string;
+  degree: string;
   diplomaLabel: string;
   specialty: string;
   institution: string;
+  startDate: string;
+  endDate: string;
   graduationYear: string;
+  location: string;
+  honors: string;
+  gpa: string;
 }
 
 interface ExperienceDraft {
@@ -81,9 +108,17 @@ interface ExperienceDraft {
   jobTitleRaw: string;
   companyName: string;
   sector: string;
+  location: string;
   startDate: string;
   endDate: string;
+  isCurrent: boolean;
+  durationMonths: string;
+  durationYears: string;
   description: string;
+  responsibilities: string[];
+  technologies: string[];
+  projects: Array<Record<string, unknown> | string>;
+  entryType: string;
 }
 
 interface SkillDraft {
@@ -155,25 +190,40 @@ type ExtractedProfilePatch = {
   identity?: Record<string, unknown>;
   education?: ParsedPatchItem[];
   experience?: ParsedPatchItem[];
+  stages?: ParsedPatchItem[];
   skills?: ParsedPatchItem[];
   languages?: ParsedPatchItem[];
 };
 
 const emptyEducation = (): EducationDraft => ({
   levelCode: '',
+  degree: '',
   diplomaLabel: '',
   specialty: '',
   institution: '',
+  startDate: '',
+  endDate: '',
   graduationYear: '',
+  location: '',
+  honors: '',
+  gpa: '',
 });
 
 const emptyExperience = (): ExperienceDraft => ({
   jobTitleRaw: '',
   companyName: '',
   sector: '',
+  location: '',
   startDate: '',
   endDate: '',
+  isCurrent: false,
+  durationMonths: '',
+  durationYears: '',
   description: '',
+  responsibilities: [],
+  technologies: [],
+  projects: [],
+  entryType: '',
 });
 
 const emptySkill = (): SkillDraft => ({
@@ -222,20 +272,36 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
   education: bundle.education.map((item) => ({
     id: item.id,
     levelCode: item.levelCode ?? '',
+    degree: item.degree ?? item.diplomaLabel ?? '',
     diplomaLabel: item.diplomaLabel ?? '',
     specialty: item.specialty ?? '',
     institution: item.institution ?? '',
+    startDate: item.startDate ?? '',
+    endDate: item.endDate ?? '',
     graduationYear:
       item.graduationYear == null ? '' : String(item.graduationYear),
+    location: item.location ?? '',
+    honors: item.honors ?? '',
+    gpa: item.gpa ?? '',
   })),
   experience: bundle.experience.map((item) => ({
     id: item.id,
     jobTitleRaw: item.jobTitleRaw ?? '',
     companyName: item.companyName ?? '',
     sector: item.sector ?? '',
+    location: item.location ?? '',
     startDate: item.startDate ?? '',
     endDate: item.endDate ?? '',
+    isCurrent: item.isCurrent ?? false,
+    durationMonths:
+      item.durationMonths == null ? '' : String(item.durationMonths),
+    durationYears:
+      item.durationYears == null ? '' : String(item.durationYears),
     description: item.description ?? '',
+    responsibilities: item.responsibilities ?? [],
+    technologies: item.technologies ?? [],
+    projects: item.projects ?? [],
+    entryType: item.entryType ?? '',
   })),
   skills: bundle.skills.map((item) => ({
     id: item.id,
@@ -265,10 +331,16 @@ const toNullableNumber = (value: string): number | null => {
 const hasEducationValue = (item: EducationDraft): boolean =>
   [
     item.levelCode,
+    item.degree,
     item.diplomaLabel,
     item.specialty,
     item.institution,
+    item.startDate,
+    item.endDate,
     item.graduationYear,
+    item.location,
+    item.honors,
+    item.gpa,
   ].some((value) => value.trim());
 
 const hasExperienceValue = (item: ExperienceDraft): boolean =>
@@ -276,9 +348,15 @@ const hasExperienceValue = (item: ExperienceDraft): boolean =>
     item.jobTitleRaw,
     item.companyName,
     item.sector,
+    item.location,
     item.startDate,
     item.endDate,
+    item.durationMonths,
+    item.durationYears,
     item.description,
+    item.entryType,
+    ...item.responsibilities,
+    ...item.technologies,
   ].some((value) => value.trim());
 
 const hasSkillValue = (item: SkillDraft): boolean =>
@@ -514,6 +592,23 @@ function applyParsedCvToDraft(
     candidateLocation?.display_location ||
     toStringOrEmpty(identity.location) ||
     toStringOrEmpty(personalInfo?.location);
+  const firstParsedLanguage =
+    Array.isArray(patch.languages) && patch.languages.length > 0
+      ? patch.languages[0]
+      : undefined;
+  const parsedPrimaryLanguage = toStringOrEmpty(
+    identity.primary_language ??
+      personalInfo?.primary_language ??
+      (firstParsedLanguage &&
+      typeof firstParsedLanguage === 'object' &&
+      !Array.isArray(firstParsedLanguage)
+        ? (
+            firstParsedLanguage as Record<string, unknown>
+          ).language_code ??
+          (firstParsedLanguage as Record<string, unknown>).code
+        : undefined),
+  );
+
   return {
     ...current,
 
@@ -543,9 +638,11 @@ function applyParsedCvToDraft(
     address: displayLocation || current.address,
     governorateCode: governorateCode || current.governorateCode,
     delegationCode: delegationCode || current.delegationCode,
+    primaryLanguage: parsedPrimaryLanguage || current.primaryLanguage,
 
-    education: patch.education.map((item) => ({
+    education: (patch.education ?? []).map((item) => ({
       levelCode: toStringOrEmpty(item.level_code ?? item.levelCode),
+      degree: toStringOrEmpty(item.degree ?? item.raw_degree),
       diplomaLabel: toStringOrEmpty(
         item.diploma_label
         ?? item.diplomaLabel
@@ -558,20 +655,49 @@ function applyParsedCvToDraft(
         ?? item.field,
       ),
       institution: toStringOrEmpty(item.institution),
+      startDate: toStringOrEmpty(item.start_date ?? item.startDate),
+      endDate: toStringOrEmpty(item.end_date ?? item.endDate),
       graduationYear: toStringOrEmpty(
         item.graduation_year
         ?? item.graduationYear
         ?? item.end_date,
       ),
+      location: toStringOrEmpty(item.location),
+      honors: toStringOrEmpty(item.honors),
+      gpa: toStringOrEmpty(item.gpa),
     })),
 
-    experience: (patch.experience ?? []).map((item) => ({
-      jobTitleRaw: toStringOrEmpty(item.title ?? item.job_title ?? item.jobTitleRaw),
+    experience: [...(patch.experience ?? []), ...(patch.stages ?? [])].map((item) => ({
+      jobTitleRaw: toStringOrEmpty(
+        item.title ?? item.job_title ?? item.jobTitleRaw,
+      ),
       companyName: toStringOrEmpty(item.company ?? item.company_name),
-      sector: "",
+      sector: '',
+      location: toStringOrEmpty(item.location),
       startDate: toStringOrEmpty(item.start_date),
       endDate: toStringOrEmpty(item.end_date),
+      isCurrent: item.is_current === true,
+      durationMonths: toStringOrEmpty(
+        item.duration_months ?? item.durationMonths,
+      ),
+      durationYears: toStringOrEmpty(
+        item.duration_years ?? item.durationYears,
+      ),
       description: toStringOrEmpty(item.description),
+      responsibilities: Array.isArray(item.responsibilities)
+        ? item.responsibilities
+            .filter((value): value is string => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : [],
+      technologies: Array.isArray(item.technologies)
+        ? item.technologies
+            .filter((value): value is string => typeof value === 'string')
+            .map((value) => value.trim())
+            .filter(Boolean)
+        : [],
+      projects: Array.isArray(item.projects) ? item.projects : [],
+      entryType: toStringOrEmpty(item.entry_type ?? item.entryType),
     })),
 
     skills: (patch.skills ?? []).map((item) => ({
@@ -598,6 +724,12 @@ const fallbackLanguageLabels: Record<string, string> = {
   de: 'Allemand',
   es: 'Espagnol',
   it: 'Italien',
+  zh: 'Chinois',
+  ja: 'Japonais',
+  ko: 'Coréen',
+  pt: 'Portugais',
+  ru: 'Russe',
+  tr: 'Turc',
 };
 
 const fallbackLanguageLevelLabels: Record<string, string> = {
@@ -729,12 +861,17 @@ export default function Profile() {
   const [cvPreviewUrl, setCvPreviewUrl] = useState<string | null>(null);
   const [isCvPreviewOpen, setIsCvPreviewOpen] = useState(false);
   const [draft, setDraft] = useState<ProfileDraft | null>(null);
+  const [latestParseResult, setLatestParseResult] =
+    useState<CandidateCvParseResult | null>(null);
+  const [interestKeywords, setInterestKeywords] = useState<string[]>(
+    getStoredCandidateInterestKeywords(),
+  );
   const [minimumOfferScore, setMinimumOfferScore] = useState(
     getStoredCandidateMinimumOfferScore(),
   );
 
   const bundleQuery = useQuery({
-    queryKey: ['candidate', 'bundle'],
+    queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
   });
   const governoratesQuery = useQuery({
@@ -780,54 +917,176 @@ export default function Profile() {
     }
   }, [bundle, isEditing]);
 
-  const currentDraft = draft ?? (bundle ? toDraft(bundle) : null);
+  useEffect(() => {
+    const syncPortalPreferences = () => {
+      setMinimumOfferScore(getStoredCandidateMinimumOfferScore());
+      setInterestKeywords(getStoredCandidateInterestKeywords());
+    };
 
-  const displayName = useMemo(
-    () => (bundle ? inferCandidateDisplayName(bundle) : 'Mon profil'),
-    [bundle],
-  );
-  const displayLocation = useMemo(
-    () => (bundle ? inferCandidateLocation(bundle) : ''),
-    [bundle],
-  );
-  const currentCv = bundle?.currentCv;
-
-  const professionalExperiences = useMemo(
-    () =>
-      (currentDraft?.experience ?? []).filter(
-        (item) => !isInternshipExperience(item),
-      ),
-    [currentDraft?.experience],
-  );
-
-  const internshipExperiences = useMemo(
-    () =>
-      (currentDraft?.experience ?? []).filter((item) =>
-        isInternshipExperience(item),
-      ),
-    [currentDraft?.experience],
-  );
-
-  const codingSkillLabels = useMemo(() => {
-    const skillLabels = (bundle?.skills ?? []).map(inferSkillLabel);
-    return skillLabels.filter((label) =>
-      /(python|java|react|sql|typescript|javascript|docker|kafka|spark|node)/i.test(
-        label,
-      ),
+    window.addEventListener(
+      candidatePortalPreferencesEventName(),
+      syncPortalPreferences,
     );
-  }, [bundle?.skills]);
+    window.addEventListener('storage', syncPortalPreferences);
+
+    return () => {
+      window.removeEventListener(
+        candidatePortalPreferencesEventName(),
+        syncPortalPreferences,
+      );
+      window.removeEventListener('storage', syncPortalPreferences);
+    };
+  }, []);
+
+  const currentDraft = draft ?? (bundle ? toDraft(bundle) : null);
+  const currentCv = bundle?.currentCv;
+  const preferParsedView = isEditing && Boolean(latestParseResult);
+
+  const selectedGovernorateLabel = useMemo(
+    () =>
+      governoratesQuery.data?.find(
+        (option) => option.code === currentDraft?.governorateCode,
+      )?.label ?? bundle?.contact?.governorate_label ?? '',
+    [
+      bundle?.contact?.governorate_label,
+      currentDraft?.governorateCode,
+      governoratesQuery.data,
+    ],
+  );
+
+  const selectedDelegationLabel = useMemo(
+    () =>
+      delegationsQuery.data?.find(
+        (option) => option.code === currentDraft?.delegationCode,
+      )?.label ?? bundle?.contact?.delegation_label ?? '',
+    [
+      bundle?.contact?.delegation_label,
+      currentDraft?.delegationCode,
+      delegationsQuery.data,
+    ],
+  );
+
+  const displayName = useMemo(() => {
+    const draftName = [currentDraft?.firstName, currentDraft?.lastName]
+      .filter((value) => value?.trim())
+      .join(' ')
+      .trim();
+
+    if (draftName) {
+      return draftName;
+    }
+
+    return bundle ? inferCandidateDisplayName(bundle) : 'Mon profil';
+  }, [bundle, currentDraft?.firstName, currentDraft?.lastName]);
+
+  const displayLocation = useMemo(() => {
+    const parts = [
+      currentDraft?.address?.trim(),
+      selectedDelegationLabel,
+      selectedGovernorateLabel,
+    ].filter(Boolean);
+
+    if (parts.length > 0) {
+      return parts.join(', ');
+    }
+
+    return bundle ? inferCandidateLocation(bundle) : '';
+  }, [
+    bundle,
+    currentDraft?.address,
+    selectedDelegationLabel,
+    selectedGovernorateLabel,
+  ]);
+
+  const educationItems = useMemo<DisplayEducationItem[]>(
+    () =>
+      buildEducationItems(
+        bundle?.education ?? [],
+        latestParseResult,
+        preferParsedView,
+      ),
+    [bundle?.education, latestParseResult, preferParsedView],
+  );
+
+  const { professional: professionalExperiences, internships: internshipExperiences } =
+    useMemo(
+      () =>
+        buildExperienceSections(
+          bundle?.experience ?? [],
+          latestParseResult,
+          preferParsedView,
+        ),
+      [bundle?.experience, latestParseResult, preferParsedView],
+    );
+
+  const skillItems = useMemo(
+    () =>
+      buildSkillItems(bundle?.skills ?? [], latestParseResult, preferParsedView),
+    [bundle?.skills, latestParseResult, preferParsedView],
+  );
+
+  const skillGroups = useMemo(
+    () => groupSkillsByCategory(skillItems),
+    [skillItems],
+  );
+
+  const languageItems = useMemo<DisplayLanguageItem[]>(
+    () =>
+      buildLanguageItems(
+        bundle?.languages ?? [],
+        latestParseResult,
+        preferParsedView,
+      ),
+    [bundle?.languages, latestParseResult, preferParsedView],
+  );
+
+  const certificationItems = useMemo<DisplayCertificationItem[]>(
+    () => buildCertificationItems(latestParseResult),
+    [latestParseResult],
+  );
+
+  const projectItems = useMemo<DisplayProjectItem[]>(
+    () => buildProjectItems(latestParseResult),
+    [latestParseResult],
+  );
+
+  const parsedInterestKeywords = useMemo(
+    () => buildInterestKeywords(latestParseResult),
+    [latestParseResult],
+  );
+
+  const visibleInterestKeywords =
+    parsedInterestKeywords.length > 0 ? parsedInterestKeywords : interestKeywords;
 
   const refreshCandidateViews = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ['candidate', 'dashboard'] }),
-      queryClient.invalidateQueries({ queryKey: ['candidate', 'matches'] }),
-      queryClient.invalidateQueries({ queryKey: ['candidate', 'job-offers'] }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.dashboard(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.profile(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.bundle(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.cvRecords(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.matches(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.jobOffers(),
+      }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.candidate.recommendations(),
+      }),
     ]);
   };
 
   const refetchCandidateBundle = async () =>
     queryClient.fetchQuery({
-      queryKey: ['candidate', 'bundle'],
+      queryKey: queryKeys.candidate.bundle(),
       queryFn: () => gatewayApi.candidate.getBundle(),
     });
 
@@ -836,6 +1095,7 @@ export default function Profile() {
     if (bundle) {
       setDraft(toDraft(bundle));
     }
+    setLatestParseResult(null);
     setIsEditing(false);
   };
 
@@ -899,6 +1159,7 @@ export default function Profile() {
       toast.success('CV importé. Analyse en cours...');
 
       const parseResult = await gatewayApi.candidate.parseCv(record.id);
+      setLatestParseResult(parseResult);
 
       setDraft((current) =>
         current ? applyParsedCvToDraft(current, parseResult) : current,
@@ -907,6 +1168,7 @@ export default function Profile() {
       setIsEditing(true);
 
       await refreshCandidateViews();
+      await refetchCandidateBundle();
 
       toast.success(
         'CV analysé. Vérifiez les champs puis cliquez sur Enregistrer.',
@@ -971,7 +1233,7 @@ export default function Profile() {
         (item) =>
           gatewayApi.candidate.createEducation({
             level_code: item.levelCode || null,
-            diploma_label: item.diplomaLabel || null,
+            diploma_label: item.diplomaLabel || item.degree || null,
             specialty: item.specialty || null,
             institution: item.institution || null,
             graduation_year: item.graduationYear
@@ -981,7 +1243,7 @@ export default function Profile() {
         (item) =>
           gatewayApi.candidate.updateEducation(item.id!, {
             level_code: item.levelCode || null,
-            diploma_label: item.diplomaLabel || null,
+            diploma_label: item.diplomaLabel || item.degree || null,
             specialty: item.specialty || null,
             institution: item.institution || null,
             graduation_year: item.graduationYear
@@ -997,7 +1259,14 @@ export default function Profile() {
         hasExperienceValue,
         (item) =>
           gatewayApi.candidate.createExperience({
-            job_title_raw: item.jobTitleRaw || null,
+            job_title_raw:
+              item.entryType === 'internship'
+                ? item.jobTitleRaw
+                  ? /stage|internship|intern/i.test(item.jobTitleRaw)
+                    ? item.jobTitleRaw
+                    : `Stage - ${item.jobTitleRaw}`
+                  : 'Stage'
+                : item.jobTitleRaw || null,
             company_name: item.companyName || null,
             sector: item.sector || null,
             start_date: item.startDate || null,
@@ -1006,7 +1275,14 @@ export default function Profile() {
           }),
         (item) =>
           gatewayApi.candidate.updateExperience(item.id!, {
-            job_title_raw: item.jobTitleRaw || null,
+            job_title_raw:
+              item.entryType === 'internship'
+                ? item.jobTitleRaw
+                  ? /stage|internship|intern/i.test(item.jobTitleRaw)
+                    ? item.jobTitleRaw
+                    : `Stage - ${item.jobTitleRaw}`
+                  : 'Stage'
+                : item.jobTitleRaw || null,
             company_name: item.companyName || null,
             sector: item.sector || null,
             start_date: item.startDate || null,
@@ -1202,42 +1478,27 @@ export default function Profile() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <ProfileMetaChip
                   icon={MapPin}
-                  label={cleanDisplayText(displayLocation)}
+                  label={cleanCandidateDisplayText(displayLocation)}
                 />
                 <ProfileMetaChip
                   icon={Mail}
-                  label={cleanDisplayText(bundle?.contact?.email)}
+                  label={cleanCandidateDisplayText(currentDraft?.email)}
                 />
                 <ProfileMetaChip
                   icon={Globe2}
                   label={`Langue principale : ${
-                    bundle?.primaryLanguage
-                      ? formatLanguageLabel(bundle.primaryLanguage)
+                    currentDraft?.primaryLanguage
+                      ? formatCandidateLanguageLabel(
+                          currentDraft.primaryLanguage,
+                        ) ?? 'Non renseigné'
                       : 'Non renseigné'
                   }`}
                 />
                 <ProfileMetaChip
                   icon={Languages}
-                  label={`${bundle?.languages.length ?? 0} langue(s) renseignée(s)`}
+                  label={`${languageItems.length} langue(s) renseignée(s)`}
                 />
               </div>
-            </div>
-            <div className="w-full rounded-2xl border border-border bg-background/90 p-4 shadow-sm lg:max-w-sm">
-              <p className="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                CV actuel
-              </p>
-              <p className="mt-2 text-sm font-semibold text-foreground">
-                {currentCv?.originalFilename ?? 'Aucun CV importé'}
-              </p>
-              <p className="mt-2 text-xs text-muted-foreground">
-                {currentCv
-                  ? `Statut : ${formatCvStatusLabel(currentCv.parsingStatus)}${
-                      formatShortDate(currentCv.uploadedAt)
-                        ? ` • Importé le ${formatShortDate(currentCv.uploadedAt)}`
-                        : ''
-                    }`
-                  : 'Importez votre CV pour enrichir automatiquement votre profil.'}
-              </p>
             </div>
           </div>
 
@@ -1323,7 +1584,7 @@ export default function Profile() {
                 }
                 disabled={!isEditing}
               />
-              <Field
+              <SelectField
                 label="Langue principale"
                 value={currentDraft.primaryLanguage}
                 onChange={(value) =>
@@ -1331,7 +1592,9 @@ export default function Profile() {
                     current ? { ...current, primaryLanguage: value } : current,
                   )
                 }
+                options={languagesQuery.data ?? []}
                 disabled={!isEditing}
+                placeholder="Choisir une langue"
               />
               <OptionSelect
                 label="Genre"
@@ -1504,8 +1767,8 @@ export default function Profile() {
           <Separator className="bg-primary/40" />
 
           <CollectionSection<EducationDraft>
-            title="Formation"
-            description="Vos diplômes, spécialités et établissements."
+            title="Formations et diplômes"
+            description="Vos diplômes, niveaux et établissements renseignés."
             icon={GraduationCap}
             iconClassName="icon-background-color-7"
             items={currentDraft?.education}
@@ -1562,6 +1825,60 @@ export default function Profile() {
                 />
               </div>
             )}
+            renderListView={() => (
+              <div className="space-y-4">
+                {educationItems.length > 0 ? (
+                  educationItems.map((item, index) => {
+                    const dateRange =
+                      formatCandidateDateRange(item.startDate, item.endDate) ??
+                      item.graduationYear;
+                    const metadata = [
+                      item.levelCode ? `Niveau : ${item.levelCode}` : null,
+                      item.specialty,
+                      item.location,
+                      item.honors,
+                      item.gpa ? `GPA : ${item.gpa}` : null,
+                    ].filter(Boolean);
+
+                    return (
+                      <article
+                        key={`education-view-${index}`}
+                        className="rounded-2xl border border-border bg-background p-5"
+                      >
+                        <h3 className="text-base font-semibold text-foreground">
+                          {item.degree ?? item.diplomaLabel ?? item.levelCode ?? 'Formation'}
+                        </h3>
+                        {item.diplomaLabel && item.diplomaLabel !== item.degree ? (
+                          <p className="mt-1 text-sm text-foreground">
+                            {item.diplomaLabel}
+                          </p>
+                        ) : null}
+                        {item.institution || dateRange ? (
+                          <p className="mt-1 text-sm text-muted-foreground">
+                            {[item.institution, dateRange].filter(Boolean).join(' - ')}
+                          </p>
+                        ) : null}
+                        {metadata.length > 0 ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {metadata.map((value) => (
+                              <SkillTag
+                                key={`${index}-${value}`}
+                                label={value}
+                                variant="outline"
+                              />
+                            ))}
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
+                    Aucune formation renseignée.
+                  </div>
+                )}
+              </div>
+            )}
             viewItem={(item) => (
               <>
                 <h3 className="text-base font-semibold text-foreground">
@@ -1579,8 +1896,8 @@ export default function Profile() {
           <Separator className="bg-primary/40" />
 
           <CollectionSection<ExperienceDraft>
-            title="Expérience"
-            description="Vos expériences professionnelles et vos stages."
+            title="Parcours professionnel"
+            description="Vos expériences professionnelles et vos stages, affichés séparément."
             icon={Briefcase}
             iconClassName="icon-background-color-7"
             items={currentDraft?.experience}
@@ -1649,93 +1966,146 @@ export default function Profile() {
                 </div>
               </div>
             )}
-            renderListView={() => (
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-border bg-background p-5">
-                  <h3 className="text-base font-semibold text-foreground">
-                    Expériences professionnelles
-                  </h3>
-                  <div className="mt-4 space-y-4">
-                    {professionalExperiences.length > 0 ? (
-                      professionalExperiences.map((item, index) => (
-                        <div
-                          key={item.id ?? `professional-${index}`}
-                          className="rounded-2xl border border-border bg-surface-muted/30 p-4"
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            {item.jobTitleRaw || 'Expérience professionnelle'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {[item.companyName, item.sector]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </p>
-                          {formatExperiencePeriod(
-                            item.startDate,
-                            item.endDate,
-                          ) ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {formatExperiencePeriod(item.startDate, item.endDate)}
-                            </p>
-                          ) : null}
-                          {item.description ? (
-                            <p className="mt-3 text-sm leading-6 text-foreground">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Aucune expérience professionnelle renseignée.
-                      </p>
-                    )}
-                  </div>
-                </div>
+            renderListView={() => {
+              const renderExperienceCard = (
+                item: DisplayExperienceItem,
+                index: number,
+                fallbackTitle: string,
+              ) => {
+                const period = formatCandidateDateRange(
+                  item.startDate,
+                  item.endDate,
+                  item.isCurrent,
+                );
+                const duration = formatDurationLabel(
+                  item.durationMonths,
+                  item.durationYears,
+                );
+                const projects = item.projects.filter(
+                  (project) =>
+                    project.name ||
+                    project.description ||
+                    project.technologies.length > 0,
+                );
 
-                <div className="rounded-2xl border border-border bg-background p-5">
-                  <h3 className="text-base font-semibold text-foreground">
-                    Stages
-                  </h3>
-                  <div className="mt-4 space-y-4">
-                    {internshipExperiences.length > 0 ? (
-                      internshipExperiences.map((item, index) => (
-                        <div
-                          key={item.id ?? `internship-${index}`}
-                          className="rounded-2xl border border-border bg-surface-muted/30 p-4"
-                        >
-                          <p className="text-sm font-semibold text-foreground">
-                            {item.jobTitleRaw || 'Stage'}
-                          </p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {[item.companyName, item.sector]
-                              .filter(Boolean)
-                              .join(' • ')}
-                          </p>
-                          {formatExperiencePeriod(
-                            item.startDate,
-                            item.endDate,
-                          ) ? (
-                            <p className="mt-2 text-xs text-muted-foreground">
-                              {formatExperiencePeriod(item.startDate, item.endDate)}
-                            </p>
-                          ) : null}
-                          {item.description ? (
-                            <p className="mt-3 text-sm leading-6 text-foreground">
-                              {item.description}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Aucun stage renseigné.
+                return (
+                  <div
+                    key={`${fallbackTitle}-${index}`}
+                    className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                  >
+                    <p className="text-sm font-semibold text-foreground">
+                      {item.title ?? fallbackTitle}
+                    </p>
+                    {item.company || item.location ? (
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {[item.company, item.location].filter(Boolean).join(' • ')}
                       </p>
-                    )}
+                    ) : null}
+                    {period || duration ? (
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {period ? <span>{period}</span> : null}
+                        {duration ? <span>{duration}</span> : null}
+                      </div>
+                    ) : null}
+                    {item.description ? (
+                      <p className="mt-3 text-sm leading-6 text-foreground">
+                        {item.description}
+                      </p>
+                    ) : null}
+                    {item.responsibilities.length > 0 ? (
+                      <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-foreground">
+                        {item.responsibilities.map((responsibility) => (
+                          <li key={responsibility}>{responsibility}</li>
+                        ))}
+                      </ul>
+                    ) : null}
+                    {item.technologies.length > 0 ? (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {item.technologies.map((technology) => (
+                          <SkillTag
+                            key={technology}
+                            label={technology}
+                            variant="matched"
+                          />
+                        ))}
+                      </div>
+                    ) : null}
+                    {projects.length > 0 ? (
+                      <div className="mt-4 space-y-3">
+                        {projects.map((project, projectIndex) => (
+                          <div
+                            key={`${fallbackTitle}-${index}-project-${projectIndex}`}
+                            className="rounded-xl border border-border bg-background p-3"
+                          >
+                            <p className="text-sm font-medium text-foreground">
+                              {project.name ?? 'Projet'}
+                            </p>
+                            {project.description ? (
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                {project.description}
+                              </p>
+                            ) : null}
+                            {project.technologies.length > 0 ? (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {project.technologies.map((technology) => (
+                                  <SkillTag
+                                    key={`${projectIndex}-${technology}`}
+                                    label={technology}
+                                    variant="outline"
+                                  />
+                                ))}
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              };
+
+              return (
+                <div className="space-y-4">
+                  <div className="rounded-2xl border border-border bg-background p-5">
+                    <h3 className="text-base font-semibold text-foreground">
+                      Expériences professionnelles
+                    </h3>
+                    <div className="mt-4 space-y-4">
+                      {professionalExperiences.length > 0 ? (
+                        professionalExperiences.map((item, index) =>
+                          renderExperienceCard(
+                            item,
+                            index,
+                            'Expérience professionnelle',
+                          ),
+                        )
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Aucune expérience professionnelle renseignée.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border border-border bg-background p-5">
+                    <h3 className="text-base font-semibold text-foreground">
+                      Stages
+                    </h3>
+                    <div className="mt-4 space-y-4">
+                      {internshipExperiences.length > 0 ? (
+                        internshipExperiences.map((item, index) =>
+                          renderExperienceCard(item, index, 'Stage'),
+                        )
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Aucun stage renseigné.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
+              );
+            }}
             viewItem={(item) => (
               <>
                 <h3 className="text-base font-semibold text-foreground">
@@ -1806,17 +2176,30 @@ export default function Profile() {
                 />
               </div>
             )}
-            renderListView={(items) => (
-              <div className="rounded-2xl border border-border bg-background p-5">
-                <div className="flex flex-wrap gap-2">
-                  {items.map((item, index) => (
-                    <SkillTag
-                      key={item.id ?? `skill-${index}`}
-                      label={item.skillLabelRaw || 'Compétence'}
-                      variant="matched"
-                    />
-                  ))}
-                </div>
+            renderListView={() => (
+              <div className="space-y-4 rounded-2xl border border-border bg-background p-5">
+                {skillGroups.length > 0 ? (
+                  skillGroups.map((group) => (
+                    <div key={group.category}>
+                      <p className="text-sm font-medium text-foreground">
+                        {group.category}
+                      </p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {group.items.map((label) => (
+                          <SkillTag
+                            key={`${group.category}-${label}`}
+                            label={label}
+                            variant="matched"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune compétence renseignée.
+                  </p>
+                )}
               </div>
             )}
             viewItem={(item) => (
@@ -1887,41 +2270,25 @@ export default function Profile() {
                 </div>
               </div>
             )}
-            renderListView={(items) => (
+            renderListView={() => (
               <div className="rounded-2xl border border-border bg-background p-5">
-                <div className="flex flex-wrap gap-2">
-                  {items.map((item, index) => {
-                    const bundleLanguage = bundle?.languages.find(
-                      (language) => language.id === item.id,
-                    );
-                    const languageOption = languagesQuery.data?.find(
-                      (option) => option.code === item.languageCode,
-                    );
-                    const levelOption = languageLevelsQuery.data?.find(
-                      (option) => option.code === item.level,
-                    );
-
-                    const label = `${formatLanguageLabel(
-                      item.languageCode,
-                      bundleLanguage?.languageLabelFr ??
-                        bundleLanguage?.languageLabelEn ??
-                        languageOption?.label,
-                    )} - ${formatLanguageLevelLabel(
-                      item.level,
-                      bundleLanguage?.levelLabelFr ??
-                        bundleLanguage?.levelLabelEn ??
-                        levelOption?.label,
-                    )}`;
-
-                    return (
+                {languageItems.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {languageItems.map((item, index) => (
                       <SkillTag
-                        key={item.id ?? `language-${index}`}
-                        label={label}
+                        key={`${item.name}-${item.level ?? index}`}
+                        label={
+                          item.level ? `${item.name} - ${item.level}` : item.name
+                        }
                         variant="outline"
                       />
-                    );
-                  })}
-                </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune langue renseignée.
+                  </p>
+                )}
               </div>
             )}
             viewItem={(item) => {
@@ -1961,51 +2328,95 @@ export default function Profile() {
 
           <section className="space-y-4">
             <SectionTitle
-              title="Compétences détectées depuis le CV"
-              description="Un aperçu des informations extraites automatiquement de votre CV."
-              icon={Languages}
+              title="Certifications"
+              description="Les certifications extraites ou renseignées pour votre profil."
+              icon={GraduationCap}
               iconClassName="icon-background-color-7"
             />
-            <div className="grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
-                <p className="text-sm font-semibold text-foreground">
-                  Compétences détectées
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {bundle?.skills.length ? (
-                    bundle.skills.map((skill) => (
-                      <SkillTag
-                        key={skill.id}
-                        label={inferSkillLabel(skill)}
-                        variant="matched"
-                      />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Aucune compétence n'est encore enregistrée. Importez un CV
-                      ou ajoutez-les manuellement.
-                    </p>
-                  )}
+            <div className="rounded-2xl border border-border bg-background p-5">
+              {certificationItems.length > 0 ? (
+                <div className="space-y-4">
+                  {certificationItems.map((item, index) => (
+                    <article
+                      key={`certification-${index}`}
+                      className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        {item.name ?? 'Certification'}
+                      </p>
+                      {item.issuer || item.date ? (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {[item.issuer, formatCandidateDate(item.date)]
+                            .filter(Boolean)
+                            .join(' - ')}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aucune certification renseignée.
+                </p>
+              )}
+            </div>
+          </section>
 
-              <div className="rounded-2xl border border-border bg-background p-5 card-border-top">
-                <p className="text-sm font-semibold text-foreground">
-                  Compétences numériques
-                </p>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  {codingSkillLabels.length ? (
-                    codingSkillLabels.map((skill) => (
-                      <SkillTag key={skill} label={skill} variant="matched" />
-                    ))
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Les compétences techniques apparaîtront ici lorsqu'elles
-                      seront détectées dans votre profil.
-                    </p>
-                  )}
+          <Separator className="bg-primary/40" />
+
+          <section className="space-y-4">
+            <SectionTitle
+              title="Projets"
+              description="Les projets détectés dans votre CV ou associés à votre profil."
+              icon={Briefcase}
+              iconClassName="icon-background-color-7"
+            />
+
+            <div className="rounded-2xl border border-border bg-background p-5">
+              {projectItems.length > 0 ? (
+                <div className="space-y-4">
+                  {projectItems.map((project, index) => (
+                    <article
+                      key={`project-${index}`}
+                      className="rounded-2xl border border-border bg-surface-muted/30 p-4"
+                    >
+                      <p className="text-sm font-semibold text-foreground">
+                        {project.name ?? 'Projet'}
+                      </p>
+                      {project.description ? (
+                        <p className="mt-2 text-sm leading-6 text-foreground">
+                          {project.description}
+                        </p>
+                      ) : null}
+                      {project.technologies.length > 0 ? (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {project.technologies.map((technology) => (
+                            <SkillTag
+                              key={`${index}-${technology}`}
+                              label={technology}
+                              variant="outline"
+                            />
+                          ))}
+                        </div>
+                      ) : null}
+                      {project.url ? (
+                        <a
+                          href={project.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-3 inline-flex text-sm font-medium text-primary underline-offset-4 hover:underline"
+                        >
+                          Voir le projet
+                        </a>
+                      ) : null}
+                    </article>
+                  ))}
                 </div>
-              </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Aucun projet renseigné.
+                </p>
+              )}
             </div>
           </section>
 
@@ -2014,29 +2425,60 @@ export default function Profile() {
           <section className="space-y-4">
             <SectionTitle
               title="Domaines et technologies qui vous intéressent"
-              description="Préférences temporaires côté front, en attendant leur persistance via l'API."
+              description="Mots-clés du profil candidat, avec fallback temporaire côté frontend si nécessaire."
               icon={Globe2}
               iconClassName="icon-background-color-7"
             />
 
             <div className="rounded-2xl border border-border bg-background p-5">
               <div className="flex flex-wrap gap-2">
-                {candidateInterestKeywords.map((keyword) => (
+                {visibleInterestKeywords.map((keyword) => (
                   <SkillTag key={keyword} label={keyword} variant="matched" />
                 ))}
               </div>
+              {visibleInterestKeywords.length === 0 ? (
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Aucun mot-clé renseigné.
+                </p>
+              ) : null}
+            </div>
+          </section>
 
-              <div className="mt-6 grid gap-3 md:max-w-xs">
+          <Separator className="bg-primary/40" />
+
+          <section className="space-y-4">
+            <SectionTitle
+              title="Préférences de recommandation"
+              description="Paramètres utilisés pour filtrer les offres compatibles."
+              icon={Globe2}
+              iconClassName="icon-background-color-7"
+            />
+
+            <div className="rounded-2xl border border-border bg-background p-5">
+              <div className="grid gap-3 md:max-w-sm">
+                <p className="text-sm font-semibold text-foreground">
+                  Score minimum des offres compatibles
+                </p>
                 <Label className="text-xs text-muted-foreground">
-                  Score minimum des offres
+                  Seuil minimum
                 </Label>
                 <Select
                   value={String(minimumOfferScore)}
-                  onValueChange={(value) => {
+                  onValueChange={async (value) => {
                     const nextScore = Number(value);
                     setMinimumOfferScore(nextScore);
-                    // Ce seuil servira plus tard à filtrer les offres recommandées via l'API.
                     setStoredCandidateMinimumOfferScore(nextScore);
+                    await Promise.all([
+                      queryClient.invalidateQueries({
+                        queryKey: queryKeys.candidate.matches(),
+                      }),
+                      queryClient.invalidateQueries({
+                        queryKey: queryKeys.candidate.jobOffers(),
+                      }),
+                      queryClient.invalidateQueries({
+                        queryKey: queryKeys.candidate.dashboard(),
+                      }),
+                    ]);
                   }}
                 >
                   <SelectTrigger className="h-10">
@@ -2051,7 +2493,8 @@ export default function Profile() {
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
-                  Ce seuil est actuellement conservé uniquement dans votre
+                  Aucun endpoint dédié n’est encore branché sur ce portail pour
+                  ce réglage. Le seuil est donc conservé localement dans votre
                   navigateur.
                 </p>
               </div>
@@ -2213,7 +2656,7 @@ function CollectionSection<T extends { id?: string }>({
       </div>
 
       <div className="space-y-4">
-        {items?.length === 0 ? (
+        {items?.length === 0 && (isEditing || !renderListView) ? (
           <div className="rounded-2xl border border-dashed border-border bg-background p-5 text-sm text-muted-foreground">
             {emptyStateMessage}
           </div>

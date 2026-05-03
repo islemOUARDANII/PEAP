@@ -8,6 +8,7 @@ import { StatusPill, statusToTone } from "@/components/common/StatusPill";
 import { Button } from "@/components/ui/button";
 import { ApiServiceError } from "@/services/api/client";
 import { gatewayApi, type CandidateCvParseResult, type CandidateCvRecord } from "@/services/api/gateway";
+import { queryKeys } from "@/services/api/queryKeys";
 import { appEnv } from "@/config/env";
 import { readStoredSession } from "@/services/auth/sessionStorage";
 
@@ -51,6 +52,26 @@ const apiErrorMessage = (error: unknown, fallback: string): string => {
   return error instanceof Error ? error.message : fallback;
 };
 
+const formatStatusLabel = (value: string | null | undefined): string => {
+  const normalized = (value ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return "Non renseigné";
+  }
+
+  const labels: Record<string, string> = {
+    uploaded: "Importé",
+    pending: "En attente",
+    processing: "Analyse en cours",
+    parsed: "Analysé",
+    search_ready: "Prêt pour le matching",
+    failed: "Échec",
+    active: "Actif",
+    current: "Actuel",
+  };
+
+  return labels[normalized] ?? value ?? "Non renseigné";
+};
+
 async function openAuthenticatedFile(path: string): Promise<void> {
   const token = readStoredSession()?.token;
   const headers = new Headers();
@@ -64,7 +85,7 @@ async function openAuthenticatedFile(path: string): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    throw new Error(`La requête a échoué avec le statut ${response.status}`);
   }
 
   const blob = await response.blob();
@@ -83,7 +104,7 @@ export default function UploadCv() {
   const [latestParseResult, setLatestParseResult] = useState<CandidateCvParseResult | null>(null);
 
   const bundleQuery = useQuery({
-    queryKey: ["candidate", "bundle"],
+    queryKey: queryKeys.candidate.bundle(),
     queryFn: () => gatewayApi.candidate.getBundle(),
   });
 
@@ -92,11 +113,13 @@ export default function UploadCv() {
 
   const refreshAll = async () => {
     await Promise.all([
-      queryClient.invalidateQueries({ queryKey: ["candidate", "bundle"] }),
-      queryClient.invalidateQueries({ queryKey: ["candidate", "cv-records"] }),
-      queryClient.invalidateQueries({ queryKey: ["candidate", "dashboard"] }),
-      queryClient.invalidateQueries({ queryKey: ["candidate", "matches"] }),
-      queryClient.invalidateQueries({ queryKey: ["candidate", "job-offers"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.bundle() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.profile() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.cvRecords() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.dashboard() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.matches() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.jobOffers() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.candidate.recommendations() }),
       queryClient.invalidateQueries({ queryKey: ["search", "offers"] }),
     ]);
   };
@@ -110,10 +133,10 @@ export default function UploadCv() {
     try {
       const record = await gatewayApi.candidate.uploadCv(file);
       await refreshAll();
-      toast.success(`Uploaded ${record.originalFilename ?? record.blobName}`);
+      toast.success(`CV importé : ${record.originalFilename ?? record.blobName}`);
       setLatestParseResult(null);
     } catch (error) {
-      toast.error(apiErrorMessage(error, "CV upload failed"));
+      toast.error(apiErrorMessage(error, "Échec de l'import du CV"));
     } finally {
       setIsUploading(false);
       if (inputRef.current) {
@@ -128,9 +151,9 @@ export default function UploadCv() {
       const result = await gatewayApi.candidate.parseCv(record.id);
       setLatestParseResult(result);
       await refreshAll();
-      toast.success(`Parse request sent for ${record.originalFilename ?? record.blobName}`);
+      toast.success(`Analyse lancée pour ${record.originalFilename ?? record.blobName}`);
     } catch (error) {
-      toast.error(apiErrorMessage(error, "CV parse failed"));
+      toast.error(apiErrorMessage(error, "Échec de l'analyse du CV"));
     } finally {
       setActiveParseId(null);
     }
@@ -144,9 +167,9 @@ export default function UploadCv() {
         setLatestParseResult(null);
       }
       await refreshAll();
-      toast.success(`Deleted ${record.originalFilename ?? record.blobName}`);
+      toast.success(`CV supprimé : ${record.originalFilename ?? record.blobName}`);
     } catch (error) {
-      toast.error(apiErrorMessage(error, "Unable to delete this CV"));
+      toast.error(apiErrorMessage(error, "Impossible de supprimer ce CV"));
     } finally {
       setActiveDeleteId(null);
     }
@@ -157,7 +180,7 @@ export default function UploadCv() {
     try {
       await openAuthenticatedFile(gatewayApi.candidate.getCurrentCvViewUrl());
     } catch (error) {
-      toast.error(apiErrorMessage(error, "Unable to open the current CV"));
+      toast.error(apiErrorMessage(error, "Impossible d'ouvrir le CV actuel"));
     } finally {
       setActiveOpenCurrent(false);
     }
@@ -168,7 +191,7 @@ export default function UploadCv() {
       <div className="panel p-6 text-sm text-muted-foreground">
         <div className="flex items-center gap-2">
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading CV records...
+          Chargement des CV...
         </div>
       </div>
     );
@@ -179,7 +202,7 @@ export default function UploadCv() {
       <div className="panel p-6 text-sm text-destructive">
         {bundleQuery.error instanceof Error
           ? bundleQuery.error.message
-          : "Unable to load CV records."}
+          : "Impossible de charger les CV."}
       </div>
     );
   }
@@ -187,8 +210,8 @@ export default function UploadCv() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="CV Upload & Parsing"
-        description="Upload CV files to the API Gateway, parse them by CV record id, and inspect the returned debug payloads."
+        title="Import et analyse du CV"
+        description="Importez un CV, lancez son analyse, puis consultez les données renvoyées par l'API."
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -206,7 +229,7 @@ export default function UploadCv() {
               disabled={bundleQuery.isFetching}
             >
               <RefreshCw className={`h-4 w-4 ${bundleQuery.isFetching ? "animate-spin" : ""}`} />
-              Refresh
+              Actualiser
             </Button>
             <Button
               type="button"
@@ -220,7 +243,7 @@ export default function UploadCv() {
               ) : (
                 <FileUp className="h-4 w-4" />
               )}
-              {isUploading ? "Uploading..." : "Upload CV"}
+              {isUploading ? "Import..." : "Importer un CV"}
             </Button>
           </div>
         }
@@ -229,27 +252,27 @@ export default function UploadCv() {
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(24rem,1fr)]">
         <section className="panel overflow-hidden">
           <div className="border-b border-border bg-surface-muted px-4 py-3">
-            <h2 className="text-sm font-semibold text-foreground">Uploaded CV records</h2>
+            <h2 className="text-sm font-semibold text-foreground">CV importés</h2>
             <p className="text-xs text-muted-foreground">
-              Parse actions call{" "}
-              <code>/candidates/me/cv/&lbrace;cv_record_id&rbrace;/parse</code> using the real record id.
+              Les actions d'analyse appellent{" "}
+              <code>/candidates/me/cv/&lbrace;cv_record_id&rbrace;/parse</code> avec le vrai identifiant du CV.
             </p>
           </div>
 
           {records.length === 0 ? (
             <div className="px-4 py-6 text-sm text-muted-foreground">
-              No CV records are stored yet. Upload a file to create the first record.
+              Aucun CV n'est encore enregistré. Importez un fichier pour créer le premier enregistrement.
             </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-surface-muted text-xs text-muted-foreground">
-                    <th className="px-4 py-3 text-left font-medium">File</th>
-                    <th className="px-2 py-3 text-left font-medium">CV Record ID</th>
-                    <th className="px-2 py-3 text-left font-medium">Status</th>
-                    <th className="px-2 py-3 text-left font-medium">Parsing</th>
-                    <th className="px-2 py-3 text-left font-medium">Uploaded</th>
+                    <th className="px-4 py-3 text-left font-medium">Fichier</th>
+                    <th className="px-2 py-3 text-left font-medium">Identifiant du CV</th>
+                    <th className="px-2 py-3 text-left font-medium">Statut</th>
+                    <th className="px-2 py-3 text-left font-medium">Analyse</th>
+                    <th className="px-2 py-3 text-left font-medium">Importé le</th>
                     <th className="px-4 py-3 text-right font-medium">Actions</th>
                   </tr>
                 </thead>
@@ -268,7 +291,7 @@ export default function UploadCv() {
                           </p>
                           {record.isCurrent ? (
                             <div className="mt-2">
-                              <StatusPill label="Current" tone="accent" dot={false} />
+                              <StatusPill label="CV actuel" tone="accent" dot={false} />
                             </div>
                           ) : null}
                         </td>
@@ -276,11 +299,14 @@ export default function UploadCv() {
                           {record.id}
                         </td>
                         <td className="px-2 py-3 align-top">
-                          <StatusPill label={record.status} tone={statusToTone(record.status)} />
+                          <StatusPill
+                            label={formatStatusLabel(record.status)}
+                            tone={statusToTone(record.status)}
+                          />
                         </td>
                         <td className="px-2 py-3 align-top">
                           <StatusPill
-                            label={record.parsingStatus}
+                            label={formatStatusLabel(record.parsingStatus)}
                             tone={statusToTone(record.parsingStatus)}
                           />
                         </td>
@@ -301,7 +327,7 @@ export default function UploadCv() {
                               ) : (
                                 <SearchCheck className="h-4 w-4" />
                               )}
-                              {isParsing ? "Parsing..." : "Analyze"}
+                              {isParsing ? "Analyse..." : "Analyser"}
                             </Button>
                             <Button
                               type="button"
@@ -315,7 +341,7 @@ export default function UploadCv() {
                               ) : (
                                 <Trash2 className="h-4 w-4" />
                               )}
-                              {isDeleting ? "Deleting..." : "Delete"}
+                              {isDeleting ? "Suppression..." : "Supprimer"}
                             </Button>
                           </div>
                         </td>
@@ -330,25 +356,25 @@ export default function UploadCv() {
 
         <div className="space-y-4">
           <section className="panel p-5">
-            <h2 className="text-sm font-semibold text-foreground">Current CV</h2>
+            <h2 className="text-sm font-semibold text-foreground">CV actuel</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              The current CV view endpoint is loaded through the authenticated API Gateway.
+              L'aperçu du CV actuel est chargé via l'API Gateway authentifiée.
             </p>
             <div className="mt-4 space-y-2 text-sm">
               <div className="rounded-md bg-surface-muted p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Filename</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Nom du fichier</p>
                 <p className="mt-1 font-medium text-foreground">
-                  {currentCv?.originalFilename ?? "No current CV"}
+                  {currentCv?.originalFilename ?? "Aucun CV actuel"}
                 </p>
               </div>
               <div className="rounded-md bg-surface-muted p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Current parsing status</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Statut d'analyse actuel</p>
                 <p className="mt-1 font-medium text-foreground">
-                  {currentCv?.parsingStatus ?? "No record"}
+                  {currentCv ? formatStatusLabel(currentCv.parsingStatus) : "Aucun enregistrement"}
                 </p>
               </div>
               <div className="rounded-md bg-surface-muted p-3">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">View endpoint</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Endpoint d'aperçu</p>
                 <p className="mt-1 break-all font-mono text-xs text-foreground">
                   {currentCv ? `${appEnv.apiBaseUrl}/candidates/me/cv/current/view` : "-"}
                 </p>
@@ -367,46 +393,46 @@ export default function UploadCv() {
                 ) : (
                   <Eye className="h-4 w-4" />
                 )}
-                {activeOpenCurrent ? "Opening..." : "Open current CV"}
+                {activeOpenCurrent ? "Ouverture..." : "Ouvrir le CV actuel"}
               </Button>
             </div>
           </section>
 
           <section className="panel p-5">
-            <h2 className="text-sm font-semibold text-foreground">Latest parse result</h2>
+            <h2 className="text-sm font-semibold text-foreground">Dernier résultat d'analyse</h2>
             <p className="mt-1 text-xs text-muted-foreground">
-              Parsed payload, mapped payload, warnings, and extracted profile patch are shown exactly as returned by the backend.
+              Le payload parsé, le payload mappé, les avertissements et le patch profil sont affichés tels que renvoyés par le backend.
             </p>
 
             {!latestParseResult ? (
               <div className="mt-4 rounded-md border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-                Run Analyze on one CV record to inspect the latest backend parse response.
+                Lancez l'analyse d'un CV pour consulter la dernière réponse du backend.
               </div>
             ) : (
               <div className="mt-4 space-y-4">
                 <div className="grid gap-3 md:grid-cols-2">
                   <div className="rounded-md bg-surface-muted p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">CV record id</p>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Identifiant du CV</p>
                     <p className="mt-1 break-all font-mono text-xs text-foreground">
                       {latestParseResult.cvRecordId}
                     </p>
                   </div>
                   <div className="rounded-md bg-surface-muted p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Parsing status</p>
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Statut d'analyse</p>
                     <div className="mt-2">
                       <StatusPill
-                        label={latestParseResult.parsingStatus}
+                        label={formatStatusLabel(latestParseResult.parsingStatus)}
                         tone={statusToTone(latestParseResult.parsingStatus)}
                       />
                     </div>
                   </div>
                 </div>
 
-                <JsonPanel title="Warnings" value={latestParseResult.warnings} />
-                <JsonPanel title="Parsed payload" value={latestParseResult.parsedPayload} />
-                <JsonPanel title="Mapped payload" value={latestParseResult.mappedPayload} />
+                <JsonPanel title="Avertissements" value={latestParseResult.warnings} />
+                <JsonPanel title="Payload parsé" value={latestParseResult.parsedPayload} />
+                <JsonPanel title="Payload mappé" value={latestParseResult.mappedPayload} />
                 <JsonPanel
-                  title="Extracted profile patch"
+                  title="Patch profil extrait"
                   value={latestParseResult.extractedProfilePatch}
                 />
               </div>

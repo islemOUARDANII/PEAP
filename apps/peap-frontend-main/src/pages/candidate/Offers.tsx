@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   GraduationCap,
   Lightbulb,
-  Loader2,
   MapPin,
   Sparkles,
   type LucideIcon,
@@ -27,10 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  gatewayApi,
-  type MatchingResultDetailRecord,
-} from '@/services/api/gateway';
+import { gatewayApi } from '@/services/api/gateway';
 import { queryKeys } from '@/services/api/queryKeys';
 import {
   candidateMatchingUnavailableMessage,
@@ -104,6 +100,28 @@ const formatCriterionLabel = (
 const formatListLabel = (values: string[], fallback: string): string =>
   values.length > 0 ? values.join(' • ') : fallback;
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function toPercent(value: unknown): number {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return 0;
+  }
+
+  return numeric <= 1 ? Math.round(numeric * 100) : Math.round(numeric);
+}
+
+function toStringList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+}
+
 function OfferEmptyState() {
   return (
     <div className="panel flex flex-col items-center justify-center gap-3 p-10 text-center card-border-top">
@@ -170,15 +188,7 @@ export default function CandidateOffers() {
       (offer) => offer.matchingResultId === selectedOfferId,
     ) ?? null;
 
-  const offerDetailQuery = useQuery({
-    queryKey: [
-      ...queryKeys.candidate.match(selectedOfferId ?? undefined),
-      'details',
-    ],
-    queryFn: () => gatewayApi.matching.getResult(selectedOfferId as string),
-    enabled: Boolean(selectedOfferId),
-    staleTime: 5 * 60_000,
-  });
+
 
   const handleApply = () => {
     if (!selectedOfferId) {
@@ -481,31 +491,7 @@ export default function CandidateOffers() {
                   </div>
                 ) : null}
 
-                {offerDetailQuery.isLoading ? (
-                  <div className="flex items-center gap-2 rounded-2xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Chargement des explications de matching...
-                  </div>
-                ) : offerDetailQuery.isError ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-                    Les explications détaillées de matching sont indisponibles
-                    pour le moment.
-                  </div>
-                ) : offerDetailQuery.data?.details.length ? (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {offerDetailQuery.data.details.slice(0, 6).map((detail) => (
-                      <MatchingExplanationCard
-                        key={detail.id}
-                        detail={detail}
-                      />
-                    ))}
-                  </div>
-                ) : !selectedOffer.explanationShort ? (
-                  <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
-                    Aucune explication complémentaire n'est disponible pour le
-                    moment.
-                  </div>
-                ) : null}
+                <MatchingExplanation explanationJson={selectedOffer.explanationJson ?? {}} />
               </section>
 
               <DialogFooter className="gap-2">
@@ -572,35 +558,115 @@ function DetailField({
   );
 }
 
-function MatchingExplanationCard({
-  detail,
+function MatchingExplanation({
+  explanationJson,
 }: {
-  detail: MatchingResultDetailRecord;
+  explanationJson: Record<string, unknown>;
 }) {
+  const subScores = asRecord(explanationJson.sub_scores);
+  const details = asRecord(explanationJson.details);
+  const weights = asRecord(explanationJson.weights);
+
+  const languageDetails = asRecord(details.LANGUAGE_MATCH);
+  const contractDetails = asRecord(details.CONTRACT_MATCH);
+
+  const matchedLanguages = toStringList(languageDetails.matched_languages);
+  const missingLanguages = toStringList(languageDetails.missing_languages);
+
+  const hasSubScores = Object.keys(subScores).length > 0;
+
+  if (!hasSubScores) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-background p-4 text-sm text-muted-foreground">
+        Aucune explication détaillée n'est disponible pour le moment.
+      </div>
+    );
+  }
+
   return (
-    <div className="rounded-2xl border border-border bg-background p-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-foreground">
-          {formatCriterionLabel(detail.criterionLabel, detail.criterionCode)}
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {detail.matched === true ? (
-            <StatusChip label="Correspondance" />
+    <div className="space-y-4">
+      <div className="grid gap-3 md:grid-cols-2">
+        <ScoreLine
+          label="Compétences"
+          score={toPercent(subScores.SKILLS_MATCH)}
+          weight={toPercent(weights.SKILLS_MATCH)}
+        />
+        <ScoreLine
+          label="Formation"
+          score={toPercent(subScores.EDUCATION_MATCH)}
+          weight={toPercent(weights.EDUCATION_MATCH)}
+        />
+        <ScoreLine
+          label="Expérience"
+          score={toPercent(subScores.EXPERIENCE_MATCH)}
+          weight={toPercent(weights.EXPERIENCE_MATCH)}
+        />
+        <ScoreLine
+          label="Langues"
+          score={toPercent(subScores.LANGUAGE_MATCH)}
+          weight={toPercent(weights.LANGUAGE_MATCH)}
+        />
+        <ScoreLine
+          label="Localisation"
+          score={toPercent(subScores.LOCATION_MATCH)}
+          weight={toPercent(weights.LOCATION_MATCH)}
+        />
+        <ScoreLine
+          label="Contrat"
+          score={toPercent(subScores.CONTRACT_MATCH)}
+          weight={toPercent(weights.CONTRACT_MATCH)}
+        />
+      </div>
+
+      <div className="rounded-2xl border border-border bg-surface-muted/40 p-4 text-sm">
+        <p className="font-semibold text-foreground">Détails principaux</p>
+
+        <div className="mt-2 space-y-1 text-muted-foreground">
+          {matchedLanguages.length > 0 ? (
+            <p>Langues validées : {matchedLanguages.join(', ')}</p>
           ) : null}
-          {detail.isGap ? <StatusChip label="Point à améliorer" /> : null}
-          {formatScore(detail.score) ? (
-            <StatusChip label={`Score ${formatScore(detail.score)}`} />
+
+          {missingLanguages.length > 0 ? (
+            <p>Langues manquantes : {missingLanguages.join(', ')}</p>
+          ) : null}
+
+          {contractDetails.match_type === 'mismatch' ? (
+            <p>
+              Le type de contrat ne correspond pas exactement à vos préférences.
+            </p>
           ) : null}
         </div>
       </div>
+    </div>
+  );
+}
 
-      {detail.gapMessage ? (
-        <p className="mt-3 text-sm text-foreground/90">{detail.gapMessage}</p>
-      ) : null}
+function ScoreLine({
+  label,
+  score,
+  weight,
+}: {
+  label: string;
+  score: number;
+  weight: number;
+}) {
+  return (
+    <div className="rounded-2xl border border-border bg-background p-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-foreground">{label}</p>
+        <p className="text-sm font-semibold text-accent">{score}%</p>
+      </div>
 
-      {detail.recommendation ? (
-        <p className="mt-2 text-sm text-muted-foreground">
-          Recommandation : {detail.recommendation}
+      <div className="mt-3 h-2 rounded-full bg-muted">
+        <div
+          className="h-2 rounded-full bg-accent"
+          style={{ width: `${Math.min(Math.max(score, 0), 100)}%` }}
+        />
+      </div>
+
+      {weight > 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Poids dans le modèle : {weight}%
         </p>
       ) : null}
     </div>
