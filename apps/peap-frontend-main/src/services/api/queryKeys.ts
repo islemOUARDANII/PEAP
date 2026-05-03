@@ -53,6 +53,7 @@ export const queryKeys = {
   candidate: {
     dashboard: () => ["candidate", "dashboard"] as const,
     profile: () => ["candidate", "profile"] as const,
+    profilePresence: () => ["candidate", "profile", "presence"] as const,
     keywords: () => ["candidate", "profile", "keywords"] as const,
     offerThreshold: () => ["candidate", "profile", "offer-threshold"] as const,
     bundle: () => ["candidate", "bundle"] as const,
@@ -62,6 +63,11 @@ export const queryKeys = {
     recommendations: () => ["candidate", "recommendations"] as const,
     cvUploadStatus: (cvId?: string) => ["candidate", "cv-upload", cvId ?? "default"] as const,
     cvRecords: () => ["candidate", "cv-records"] as const,
+    offersAll: () => ["candidate", "offers", "all"] as const,
+    offersInteresting: () => ["candidate", "offers", "interesting"] as const,
+    offersRecommended: () => ["candidate", "offers", "recommended"] as const,
+    offersSearch: (tab: string, query = "", mode = "keyword") =>
+      ["candidate", "offers", "search", tab, query, mode] as const,
   },
   provider: {
     dashboard: () => ["provider", "dashboard"] as const,

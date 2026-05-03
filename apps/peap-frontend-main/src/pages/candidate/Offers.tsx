@@ -15,6 +15,7 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import CandidateProfileOnboardingCard from '@/components/common/CandidateProfileOnboardingCard';
 import { PageHeader } from '@/components/common/PageHeader';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
 import { SkillTag } from '@/components/common/SkillTag';
@@ -27,6 +28,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ApiServiceError } from '@/services/api/client';
 import { gatewayApi } from '@/services/api/gateway';
@@ -37,20 +46,37 @@ import {
   getRecommendedOffers,
   MATCHING_UNAVAILABLE_MESSAGE,
   SEARCH_UNAVAILABLE_MESSAGE,
+  searchCandidateOffers,
   type CandidateRecommendedOfferSummary,
   type CandidateSearchOfferSummary,
 } from '@/services/candidate/candidateOffers';
 import {
+  type CandidateOfferSearchMode,
   cleanText,
   formatDate,
+  matchesOfferSearch,
   normalizePercent,
 } from '@/services/candidate/candidateOfferUtils';
+import {
+  isJobSeekerProfileNotFoundError,
+  shouldRetryCandidateProfileQuery,
+} from '@/services/candidate/candidateProfileOnboarding';
 
 type OfferTab = 'all' | 'interesting' | 'recommended';
 type SelectedOffer = CandidateSearchOfferSummary | CandidateRecommendedOfferSummary;
 
 const DEFAULT_TAB: OfferTab = 'recommended';
 const OFFER_TABS: OfferTab[] = ['all', 'interesting', 'recommended'];
+const DEFAULT_SEARCH_MODE: CandidateOfferSearchMode = 'keyword';
+const SEARCH_MODE_OPTIONS: Array<{
+  value: CandidateOfferSearchMode;
+  label: string;
+}> = [
+  { value: 'keyword', label: 'Mot cle' },
+  { value: 'skill', label: 'Competence' },
+  { value: 'company', label: 'Entreprise' },
+  { value: 'location', label: 'Localisation' },
+];
 
 const isOfferTab = (value: string | null): value is OfferTab =>
   value != null && OFFER_TABS.includes(value as OfferTab);
@@ -63,8 +89,8 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const toStringList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value
-        .map((item) => cleanText(item))
-        .filter((item): item is string => Boolean(item))
+      .map((item) => cleanText(item))
+      .filter((item): item is string => Boolean(item))
     : [];
 
 const formatSearchRelevance = (value: number | null): string | null => {
@@ -113,9 +139,28 @@ export default function CandidateOffers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(null);
   const [appliedOfferIds, setAppliedOfferIds] = useState<string[]>([]);
+  const [searchInput, setSearchInput] = useState('');
+  const [appliedSearch, setAppliedSearch] = useState('');
+  const [searchMode, setSearchMode] =
+    useState<CandidateOfferSearchMode>(DEFAULT_SEARCH_MODE);
 
   const rawTab = searchParams.get('tab');
   const activeTab = isOfferTab(rawTab) ? rawTab : DEFAULT_TAB;
+  const trimmedSearchInput = searchInput.trim();
+  const hasActiveSearch = appliedSearch.length > 0;
+
+  const profilePresenceQuery = useQuery({
+    queryKey: queryKeys.candidate.profilePresence(),
+    queryFn: () => gatewayApi.candidate.hasProfile(),
+    retry: shouldRetryCandidateProfileQuery,
+    staleTime: 30_000,
+  });
+  const isMissingCandidateProfile = isJobSeekerProfileNotFoundError(
+    profilePresenceQuery.error,
+  );
+  const hasCandidateProfile = profilePresenceQuery.data === true;
+  const isProfileGateLoading =
+    profilePresenceQuery.isLoading || profilePresenceQuery.isFetching;
 
   useEffect(() => {
     if (!isOfferTab(rawTab)) {
@@ -128,23 +173,39 @@ export default function CandidateOffers() {
   }, [activeTab]);
 
   const allOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'all'],
-    queryFn: () => getAllPublishedOffers(),
+    queryKey: queryKeys.candidate.offersSearch('all', appliedSearch, searchMode),
+    queryFn: () =>
+      hasActiveSearch
+        ? searchCandidateOffers({
+          query: appliedSearch,
+          mode: searchMode,
+        })
+        : getAllPublishedOffers(),
     enabled: activeTab === 'all',
     staleTime: 5 * 60_000,
   });
 
   const interestingOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'interesting'],
-    queryFn: () => getInterestingOffers(),
-    enabled: activeTab === 'interesting',
+    queryKey: queryKeys.candidate.offersSearch(
+      'interesting',
+      appliedSearch,
+      searchMode,
+    ),
+    queryFn: () =>
+      hasActiveSearch
+        ? searchCandidateOffers({
+          query: appliedSearch,
+          mode: searchMode,
+        })
+        : getInterestingOffers(),
+    enabled: activeTab === 'interesting' && hasCandidateProfile,
     staleTime: 5 * 60_000,
   });
 
   const recommendedOffersQuery = useQuery({
-    queryKey: [...queryKeys.candidate.jobOffers(), 'recommended'],
+    queryKey: queryKeys.candidate.offersRecommended(),
     queryFn: () => getRecommendedOffers(),
-    enabled: activeTab === 'recommended',
+    enabled: activeTab === 'recommended' && hasCandidateProfile,
     staleTime: 5 * 60_000,
   });
 
@@ -189,31 +250,164 @@ export default function CandidateOffers() {
     },
   });
 
-  const pageTitle = getTabTitle(activeTab);
-  const pageDescription = getTabDescription(activeTab);
   const isAlreadyApplied = selectedOffer?.offerId
     ? appliedOfferIds.includes(selectedOffer.offerId)
     : false;
+  const interestingKeywords =
+    activeTab === 'interesting' &&
+    interestingOffersQuery.data &&
+    'keywords' in interestingOffersQuery.data
+      ? interestingOffersQuery.data.keywords
+      : [];
+  const interestingKeywordsLabel = interestingKeywords
+    .map((item) => item.keyword)
+    .filter(Boolean)
+    .join(', ');
 
-  const activeSearchOffers = useMemo(() => {
+  const filteredRecommendedOffers = useMemo(
+    () =>
+      (recommendedOffersQuery.data?.offers ?? []).filter((offer) =>
+        matchesOfferSearch(offer, appliedSearch, searchMode),
+      ),
+    [appliedSearch, recommendedOffersQuery.data?.offers, searchMode],
+  );
+
+  const activeTabSummary = useMemo(() => {
     if (activeTab === 'all') {
-      return allOffersQuery.data?.offers ?? [];
+      return hasActiveSearch
+        ? `RÃ©sultats pour : ${appliedSearch}`
+        : 'Affichage des offres disponibles.';
     }
 
     if (activeTab === 'interesting') {
-      return interestingOffersQuery.data?.offers ?? [];
+      if (hasActiveSearch) {
+        return `Recherche personnalisÃ©e : ${appliedSearch}`;
+      }
+
+      return interestingKeywordsLabel
+        ? `Recherche basÃ©e sur vos centres dâ€™intÃ©rÃªt : ${interestingKeywordsLabel}`
+        : 'Recherche basÃ©e sur vos centres dâ€™intÃ©rÃªt.';
     }
 
-    return [];
-  }, [
-    activeTab,
-    allOffersQuery.data?.offers,
-    interestingOffersQuery.data?.offers,
-  ]);
+    return hasActiveSearch
+      ? 'Filtre appliquÃ© aux offres recommandÃ©es.'
+      : 'Affichage des offres recommandÃ©es.';
+  }, [activeTab, appliedSearch, hasActiveSearch, interestingKeywordsLabel]);
+
+  const handleSearchSubmit = () => {
+    setAppliedSearch(trimmedSearchInput);
+  };
+
+  const handleSearchReset = () => {
+    setSearchInput('');
+    setAppliedSearch('');
+    setSearchMode(DEFAULT_SEARCH_MODE);
+  };
+
+  const activeTabSummaryText = useMemo(() => {
+    if (activeTab === 'all') {
+      return hasActiveSearch
+        ? `Resultats pour : ${appliedSearch}`
+        : 'Affichage des offres disponibles.';
+    }
+
+    if (activeTab === 'interesting') {
+      if (hasActiveSearch) {
+        return `Recherche personnalisee : ${appliedSearch}`;
+      }
+
+      return interestingKeywordsLabel
+        ? `Recherche basee sur vos centres d'interet : ${interestingKeywordsLabel}`
+        : "Recherche basee sur vos centres d'interet.";
+    }
+
+    return hasActiveSearch
+      ? 'Filtre applique aux offres recommandees.'
+      : 'Affichage des offres recommandees.';
+  }, [activeTab, appliedSearch, hasActiveSearch, interestingKeywordsLabel]);
 
   return (
     <div className="space-y-6">
-      <PageHeader title={pageTitle} description={pageDescription} />
+      <PageHeader
+        title="Offres"
+        description="Consultez toutes les offres, les offres liees a vos centres d'interet et vos recommandations personnalisees."
+      />
+
+      <section className="panel space-y-4 p-5 card-border-top">
+        <form
+          className="space-y-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            handleSearchSubmit();
+          }}
+        >
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem_auto_auto]">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={searchInput}
+                onChange={(event) => setSearchInput(event.target.value)}
+                placeholder="Rechercher par metier, competence, entreprise ou mot-cle..."
+                className="h-10 bg-surface-muted pl-9"
+              />
+            </div>
+
+            <Select
+              value={searchMode}
+              onValueChange={(value) =>
+                setSearchMode(value as CandidateOfferSearchMode)
+              }
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue placeholder="Mode de recherche" />
+              </SelectTrigger>
+              <SelectContent>
+                {SEARCH_MODE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Button type="submit" className="h-10">
+              <Search className="h-4 w-4" />
+              Rechercher
+            </Button>
+
+            <Button
+              type="button"
+              variant="outline"
+              className="h-10"
+              onClick={handleSearchReset}
+            >
+              Reinitialiser
+            </Button>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-background px-4 py-3">
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {getTabTitle(activeTab)}
+            </p>
+            <p className="mt-2 text-sm text-foreground">
+              {activeTabSummaryText}
+            </p>
+            {activeTab === 'recommended' && hasActiveSearch ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Le filtrage reste local sur les recommandations deja chargees.
+              </p>
+            ) : null}
+          </div>
+        </form>
+      </section>
+
+      {isMissingCandidateProfile ? (
+        <CandidateProfileOnboardingCard
+          compact
+          title="Votre profil candidat n’est pas encore créé."
+          description="Uploadez votre CV pour recevoir des offres recommandées."
+        />
+      ) : null}
 
       <Tabs
         value={activeTab}
@@ -237,15 +431,17 @@ export default function CandidateOffers() {
             <OfferPanelMessage message="Chargement des offres publiées..." />
           ) : allOffersQuery.isError ? (
             <OfferPanelMessage message={SEARCH_UNAVAILABLE_MESSAGE} />
-          ) : activeSearchOffers.length === 0 ? (
+          ) : hasActiveSearch && (allOffersQuery.data?.offers ?? []).length === 0 ? (
+            <OfferPanelMessage message="Aucune offre trouvee pour cette recherche." />
+          ) : (allOffersQuery.data?.offers ?? []).length === 0 ? (
             <OfferPanelMessage message="Aucune offre publiée pour le moment." />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {activeSearchOffers.map((offer) => (
+              {(allOffersQuery.data?.offers ?? []).map((offer) => (
                 <SearchOfferCard
                   key={`all-${offer.offerId ?? offer.title}`}
                   offer={offer}
-                  showSearchRelevance={false}
+                  showSearchRelevance={hasActiveSearch}
                   onSelect={() => setSelectedOffer(offer)}
                 />
               ))}
@@ -254,22 +450,27 @@ export default function CandidateOffers() {
         </TabsContent>
 
         <TabsContent value="interesting" className="space-y-4">
-          {interestingOffersQuery.isLoading ? (
+          {isProfileGateLoading ? (
+            <OfferPanelMessage message="Chargement de votre profil candidat..." />
+          ) : isMissingCandidateProfile ? (
+            <OfferPanelMessage message="Les offres qui peuvent vous intéresser seront disponibles dès que votre profil candidat sera créé." />
+          ) : profilePresenceQuery.isError ? (
+            <OfferPanelMessage message="Impossible de vérifier votre profil candidat pour le moment." />
+          ) : interestingOffersQuery.isLoading ? (
             <OfferPanelMessage message="Chargement des offres basées sur vos centres d’intérêt..." />
           ) : interestingOffersQuery.isError ? (
             <OfferPanelMessage message={SEARCH_UNAVAILABLE_MESSAGE} />
           ) : (
             <>
-              <div className="panel flex flex-col gap-3 p-4 card-border-top">
+              {!hasActiveSearch ? (
+                <div className="panel flex flex-col gap-3 p-4 card-border-top">
                 <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
                   <Search className="h-4 w-4 text-accent" />
                   Recherche basée sur vos centres d’intérêt
                 </div>
-                {interestingOffersQuery.data?.keywords.length ? (
+                {!hasActiveSearch && interestingKeywords.length > 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    {interestingOffersQuery.data.keywords
-                      .map((item) => item.keyword)
-                      .join(', ')}
+                    {interestingKeywordsLabel}
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -277,15 +478,19 @@ export default function CandidateOffers() {
                     des offres pertinentes.
                   </p>
                 )}
-              </div>
+                </div>
+              ) : null}
 
-              {interestingOffersQuery.data?.keywords.length === 0 ? (
+              {!hasActiveSearch && interestingKeywords.length === 0 ? (
                 <OfferPanelMessage message="Ajoutez des centres d’intérêt dans votre profil pour obtenir des offres pertinentes." />
-              ) : activeSearchOffers.length === 0 ? (
+              ) : hasActiveSearch &&
+                (interestingOffersQuery.data?.offers ?? []).length === 0 ? (
+                <OfferPanelMessage message="Aucune offre trouvee pour cette recherche." />
+              ) : (interestingOffersQuery.data?.offers ?? []).length === 0 ? (
                 <OfferPanelMessage message="Aucune offre trouvée pour vos centres d’intérêt actuels." />
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {activeSearchOffers.map((offer) => (
+                  {(interestingOffersQuery.data?.offers ?? []).map((offer) => (
                     <SearchOfferCard
                       key={`interesting-${offer.offerId ?? offer.title}`}
                       offer={offer}
@@ -300,7 +505,13 @@ export default function CandidateOffers() {
         </TabsContent>
 
         <TabsContent value="recommended" className="space-y-4">
-          {recommendedOffersQuery.isLoading ? (
+          {isProfileGateLoading ? (
+            <OfferPanelMessage message="Chargement de votre profil candidat..." />
+          ) : isMissingCandidateProfile ? (
+            <OfferPanelMessage message="Votre profil candidat n’est pas encore créé. Uploadez votre CV pour recevoir des offres recommandées." />
+          ) : profilePresenceQuery.isError ? (
+            <OfferPanelMessage message="Impossible de vérifier votre profil candidat pour le moment." />
+          ) : recommendedOffersQuery.isLoading ? (
             <OfferPanelMessage message="Chargement des offres recommandées..." />
           ) : recommendedOffersQuery.isError ? (
             <OfferPanelMessage message={MATCHING_UNAVAILABLE_MESSAGE} />
@@ -309,9 +520,14 @@ export default function CandidateOffers() {
               message="Aucune offre recommandée pour le moment."
               secondaryMessage="Vous pouvez baisser votre seuil minimum ou compléter votre profil."
             />
+          ) : hasActiveSearch && filteredRecommendedOffers.length === 0 ? (
+            <OfferPanelMessage
+              message="Aucune offre trouvee pour cette recherche."
+              secondaryMessage="Reinitialisez pour revoir toutes vos recommandations."
+            />
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {(recommendedOffersQuery.data?.offers ?? []).map((offer) => (
+              {filteredRecommendedOffers.map((offer) => (
                 <RecommendedOfferCard
                   key={offer.matchingResultId}
                   offer={offer}

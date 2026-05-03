@@ -14,6 +14,16 @@ describe("isMissingCandidateProfileError", () => {
     expect(isMissingCandidateProfileError(error)).toBe(true);
   });
 
+  it("detects the job seeker profile not found 404", () => {
+    const error = new ApiServiceError(
+      "JOB SEEKER PROFILE NOT FOUND",
+      404,
+      { detail: "JOB SEEKER PROFILE NOT FOUND" },
+    );
+
+    expect(isMissingCandidateProfileError(error)).toBe(true);
+  });
+
   it("does not detect unrelated errors", () => {
     expect(isMissingCandidateProfileError(new ApiServiceError("Match not found", 404))).toBe(false);
     expect(isMissingCandidateProfileError(new ApiServiceError("Internal server error", 500))).toBe(false);
