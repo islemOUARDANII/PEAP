@@ -540,6 +540,10 @@
   border-radius: 1rem;
 }
 
+.border-left-aneti {
+  border-left: 6px solid hsl(var(--primary));
+}
+
 
 .light-link-border-left-1 {
   color: #001A9C;
@@ -897,4 +901,34 @@
 
 .border-color-aneti-blue {
   border-color: #00548d;
+}
+
+.profile-border-left-orange {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: hsl(var(--accent));
+  transition: border 0.08s ease-in-out
+}
+
+.profile-border-left-19 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #64748B;
+  transition: border 0.08s ease-in-out
+}
+
+.profile-background-color-19-opacity-70 {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
+
+
+.profile-border-left-20 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #475569;
+  transition: border 0.08s ease-in-out
 }

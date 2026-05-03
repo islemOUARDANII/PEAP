@@ -5,6 +5,7 @@ import {
   Building2,
   CalendarDays,
   CheckCircle2,
+  CircleSlash,
   GraduationCap,
   Lightbulb,
   MapPin,
@@ -63,7 +64,9 @@ import {
 } from '@/services/candidate/candidateProfileOnboarding';
 
 type OfferTab = 'all' | 'interesting' | 'recommended';
-type SelectedOffer = CandidateSearchOfferSummary | CandidateRecommendedOfferSummary;
+type SelectedOffer =
+  | CandidateSearchOfferSummary
+  | CandidateRecommendedOfferSummary;
 
 const DEFAULT_TAB: OfferTab = 'recommended';
 const OFFER_TABS: OfferTab[] = ['all', 'interesting', 'recommended'];
@@ -129,7 +132,9 @@ const getTabDescription = (tab: OfferTab): string => {
   }
 };
 
-const getOfferDescription = (offer: CandidateSearchOfferSummary): string | null =>
+const getOfferDescription = (
+  offer: CandidateSearchOfferSummary,
+): string | null =>
   cleanText(offer.description) ??
   cleanText(offer.raw.summary) ??
   cleanText(offer.raw.snippet) ??
@@ -137,7 +142,9 @@ const getOfferDescription = (offer: CandidateSearchOfferSummary): string | null 
 
 export default function CandidateOffers() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(null);
+  const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(
+    null,
+  );
   const [appliedOfferIds, setAppliedOfferIds] = useState<string[]>([]);
   const [searchInput, setSearchInput] = useState('');
   const [appliedSearch, setAppliedSearch] = useState('');
@@ -240,7 +247,9 @@ export default function CandidateOffers() {
 
       if (alreadyApplied && offer.offerId) {
         setAppliedOfferIds((current) =>
-          current.includes(offer.offerId) ? current : [...current, offer.offerId],
+          current.includes(offer.offerId)
+            ? current
+            : [...current, offer.offerId],
         );
         toast.info('Déjà postulé');
         return;
@@ -553,8 +562,12 @@ export default function CandidateOffers() {
             selectedOffer.kind === 'matching' ? (
               <>
                 <DialogHeader>
-                  <DialogTitle className="pr-8">{selectedOffer.title}</DialogTitle>
-                  <DialogDescription>{selectedOffer.companyName}</DialogDescription>
+                  <DialogTitle className="pr-8">
+                    {selectedOffer.title}
+                  </DialogTitle>
+                  <DialogDescription>
+                    {selectedOffer.companyName}
+                  </DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -589,7 +602,10 @@ export default function CandidateOffers() {
                     <DetailField
                       icon={CalendarDays}
                       label="Date de publication"
-                      value={formatDate(selectedOffer.publishedAt) ?? 'Non renseignée'}
+                      value={
+                        formatDate(selectedOffer.publishedAt) ??
+                        'Non renseignée'
+                      }
                     />
                   ) : null}
                 </div>
@@ -708,7 +724,9 @@ export default function CandidateOffers() {
             ) : (
               <>
                 <DialogHeader>
-                  <DialogTitle className="pr-8">{selectedOffer.title}</DialogTitle>
+                  <DialogTitle className="pr-8">
+                    {selectedOffer.title}
+                  </DialogTitle>
                   <DialogDescription>
                     {selectedOffer.companyName ?? 'Entreprise non renseignée'}
                   </DialogDescription>
@@ -741,14 +759,20 @@ export default function CandidateOffers() {
                     <DetailField
                       icon={CalendarDays}
                       label="Date de publication"
-                      value={formatDate(selectedOffer.publishedAt) ?? 'Non renseignée'}
+                      value={
+                        formatDate(selectedOffer.publishedAt) ??
+                        'Non renseignée'
+                      }
                     />
                   ) : null}
                   {selectedOffer.searchScore != null ? (
                     <DetailField
                       icon={Search}
                       label="Pertinence de recherche"
-                      value={formatSearchRelevance(selectedOffer.searchScore) ?? 'Disponible'}
+                      value={
+                        formatSearchRelevance(selectedOffer.searchScore) ??
+                        'Disponible'
+                      }
                     />
                   ) : null}
                 </div>
@@ -850,7 +874,9 @@ function SearchOfferCard({
     <article className="panel flex h-full flex-col p-5 card-border-left">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">{offer.title}</h2>
+          <h2 className="text-base font-semibold text-foreground">
+            {offer.title}
+          </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {offer.companyName ?? 'Entreprise non renseignée'}
           </p>
@@ -872,7 +898,8 @@ function SearchOfferCard({
       </div>
 
       <p className="mt-4 line-clamp-4 text-sm leading-6 text-foreground/90">
-        {getOfferDescription(offer) ?? 'Aucune description disponible pour le moment.'}
+        {getOfferDescription(offer) ??
+          'Aucune description disponible pour le moment.'}
       </p>
 
       {offer.skills.length > 0 ? (
@@ -888,7 +915,9 @@ function SearchOfferCard({
       ) : null}
 
       <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-        <span>{publishedAt ? `Publiée le ${publishedAt}` : 'Offre publiée'}</span>
+        <span>
+          {publishedAt ? `Publiée le ${publishedAt}` : 'Offre publiée'}
+        </span>
         <Button type="button" size="sm" onClick={onSelect}>
           Voir le détail
         </Button>
@@ -912,8 +941,12 @@ function RecommendedOfferCard({
     <article className="panel flex h-full flex-col p-5 card-border-left">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base font-semibold text-foreground">{offer.title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{offer.companyName}</p>
+          <h2 className="text-base font-semibold text-foreground">
+            {offer.title}
+          </h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {offer.companyName}
+          </p>
         </div>
         <ScoreBadge score={offer.score} />
       </div>
@@ -946,7 +979,9 @@ function RecommendedOfferCard({
       ) : null}
 
       <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-        <span>{publishedAt ? `Publiée le ${publishedAt}` : 'Offre recommandée'}</span>
+        <span>
+          {publishedAt ? `Publiée le ${publishedAt}` : 'Offre recommandée'}
+        </span>
         <div className="flex items-center gap-2">
           {isApplied ? (
             <span className="inline-flex items-center gap-1 text-success">
@@ -1066,8 +1101,7 @@ function MatchingExplanation({
 
           {contractDetails.match_type === 'mismatch' ? (
             <p>
-              Le type de contrat ne correspond pas exactement à vos
-              préférences.
+              Le type de contrat ne correspond pas exactement à vos préférences.
             </p>
           ) : null}
         </div>

@@ -13,9 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import {
-  useCreateOfferMutation,
-} from '@/services/api/queries';
+import { useCreateOfferMutation } from '@/services/api/queries';
 import { gatewayApi } from '@/services/api/gateway';
 import type { OfferParsedOutput } from '@/models';
 import {
@@ -203,9 +201,10 @@ export default function CreateOffer() {
         educationMin: form.educationMin.trim(),
         certificationsPreferred: splitList(form.certificationsPreferred),
         languages: languageStrings,
-        parsedOffer: inputMode === 'smart'
-          ? ((parsed as unknown as OfferParsedOutput) ?? undefined)
-          : undefined,
+        parsedOffer:
+          inputMode === 'smart'
+            ? ((parsed as unknown as OfferParsedOutput) ?? undefined)
+            : undefined,
       });
       toast.success('Offer submitted to the backend parsing pipeline');
       navigate('/provider/offers');
@@ -258,7 +257,7 @@ export default function CreateOffer() {
         }
       />
 
-      <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between card-border-top-orange">
         <div>
           <p className="text-sm font-semibold text-foreground">Input mode</p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -336,7 +335,7 @@ export default function CreateOffer() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {/* <div className="panel p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-foreground">
                 Structured Review
@@ -357,9 +356,9 @@ export default function CreateOffer() {
                 <RotateCcw className="h-4 w-4 mr-1.5" /> Rework raw text
               </Button>
             )}
-          </div>
+          </div> */}
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Role Basics</p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field
@@ -424,7 +423,7 @@ export default function CreateOffer() {
             </div>
           </div>
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Extracted Requirements</p>
             <ListField
               label="Target occupations"
@@ -446,7 +445,7 @@ export default function CreateOffer() {
             <TagPreview value={form.optionalSkills} />
           </div>
 
-          <div className="panel p-5 space-y-4">
+          <div className="panel p-5 space-y-4 card-border-top">
             <p className="stat-label">Education, Certifications & Languages</p>
             <Field
               label="Minimum education"
@@ -500,7 +499,6 @@ export default function CreateOffer() {
                   : 'Validate & submit'}
             </Button>
           </div>
-
         </div>
       )}
     </div>
@@ -520,10 +518,7 @@ function LanguageRequirementsField({
   levelOptions: ReferentialOption[];
   isLoading?: boolean;
 }) {
-  const updateItem = (
-    index: number,
-    patch: Partial<OfferLanguageDraft>,
-  ) => {
+  const updateItem = (index: number, patch: Partial<OfferLanguageDraft>) => {
     onChange(
       value.map((item, itemIndex) =>
         itemIndex === index ? { ...item, ...patch } : item,
@@ -592,7 +587,7 @@ function LanguageRequirementsField({
             return (
               <div
                 key={`${item.languageCode}-${index}`}
-                className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto]"
+                className="grid gap-3 rounded-xl border border-border p-3 md:grid-cols-[1fr_1fr_auto] border-color-aneti-blue border-left-aneti"
               >
                 <div>
                   <Label className="text-xs">Language</Label>
@@ -618,7 +613,7 @@ function LanguageRequirementsField({
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between">
+                  <div>
                     <Label className="text-xs">Minimum level</Label>
 
                     {item.level ? (
@@ -800,9 +795,9 @@ function formFromParsed(
   const extractedSkillRequirements = extractedRequirements.filter(
     (item) => requirementType(item.criterion_type) === 'SKILL',
   );
-  const mandatorySkillCandidates = asArray(requirements.mandatory_skills).filter(
-    (item) => !isLanguageLikeSkill(item),
-  );
+  const mandatorySkillCandidates = asArray(
+    requirements.mandatory_skills,
+  ).filter((item) => !isLanguageLikeSkill(item));
   const optionalSkillCandidates = asArray(requirements.optional_skills).filter(
     (item) => !isLanguageLikeSkill(item),
   );
@@ -852,9 +847,7 @@ function formFromParsed(
             evidence: cleanParsedText(metadata.evidence || ''),
           };
         })
-        .filter(
-          (item) => item.languageCode || item.level || item.evidence,
-        )
+        .filter((item) => item.languageCode || item.level || item.evidence)
     : asArray(requirements.languages)
         .map((item) => {
           const languageItem = asRecord(item);
@@ -874,9 +867,7 @@ function formFromParsed(
               .join(' '),
           };
         })
-        .filter(
-          (item) => item.languageCode || item.level || item.evidence,
-        );
+        .filter((item) => item.languageCode || item.level || item.evidence);
 
   return {
     title: cleanParsedTitle(offer.title) || current.title || '',
@@ -888,7 +879,9 @@ function formFromParsed(
     employmentType,
     seniorityLevel,
     targetOccupations: joinCleanList(
-      asArray(parsedPayload.occupations_target ?? parseResult.occupations_target),
+      asArray(
+        parsedPayload.occupations_target ?? parseResult.occupations_target,
+      ),
     ),
     mandatorySkills,
     optionalSkills,
@@ -968,10 +961,7 @@ function cleanParsedText(value: unknown): string {
       .normalize('NFD')
       .replace(/[\u0300-\u036f]/g, '')
       .toLowerCase();
-    if (
-      comparable === 'non specifie' ||
-      comparable === 'not specified'
-    ) {
+    if (comparable === 'non specifie' || comparable === 'not specified') {
       return '';
     }
     return trimmed;
@@ -1035,9 +1025,9 @@ function skillToText(value: unknown): string {
 }
 
 function joinCleanList(values: unknown[]): string {
-  return Array.from(
-    new Set(values.map(skillToText).filter(Boolean)),
-  ).join(', ');
+  return Array.from(new Set(values.map(skillToText).filter(Boolean))).join(
+    ', ',
+  );
 }
 
 function requirementType(value: unknown): string {
@@ -1053,14 +1043,16 @@ function languageDraftToText(
   }
 
   const languageLabel =
-    languageOptions.find((option) => option.code === item.languageCode)?.label ??
-    item.languageCode;
+    languageOptions.find((option) => option.code === item.languageCode)
+      ?.label ?? item.languageCode;
 
   return [languageLabel, item.level].filter(Boolean).join(' ');
 }
 
 function normalizeEnumValue(value: unknown): string {
-  return cleanParsedText(value).toLowerCase().replace(/[\s-]+/g, '_');
+  return cleanParsedText(value)
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
 }
 
 function isMustRequirement(value: Record<string, unknown>): boolean {

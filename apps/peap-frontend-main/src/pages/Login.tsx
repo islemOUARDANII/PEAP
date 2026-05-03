@@ -12,6 +12,9 @@ import {
   BriefcaseBusiness,
   Building2,
   CheckCircle2,
+  Eye,
+  EyeClosed,
+  EyeOff,
   Globe2,
   Icon,
   Loader2,
@@ -101,6 +104,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const [candidateEmail, setCandidateEmail] = useState('');
   const [candidatePassword, setCandidatePassword] = useState('');
@@ -313,7 +317,7 @@ export default function Login() {
     }
   };
 
-  const roleLabel = role?.label ?? "Platform User";
+  const roleLabel = role?.label ?? 'Platform User';
 
   return (
     <main className="min-h-screen bg-background flex flex-col ">
@@ -827,18 +831,36 @@ export default function Login() {
                       onChange={(e) => setEmail(e.target.value)}
                     />
                   </div>
-
                   <div className="space-y-1.5">
                     <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      autoComplete="current-password"
-                      required
-                      placeholder="Enter your password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                    />
+                    <div className="relative">
+                      <Input
+                        id="password"
+                        type={showPassword ? 'text' : 'password'}
+                        autoComplete="current-password"
+                        required
+                        placeholder="Enter your password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword((s) => !s)}
+                        aria-label={
+                          showPassword ? 'Hide password' : 'Show password'
+                        }
+                        aria-pressed={showPassword}
+                        tabIndex={-1}
+                        className="absolute inset-y-0 right-0 flex items-center justify-center w-10 text-muted-foreground hover:text-foreground transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-between pt-1">
@@ -866,9 +888,9 @@ export default function Login() {
                   <Button
                     type="submit"
                     className="w-full h-11 mt-2"
-                    disabled={loading}
+                    disabled={isSubmitting}
                   >
-                    {loading ? (
+                    {isSubmitting ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
                         Signing in…
