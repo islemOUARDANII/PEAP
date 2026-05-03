@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Button } from '../ui/button';
 import { CountBadge } from './CountBadge';
 
-const SearchOfferRow = ({ offer, matchedCount }) => {
+const SearchOfferRow = ({ offer, matchedCount, onClick }) => {
   return (
     <div key={offer.id} className="flex items-center gap-4 p-4 row-border-left">
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground  text-xs font-semibold">
@@ -14,11 +14,6 @@ const SearchOfferRow = ({ offer, matchedCount }) => {
           <p className="text-sm font-semibold text-foreground truncate">
             {offer.title}
           </p>
-          {/* <StatusPill
-            label={candidate.status}
-            tone={statusToTone(candidate.status)}
-            dot={false}
-          /> */}
         </div>
         <p className="text-xs text-muted-foreground truncate">
           <span className="flex items-center gap-1">
@@ -27,27 +22,12 @@ const SearchOfferRow = ({ offer, matchedCount }) => {
           </span>
         </p>
       </div>
-      <CountBadge score={matchedCount} />
-      <div className="flex gap-1.5">
-        <Button asChild variant="outline" size="sm">
-          <Link to={`/provider/candidates/${offer.id}`}>
-            <Eye className="h-3 w-3 ml-1" /> Details
-          </Link>
-        </Button>
+      {matchedCount && <CountBadge score={matchedCount} />}
 
-        {/* <Button
-          variant={isSaved ? 'default' : 'outline'}
-          size="sm"
-          //   onClick={() =>
-          //     setShortlisted(
-          //       isShort
-          //         ? shortlisted.filter((x) => x !== candidate.id)
-          //         : [...shortlisted, candidate.id],
-          //     )
-          //   }
-        >
-          <Star className={`h-3.5 w-3.5 ${isSaved ? 'fill-current' : ''}`} />
-        </Button> */}
+      <div className="flex gap-1.5" onClick={onClick}>
+        <Button asChild variant="outline" size="sm">
+          <Eye className="h-3 w-3 ml-1" /> Voir le détail
+        </Button>
       </div>
     </div>
   );

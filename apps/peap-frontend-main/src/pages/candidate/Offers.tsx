@@ -1,15 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import {
+  Ban,
   Briefcase,
   Building2,
   CalendarDays,
+  CheckCircle,
   CheckCircle2,
   CircleSlash,
   GraduationCap,
+  Grid3x3,
   Lightbulb,
+  List,
+  Loader2,
   MapPin,
   Search,
+  SlidersHorizontal,
   Sparkles,
   type LucideIcon,
 } from 'lucide-react';
@@ -62,6 +68,11 @@ import {
   isJobSeekerProfileNotFoundError,
   shouldRetryCandidateProfileQuery,
 } from '@/services/candidate/candidateProfileOnboarding';
+import { Job } from '@/models';
+import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
+import SearchOfferRow from '@/components/common/SearchOfferRow';
 
 type OfferTab = 'all' | 'interesting' | 'recommended';
 type SelectedOffer =
@@ -92,8 +103,8 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const toStringList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value
-      .map((item) => cleanText(item))
-      .filter((item): item is string => Boolean(item))
+        .map((item) => cleanText(item))
+        .filter((item): item is string => Boolean(item))
     : [];
 
 const formatSearchRelevance = (value: number | null): string | null => {
@@ -140,6 +151,157 @@ const getOfferDescription = (
   cleanText(offer.raw.snippet) ??
   null;
 
+function FiltersPanel({
+  query,
+  setQuery,
+  minExp,
+  setMinExp,
+  loc,
+  setLoc,
+  minScore,
+  setMinScore,
+  onReset,
+}: {
+  query?: string;
+  setQuery?: (v: string) => void;
+  minExp?: number;
+  setMinExp?: (v: number) => void;
+  loc?: string;
+  setLoc?: (v: string) => void;
+  minScore?: number;
+  setMinScore?: (v: number) => void;
+  onReset?: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <Label className="stat-label">Keyword</Label>
+        <div className="relative mt-1.5">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Name, role, skill…"
+            className="h-9 pl-9 bg-surface-muted"
+          />
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <Label className="stat-label">Min experience</Label>
+          <span className="text-xs font-mono text-foreground">
+            {minExp}+ yrs
+          </span>
+        </div>
+        <Slider
+          value={[minExp]}
+          onValueChange={(v) => setMinExp(v[0])}
+          min={0}
+          max={15}
+          step={1}
+          className="mt-3"
+        />
+      </div>
+
+      <div>
+        <Label className="stat-label">Education level</Label>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {/* {educationLevels.map((e) => (
+            <label
+              key={e}
+              className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+            >
+              <Checkbox
+                checked={edu.includes(e)}
+                onCheckedChange={() => toggleEdu(e)}
+              />
+              {e}
+            </label>
+          ))} */}
+        </div>
+      </div>
+
+      <div>
+        <Label className="stat-label">Location</Label>
+        <Select value={loc} onValueChange={setLoc}>
+          <SelectTrigger className="h-9 mt-1.5">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All locations</SelectItem>
+            {/* {locations.map((l) => (
+              <SelectItem key={l} value={l}>
+                {l}
+              </SelectItem>
+            ))} */}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label className="stat-label">Availability</Label>
+        <div className="mt-2 flex flex-col gap-1.5">
+          {/* {availabilities.map((a) => (
+            <label
+              key={a}
+              className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+            >
+              <Checkbox
+                checked={avail.includes(a)}
+                onCheckedChange={() => toggleAvail(a)}
+              />
+              {a}
+            </label>
+          ))} */}
+        </div>
+      </div>
+
+      <div>
+        <Label className="stat-label">Languages</Label>
+        <div className="mt-2 grid grid-cols-2 gap-1.5">
+          {/* {languages.map((l) => (
+            <label
+              key={l}
+              className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
+            >
+              <Checkbox
+                checked={langs.includes(l)}
+                onCheckedChange={() => toggleLang(l)}
+              />
+              {l}
+            </label>
+          ))} */}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between">
+          <Label className="stat-label">Minimum match</Label>
+          <span className="text-xs font-mono text-foreground">{minScore}%</span>
+        </div>
+        <Slider
+          value={[minScore]}
+          onValueChange={(v) => setMinScore(v[0])}
+          min={0}
+          max={100}
+          step={5}
+          className="mt-3"
+        />
+      </div>
+
+      <div className="flex gap-2 pt-2 border-t border-border">
+        <Button size="sm" className="flex-1">
+          Apply filters
+        </Button>
+        <Button size="sm" variant="outline" onClick={onReset}>
+          Reset
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function CandidateOffers() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedOffer, setSelectedOffer] = useState<SelectedOffer | null>(
@@ -150,7 +312,7 @@ export default function CandidateOffers() {
   const [appliedSearch, setAppliedSearch] = useState('');
   const [searchMode, setSearchMode] =
     useState<CandidateOfferSearchMode>(DEFAULT_SEARCH_MODE);
-
+  const [view, setView] = useState<'grid' | 'list'>('grid');
   const rawTab = searchParams.get('tab');
   const activeTab = isOfferTab(rawTab) ? rawTab : DEFAULT_TAB;
   const trimmedSearchInput = searchInput.trim();
@@ -180,13 +342,17 @@ export default function CandidateOffers() {
   }, [activeTab]);
 
   const allOffersQuery = useQuery({
-    queryKey: queryKeys.candidate.offersSearch('all', appliedSearch, searchMode),
+    queryKey: queryKeys.candidate.offersSearch(
+      'all',
+      appliedSearch,
+      searchMode,
+    ),
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-          query: appliedSearch,
-          mode: searchMode,
-        })
+            query: appliedSearch,
+            mode: searchMode,
+          })
         : getAllPublishedOffers(),
     enabled: activeTab === 'all',
     staleTime: 5 * 60_000,
@@ -201,9 +367,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-          query: appliedSearch,
-          mode: searchMode,
-        })
+            query: appliedSearch,
+            mode: searchMode,
+          })
         : getInterestingOffers(),
     enabled: activeTab === 'interesting' && hasCandidateProfile,
     staleTime: 5 * 60_000,
@@ -335,55 +501,124 @@ export default function CandidateOffers() {
       : 'Affichage des offres recommandees.';
   }, [activeTab, appliedSearch, hasActiveSearch, interestingKeywordsLabel]);
 
+  const renderGrid = (
+    list: Job[],
+    opts: { showMatch: boolean; reason?: (j: Job) => string | undefined },
+  ) => {
+    if (list.length === 0) {
+      return (
+        <EmptyState message="No offers found. Try adjusting your filters." />
+      );
+    }
+    return (
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+        {/* {list.map((j) => (
+          <JobCard
+            key={j.id}
+            job={j}
+            saved={saved.includes(j.id)}
+            onToggleSave={() => onToggleSave(j.id)}
+            showMatchInsight={opts.showMatch}
+            recommendedReason={opts.reason?.(j)}
+          />
+        ))} */}
+      </div>
+    );
+  };
+
+  const tabCountBadge = (n: number, active: boolean) => (
+    <Badge
+      variant="secondary"
+      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${
+        active ? 'bg-accent text-accent-foreground' : ''
+      }`}
+    >
+      {n}
+    </Badge>
+  );
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Offres"
         description="Consultez toutes les offres, les offres liees a vos centres d'interet et vos recommandations personnalisees."
       />
-
-      <section className="panel space-y-4 p-5 card-border-top">
-        <form
-          className="space-y-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            handleSearchSubmit();
-          }}
-        >
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem_auto_auto]">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchInput}
-                onChange={(event) => setSearchInput(event.target.value)}
-                placeholder="Rechercher par metier, competence, entreprise ou mot-cle..."
-                className="h-10 bg-surface-muted pl-9"
-              />
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
+        <aside className="hidden lg:block">
+          <div className="panel p-4 sticky top-4 card-border-top-blue-aneti">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                <SlidersHorizontal className="h-4 w-4" /> Filters
+              </p>
+              <button
+                // onClick={reset}
+                className="text-xs text-accent hover:underline"
+              >
+                Reset
+              </button>
             </div>
-
-            <Select
-              value={searchMode}
-              onValueChange={(value) =>
-                setSearchMode(value as CandidateOfferSearchMode)
-              }
+            <FiltersPanel />
+          </div>
+        </aside>
+        <div className="space-y-4">
+          <section className="panel space-y-4 p-5 card-border-top">
+            <form
+              className="space-y-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleSearchSubmit();
+              }}
             >
-              <SelectTrigger className="h-10">
-                <SelectValue placeholder="Mode de recherche" />
-              </SelectTrigger>
-              <SelectContent>
-                {SEARCH_MODE_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem_auto_auto]">
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                    placeholder="Rechercher par metier, competence, entreprise ou mot-cle..."
+                    className="h-10 bg-surface-muted pl-9"
+                  />
+                </div>
 
-            <Button type="submit" className="h-10">
-              <Search className="h-4 w-4" />
-              Rechercher
-            </Button>
+                <Select
+                  value={searchMode}
+                  onValueChange={(value) =>
+                    setSearchMode(value as CandidateOfferSearchMode)
+                  }
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Mode de recherche" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SEARCH_MODE_OPTIONS.map((option) => (
+                      <SelectItem key={option.value} value={option.value}>
+                        {option.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
+                <Button type="submit" className="h-10">
+                  <Search className="h-4 w-4" />
+                  Rechercher
+                </Button>
+                <div className="flex border border-border rounded-md overflow-hidden">
+                  <button
+                    onClick={() => setView('grid')}
+                    className={`p-2 ${view === 'grid' ? 'bg-accent text-accent-foreground' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+                    aria-label="Grid view"
+                  >
+                    <Grid3x3 className="h-4 w-4" />
+                  </button>
+                  <button
+                    onClick={() => setView('list')}
+                    className={`p-2 ${view === 'list' ? 'bg-accent text-accent-foreground' : 'bg-background text-muted-foreground hover:text-foreground'}`}
+                    aria-label="List view"
+                  >
+                    <List className="h-4 w-4" />
+                  </button>
+                </div>
+                {/* 
             <Button
               type="button"
               variant="outline"
@@ -391,10 +626,10 @@ export default function CandidateOffers() {
               onClick={handleSearchReset}
             >
               Reinitialiser
-            </Button>
-          </div>
+            </Button> */}
+              </div>
 
-          <div className="rounded-2xl border border-border bg-background px-4 py-3">
+              {/* <div className="rounded-2xl border border-border bg-background px-4 py-3">
             <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
               {getTabTitle(activeTab)}
             </p>
@@ -406,19 +641,19 @@ export default function CandidateOffers() {
                 Le filtrage reste local sur les recommandations deja chargees.
               </p>
             ) : null}
-          </div>
-        </form>
-      </section>
+          </div> */}
+            </form>
+          </section>
 
-      {isMissingCandidateProfile ? (
-        <CandidateProfileOnboardingCard
-          compact
-          title="Votre profil candidat n’est pas encore créé."
-          description="Uploadez votre CV pour recevoir des offres recommandées."
-        />
-      ) : null}
+          {isMissingCandidateProfile ? (
+            <CandidateProfileOnboardingCard
+              compact
+              title="Votre profil candidat n’est pas encore créé."
+              description="Uploadez votre CV pour recevoir des offres recommandées."
+            />
+          ) : null}
 
-      <Tabs
+          {/* <Tabs
         value={activeTab}
         onValueChange={(value) => {
           if (isOfferTab(value)) {
@@ -440,7 +675,8 @@ export default function CandidateOffers() {
             <OfferPanelMessage message="Chargement des offres publiées..." />
           ) : allOffersQuery.isError ? (
             <OfferPanelMessage message={SEARCH_UNAVAILABLE_MESSAGE} />
-          ) : hasActiveSearch && (allOffersQuery.data?.offers ?? []).length === 0 ? (
+          ) : hasActiveSearch &&
+            (allOffersQuery.data?.offers ?? []).length === 0 ? (
             <OfferPanelMessage message="Aucune offre trouvee pour cette recherche." />
           ) : (allOffersQuery.data?.offers ?? []).length === 0 ? (
             <OfferPanelMessage message="Aucune offre publiée pour le moment." />
@@ -473,20 +709,20 @@ export default function CandidateOffers() {
             <>
               {!hasActiveSearch ? (
                 <div className="panel flex flex-col gap-3 p-4 card-border-top">
-                <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
-                  <Search className="h-4 w-4 text-accent" />
-                  Recherche basée sur vos centres d’intérêt
-                </div>
-                {!hasActiveSearch && interestingKeywords.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    {interestingKeywordsLabel}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Ajoutez des centres d’intérêt dans votre profil pour obtenir
-                    des offres pertinentes.
-                  </p>
-                )}
+                  <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                    <Search className="h-4 w-4 text-accent" />
+                    Recherche basée sur vos centres d’intérêt
+                  </div>
+                  {!hasActiveSearch && interestingKeywords.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      {interestingKeywordsLabel}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Ajoutez des centres d’intérêt dans votre profil pour
+                      obtenir des offres pertinentes.
+                    </p>
+                  )}
                 </div>
               ) : null}
 
@@ -547,8 +783,269 @@ export default function CandidateOffers() {
             </div>
           )}
         </TabsContent>
-      </Tabs>
+      </Tabs> */}
 
+          {/* Tabs */}
+          <Tabs
+            value={activeTab}
+            onValueChange={(value) => {
+              if (isOfferTab(value)) {
+                setSearchParams({ tab: value });
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="sticky top-0 z-10 -mx-1 px-1 py-2 bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+              <TabsList className="h-auto w-full justify-start gap-1 bg-surface-muted p-1 overflow-x-auto">
+                <TabsTrigger
+                  value="all"
+                  className="data-[state=active]:bg-background"
+                >
+                  Toutes les offres
+                </TabsTrigger>
+                <TabsTrigger
+                  value="interesting"
+                  className="data-[state=active]:bg-background"
+                >
+                  Offres qui peuvent vous intéresser{' '}
+                  {/* {tabCountBadge(matchingList.length, tab === 'matching')} */}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="recommended"
+                  className="data-[state=active]:bg-background"
+                >
+                  Offres recommandées{' '}
+                  {/* {tabCountBadge(recommendedList.length, tab === 'recommended')} */}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+
+            <TabsContent
+              value="all"
+              className="mt-0 animate-in fade-in-50 duration-200"
+            >
+              {allOffersQuery.isLoading ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Chargement des offres publiées...
+                    </p>
+                  </div>
+                </div>
+              ) : allOffersQuery.isError ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+                  <Ban className="h-6 w-6 text-destructive" />
+
+                  <div>
+                    <p className="text-sm text-destructive">
+                      Impossible de vérifier votre profil candidat pour le
+                      moment.
+                    </p>
+                  </div>
+                </div>
+              ) : hasActiveSearch &&
+                (allOffersQuery.data?.offers ?? []).length === 0 ? (
+                <OfferPanelMessage message="Aucune offre trouvee pour cette recherche." />
+              ) : (allOffersQuery.data?.offers ?? []).length === 0 ? (
+                <OfferPanelMessage message="Aucune offre publiée pour le moment." />
+              ) : (
+                <>
+                  {(allOffersQuery.data?.offers ?? []).map((offer) => (
+                    <>
+                      {view === 'grid' ? (
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          <SearchOfferCard
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            showSearchRelevance={hasActiveSearch}
+                            onSelect={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="panel divide-y divide-border">
+                          <SearchOfferRow
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            onClick={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ))}
+                </>
+              )}
+            </TabsContent>
+
+            <TabsContent
+              value="interesting"
+              className="mt-0 animate-in fade-in-50 duration-200"
+            >
+              {isProfileGateLoading ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Chargement de votre profil candidat...
+                    </p>
+                  </div>
+                </div>
+              ) : isMissingCandidateProfile ? (
+                <OfferPanelMessage message="Votre profil candidat n’est pas encore créé. Uploadez votre CV pour recevoir des offres recommandées." />
+              ) : profilePresenceQuery.isError ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+                  <Ban className="h-6 w-6 text-destructive" />
+
+                  <div>
+                    <p className="text-sm text-destructive">
+                      Impossible de vérifier votre profil candidat pour le
+                      moment..
+                    </p>
+                  </div>
+                </div>
+              ) : recommendedOffersQuery.isLoading ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Chargement des offres recommandées...
+                    </p>
+                  </div>
+                </div>
+              ) : recommendedOffersQuery.isError ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+                  <Ban className="h-6 w-6 text-destructive" />
+                  <div>
+                    <p className="text-sm text-destructive">
+                      {MATCHING_UNAVAILABLE_MESSAGE}
+                    </p>
+                  </div>
+                </div>
+              ) : (recommendedOffersQuery.data?.offers ?? []).length === 0 ? (
+                <OfferPanelMessage
+                  message="Aucune offre recommandée pour le moment."
+                  secondaryMessage="Vous pouvez baisser votre seuil minimum ou compléter votre profil."
+                />
+              ) : hasActiveSearch && filteredRecommendedOffers.length === 0 ? (
+                <OfferPanelMessage
+                  message="Aucune offre trouvee pour cette recherche."
+                  secondaryMessage="Reinitialisez pour revoir toutes vos recommandations."
+                />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredRecommendedOffers.map((offer) => (
+                    <>
+                      {view === 'grid' ? (
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          <RecommendedOfferCard
+                            key={offer.matchingResultId}
+                            offer={offer}
+                            isApplied={appliedOfferIds.includes(offer.offerId)}
+                            onSelect={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="panel divide-y divide-border">
+                          <SearchOfferRow
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            matchedCount={offer.score}
+                            onClick={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent
+              value="recommended"
+              className="mt-0 animate-in fade-in-50 duration-200"
+            >
+              {isProfileGateLoading ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Chargement de votre profil candidat...
+                    </p>
+                  </div>
+                </div>
+              ) : isMissingCandidateProfile ? (
+                <OfferPanelMessage message="Votre profil candidat n’est pas encore créé. Uploadez votre CV pour recevoir des offres recommandées." />
+              ) : profilePresenceQuery.isError ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+                  <Ban className="h-6 w-6 text-destructive" />
+
+                  <div>
+                    <p className="text-sm text-destructive">
+                      Impossible de vérifier votre profil candidat pour le
+                      moment..
+                    </p>
+                  </div>
+                </div>
+              ) : recommendedOffersQuery.isLoading ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+                  <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+                  <div>
+                    <p className="text-sm text-muted-foreground">
+                      Chargement des offres recommandées...
+                    </p>
+                  </div>
+                </div>
+              ) : recommendedOffersQuery.isError ? (
+                <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+                  <Ban className="h-6 w-6 text-destructive" />
+
+                  <div>
+                    <p className="text-sm text-destructive">
+                      {MATCHING_UNAVAILABLE_MESSAGE}
+                    </p>
+                  </div>
+                </div>
+              ) : (recommendedOffersQuery.data?.offers ?? []).length === 0 ? (
+                <OfferPanelMessage
+                  message="Aucune offre recommandée pour le moment."
+                  secondaryMessage="Vous pouvez baisser votre seuil minimum ou compléter votre profil."
+                />
+              ) : hasActiveSearch && filteredRecommendedOffers.length === 0 ? (
+                <OfferPanelMessage
+                  message="Aucune offre trouvee pour cette recherche."
+                  secondaryMessage="Reinitialisez pour revoir toutes vos recommandations."
+                />
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {filteredRecommendedOffers.map((offer) => (
+                    <>
+                      {view === 'grid' ? (
+                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                          <RecommendedOfferCard
+                            key={offer.matchingResultId}
+                            offer={offer}
+                            isApplied={appliedOfferIds.includes(offer.offerId)}
+                            onSelect={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="panel divide-y divide-border">
+                          <SearchOfferRow
+                            key={`all-${offer.offerId ?? offer.title}`}
+                            offer={offer}
+                            matchedCount={offer.score}
+                            onClick={() => setSelectedOffer(offer)}
+                          />
+                        </div>
+                      )}
+                    </>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
+      </div>
       <Dialog
         open={Boolean(selectedOffer)}
         onOpenChange={(open) => {
@@ -871,24 +1368,47 @@ function SearchOfferCard({
   const searchRelevance = formatSearchRelevance(offer.searchScore);
 
   return (
-    <article className="panel flex h-full flex-col p-5 card-border-left">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+    <article className="panel p-5 flex flex-col group hover:border-accent transition-colors card-border-left">
+      <div className="flex items-start justify-between mb-3 gap-3">
+        {/* <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">
             {offer.title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {offer.companyName ?? 'Entreprise non renseignée'}
           </p>
+        </div> */}
+
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary text-xs font-semibold">
+            {offer.companyName
+              .split(' ')
+              .map((s) => s[0])
+              .join('')
+              .slice(0, 2)}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground leading-snug truncate">
+              {offer.title}
+            </h3>
+            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+              <Building2 className="h-3 w-3" /> {offer.companyName}
+            </p>
+          </div>
         </div>
         {showSearchRelevance && searchRelevance ? (
           <StatusChip label={`Pertinence de recherche : ${searchRelevance}`} />
         ) : (
-          <StatusChip label="Offre publiée" />
+          <span
+            className={`p-1.5 rounded-md border transition-colors inline-flex items-center justify-center gap-1 px-2 py-1 text-xs font-medium bg-success-soft text-success border-success/30`}
+          >
+            <CheckCircle className={`h-3.5 w-3.5 fill-current`} />
+            Offre publiée
+          </span>
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-3">
         <span className="inline-flex items-center gap-1">
           <MapPin className="h-3.5 w-3.5" />
           {offer.location ?? 'Localisation non renseignée'}
@@ -897,7 +1417,7 @@ function SearchOfferCard({
         {offer.workMode ? <StatusChip label={offer.workMode} /> : null}
       </div>
 
-      <p className="mt-4 line-clamp-4 text-sm leading-6 text-foreground/90">
+      <p className="text-xs text-foreground/80 leading-relaxed line-clamp-2 mb-3">
         {getOfferDescription(offer) ??
           'Aucune description disponible pour le moment.'}
       </p>
@@ -914,13 +1434,15 @@ function SearchOfferCard({
         </div>
       ) : null}
 
-      <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-        <span>
+      <div className="mt-auto pt-3 border-t border-border flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">
           {publishedAt ? `Publiée le ${publishedAt}` : 'Offre publiée'}
         </span>
-        <Button type="button" size="sm" onClick={onSelect}>
-          Voir le détail
-        </Button>
+        <div className="flex gap-1.5">
+          <Button type="button" size="sm" onClick={onSelect}>
+            Voir le détail
+          </Button>
+        </div>
       </div>
     </article>
   );
@@ -939,20 +1461,37 @@ function RecommendedOfferCard({
 
   return (
     <article className="panel flex h-full flex-col p-5 card-border-left">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
+      <div className="flex items-start justify-between mb-3 gap-3">
+        {/* <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">
             {offer.title}
           </h2>
           <p className="mt-1 text-sm text-muted-foreground">
             {offer.companyName}
           </p>
+        </div> */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-primary-muted text-primary text-xs font-semibold">
+            {offer.companyName
+              .split(' ')
+              .map((s) => s[0])
+              .join('')
+              .slice(0, 2)}
+          </div>
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-foreground leading-snug truncate">
+              {offer.title}
+            </h3>
+            <p className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+              <Building2 className="h-3 w-3" /> {offer.companyName}
+            </p>
+          </div>
         </div>
         <ScoreBadge score={offer.score} />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground mb-3">
+        <span className="flex items-center gap-1">
           <MapPin className="h-3.5 w-3.5" />
           {offer.location ?? 'Localisation non renseignée'}
         </span>
@@ -960,7 +1499,7 @@ function RecommendedOfferCard({
         {offer.workMode ? <StatusChip label={offer.workMode} /> : null}
       </div>
 
-      <p className="mt-4 line-clamp-4 text-sm leading-6 text-foreground/90">
+      <p className="text-xs text-foreground/80 leading-relaxed line-clamp-2 mb-3">
         {offer.explanationShort ??
           offer.description ??
           'Aucune description disponible pour le moment.'}
@@ -978,11 +1517,11 @@ function RecommendedOfferCard({
         </div>
       ) : null}
 
-      <div className="mt-auto flex items-center justify-between border-t border-border pt-4 text-xs text-muted-foreground">
-        <span>
+      <div className="mt-auto pt-3 border-t border-border flex items-center justify-between gap-2">
+        <span className="text-xs text-muted-foreground">
           {publishedAt ? `Publiée le ${publishedAt}` : 'Offre recommandée'}
         </span>
-        <div className="flex items-center gap-2">
+        <div className="flex gap-1.5">
           {isApplied ? (
             <span className="inline-flex items-center gap-1 text-success">
               <CheckCircle2 className="h-3.5 w-3.5" />
@@ -1138,6 +1677,14 @@ function ScoreLine({
           Poids dans le modèle : {weight}%
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div className="panel p-12 text-center text-sm text-muted-foreground">
+      {message}
     </div>
   );
 }

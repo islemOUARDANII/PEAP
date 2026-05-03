@@ -517,6 +517,7 @@ export default function SearchOffer() {
                     key={j.id}
                     offer={j}
                     matchedCount={matchedCount}
+                    onClick={() => {}}
                   />
                 );
               })}
