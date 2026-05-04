@@ -28,7 +28,7 @@ const SearchCandidateCard = ({
   missing,
   required,
 }) => {
-  const isShort = shortlisted.includes(candidate.id);
+  const isShort = shortlisted?.includes(candidate.id);
   const mt = matchTone(candidate.score);
   const isTop = candidate.score > TOP_SCORE_MATCH;
   return (
@@ -60,25 +60,27 @@ const SearchCandidateCard = ({
             </div>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <MatchRing
-            score={candidate.score}
-            size={44}
-            stroke={4}
-            textSize={'text-sm'}
-          />
-        </div>
+        {candidate.score && (
+          <div className="flex flex-col items-end gap-1 shrink-0">
+            <MatchRing
+              score={candidate.score}
+              size={44}
+              stroke={4}
+              textSize={'text-sm'}
+            />
+          </div>
+        )}
       </div>
 
       <div className="rounded-md bg-surface-muted border border-border px-2.5 py-1.5 mb-3 flex items-center justify-between text-xs">
         <span className="flex items-center gap-1.5 text-success">
-          <CheckCircle2 className="h-3 w-3" /> Matches {matched.length}/
-          {required.length} required
+          <CheckCircle2 className="h-3 w-3" /> Matches {matched?.length}/
+          {required?.length} required
         </span>
-        {missing.length > 0 && (
+        {missing?.length > 0 && (
           <span className="flex items-center gap-1.5 text-destructive">
             <XCircle className="h-3 w-3" /> Missing:{' '}
-            {missing.slice(0, 2).join(', ')}
+            {missing?.slice(0, 2).join(', ')}
           </span>
         )}
       </div>

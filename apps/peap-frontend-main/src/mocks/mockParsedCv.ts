@@ -1,3 +1,5 @@
+import { Candidate } from '@/models';
+
 export interface MockParsedCvPersonInfo {
   full_name: string;
   email: string;
@@ -123,4 +125,163 @@ export const mockDataChart = [
   { offerId: 'OFF-006', matches: 85, applications: 73 },
   { offerId: 'OFF-007', matches: 49, applications: 25 },
   { offerId: 'OFF-008', matches: 72, applications: 58 },
+];
+
+export const mockCandidates: Candidate[] = [
+  {
+    id: 'cand-001',
+    name: 'Ahmed Ben Salah',
+    initials: 'ABS',
+    occupation: 'Frontend Developer',
+    location: 'Tunis, Tunisia',
+    experienceYears: 3,
+    score: null,
+    topSkills: ['React', 'TypeScript', 'Tailwind'],
+    missing: ['Next.js', 'Testing'],
+    summary: 'Frontend developer building modern SPAs.',
+    status: 'Shortlisted',
+    email: 'ahmed.bensalah@email.com',
+    phone: '+21620000001',
+    offerId: 'offer-001',
+    offerTitle: 'Frontend Engineer',
+    company: 'TechCorp',
+    rank: 2,
+    codingSkills: ['JavaScript', 'TypeScript'],
+
+    experiences: [
+      {
+        company: 'Webify',
+        role: 'Frontend Developer',
+        years: '2022 - Present',
+        description: 'Built scalable UI components with React.',
+      },
+    ],
+
+    internshipExperiences: [
+      {
+        company: 'Startup Hub',
+        role: 'Frontend Intern',
+        years: '2021',
+        description: 'Worked on landing pages and UI fixes.',
+      },
+    ],
+
+    education: [
+      {
+        school: 'INSAT',
+        degree: 'Engineering in Computer Science',
+        years: '2018 - 2022',
+      },
+    ],
+
+    languages: [
+      { label: 'Arabic', level: 'Native' },
+      { label: 'French', level: 'Professional' },
+      { label: 'English', level: 'Intermediate' },
+    ],
+
+    documents: [
+      {
+        id: 'doc-001',
+        docType: 'CV',
+        filename: 'ahmed_cv.pdf',
+        mimeType: 'application/pdf',
+        uploadedAt: '2026-05-01',
+      },
+    ],
+  },
+
+  {
+    id: 'cand-002',
+    name: 'Sonia Trabelsi',
+    initials: 'ST',
+    occupation: 'Backend Developer',
+    location: 'Sfax, Tunisia',
+    experienceYears: 5,
+    score: 91,
+    topSkills: ['Node.js', 'Express', 'MongoDB'],
+    missing: ['Docker'],
+    summary: 'Backend engineer specialized in APIs and performance.',
+    status: 'Reviewed',
+    email: 'sonia@email.com',
+    offerTitle: 'Backend Engineer',
+    company: 'DataSoft',
+    rank: 1,
+
+    jobExperiences: [
+      {
+        company: 'DataSoft',
+        role: 'Backend Engineer',
+        years: '2021 - Present',
+        description: 'Designed REST APIs and microservices.',
+      },
+      {
+        company: 'DevSolutions',
+        role: 'Junior Backend Dev',
+        years: '2019 - 2021',
+        description: 'Worked on Node.js services.',
+      },
+    ],
+
+    education: [
+      {
+        school: 'ENIS',
+        degree: 'Software Engineering',
+        years: '2016 - 2019',
+      },
+    ],
+
+    languages: [
+      { label: 'Arabic', level: 'Native' },
+      { label: 'English', level: 'Advanced' },
+    ],
+  },
+
+  {
+    id: 'cand-003',
+    name: 'Youssef Khlifi',
+    initials: 'YK',
+    occupation: 'Full Stack Developer',
+    location: 'Sousse, Tunisia',
+    experienceYears: 4,
+    score: 76,
+    topSkills: ['React', 'Node.js', 'PostgreSQL'],
+    missing: ['AWS'],
+    summary: 'Full stack developer with strong backend focus.',
+    status: 'New',
+
+    codingSkills: ['JavaScript', 'SQL'],
+
+    offers: [
+      {
+        id: 'offer-001',
+        title: 'Full Stack Engineer',
+        company: 'InnovateX',
+        score: 76,
+        rank: 4,
+      },
+    ],
+  },
+
+  {
+    id: 'cand-004',
+    name: 'Mouna Gharbi',
+    initials: 'MG',
+    occupation: 'UI/UX Designer',
+    location: 'Tunis, Tunisia',
+    experienceYears: 2,
+    score: 68,
+    topSkills: ['Figma', 'User Research'],
+    missing: ['Frontend Basics'],
+    summary: 'UX designer focused on usability and research.',
+    status: 'Rejected',
+
+    education: [
+      {
+        school: 'ISAMM',
+        degree: 'Multimedia Design',
+        years: '2019 - 2022',
+      },
+    ],
+  },
 ];

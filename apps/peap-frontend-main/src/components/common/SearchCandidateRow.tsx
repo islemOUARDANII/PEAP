@@ -24,11 +24,6 @@ const SearchCandidateRow = ({
           <p className="text-sm font-semibold text-foreground truncate">
             {candidate.name}
           </p>
-          <StatusPill
-            label={candidate.status}
-            tone={statusToTone(candidate.status)}
-            dot={false}
-          />
         </div>
         <p className="inline-flex text-xs text-muted-foreground truncate items-center justify-center">
           {candidate.occupation} · {candidate.experienceYears}y ·{' '}
@@ -44,7 +39,7 @@ const SearchCandidateRow = ({
           <span className="text-destructive"> · missing {missing.length}</span>
         )}
       </div>
-      <ScoreBadge score={candidate.score} />
+      {candidate?.score && <ScoreBadge score={candidate.score} />}
       <div className="flex gap-1.5">
         <Button asChild variant="outline" size="sm">
           <Link to={`/provider/candidates/${candidate.id}`}>View</Link>

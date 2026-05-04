@@ -28,7 +28,8 @@ import Settings from '@/pages/advisor/Settings';
 import DemoMatching from '@/pages/advisor/DemoMatching';
 import Portal from '@/pages/Portal';
 import SearchOffer from '@/pages/provider/SearchOffer';
-import SearchCandidate from '@/pages/candidate/SearchCandidate';
+import SearchCandidate from '@/pages/provider/SearchCandidate';
+import SearchCandidateOffer from '@/pages/provider/SearchCandidateOffer';
 
 export function AppRouter() {
   return (
@@ -84,7 +85,6 @@ export function AppRouter() {
             path="/candidate/demo-search"
             element={<SearchOffer></SearchOffer>}
           />
-
         </Route>
 
         <Route
@@ -99,6 +99,7 @@ export function AppRouter() {
             <Route index element={<Offers />} />
             <Route path="new" element={<CreateOffer />} />
             <Route path="search" element={<SearchCandidate />} />
+            <Route path="search/offer" element={<SearchCandidateOffer />} />
             <Route path=":id" element={<OfferDetails />} />
           </Route>
           <Route path="/provider/candidates" element={<Candidates />} />

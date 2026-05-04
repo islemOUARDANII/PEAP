@@ -24,8 +24,9 @@ import {
   useProviderOfferQuery,
 } from '@/services/api/queries';
 import { queryKeys } from '@/services/api/queryKeys';
-import { ArrowLeft, Trash2, Users } from 'lucide-react';
+import { ArrowLeft, Brain, MapPin, Trash2, Users } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { mockCandidates } from '@/mocks/mockParsedCv';
 
 export default function OfferDetails() {
   const { id } = useParams();
@@ -35,7 +36,9 @@ export default function OfferDetails() {
   const deleteMutation = useDeleteProviderOfferMutation();
 
   const offer = data?.offer;
-  const candidates = data?.candidates ?? [];
+  // const candidates = data?.candidates ?? mockCandidates;
+  //! TODO : REMOVE ME
+  const candidates = mockCandidates;
 
   const handleDelete = async () => {
     if (!id) return;
@@ -209,13 +212,25 @@ export default function OfferDetails() {
       </div>
 
       <div className="panel overflow-hidden card-border-top-orange">
-        <div className="px-4 py-3 border-b border-border bg-surface-muted">
-          <h2 className="text-sm font-semibold text-foreground">
-            Candidates linked to this offer
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Matched/applied candidates with their score and profile preview.
-          </p>
+        <div className="px-4 py-3 border-b border-border bg-surface-muted flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">
+              Candidates linked to this offer
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Applied candidates with their score and profile preview.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => {}}
+            // className="hover:bg-accent/90 text-accent-foreground"
+          >
+            <Brain className="h-4 w-4 mr-1.5" />
+            Candidats matchés
+          </Button>
         </div>
         {candidates.length === 0 ? (
           <div className="px-4 py-4 text-sm text-muted-foreground">
@@ -231,7 +246,6 @@ export default function OfferDetails() {
                     Occupation
                   </th>
                   <th className="text-left font-medium px-2 py-3">Location</th>
-                  <th className="text-left font-medium px-2 py-3">Status</th>
                   <th className="text-left font-medium px-2 py-3">Score</th>
                   <th className="text-right font-medium px-4 py-3">Action</th>
                 </tr>
@@ -251,13 +265,10 @@ export default function OfferDetails() {
                       {candidate.occupation}
                     </td>
                     <td className="px-2 py-3 text-xs text-muted-foreground">
-                      {candidate.location}
-                    </td>
-                    <td className="px-2 py-3">
-                      <StatusPill
-                        label={candidate.status}
-                        tone={statusToTone(candidate.status)}
-                      />
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {candidate.location}
+                      </span>
                     </td>
                     <td className="px-2 py-3">
                       <ScoreBadge score={candidate.score} size="sm" />
