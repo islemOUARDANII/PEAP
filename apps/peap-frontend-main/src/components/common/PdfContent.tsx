@@ -23,7 +23,7 @@ const PdfContent = ({ offer, candidates, matched = 40, applications = 60 }) => {
   const chartData = useMemo(() => {
     return mockDataChart;
   }, []);
-
+  console.log('matched', matched, 'applications', applications);
   const total = matched + applications;
   const recommendedPct =
     total > 0 ? Math.round((applications / total) * 100) : 0;
