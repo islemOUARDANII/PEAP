@@ -98,7 +98,7 @@ export const navByRole: Record<Role, RoleNavigation> = {
       {
         label: 'Navigation',
         items: [
-          { to: '/advisor', label: 'Dashboard', icon: LayoutDashboard },
+          { to: '/advisor', label: 'Accueil', icon: LayoutDashboard },
           { to: '/advisor/account', label: 'Gestion du compte', icon: UserCog },
           {
             to: '/advisor/activity',

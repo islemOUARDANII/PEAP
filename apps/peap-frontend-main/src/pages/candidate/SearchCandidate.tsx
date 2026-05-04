@@ -373,12 +373,12 @@ export default function SearchCandidate() {
             </Select>
 
             <div className="relative flex-1 min-w-[220px]">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
               <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search candidates by name, skills, or experience..."
-                className="h-9 bg-surface-muted pl-9 input-search"
+                className="h-9 bg-surface-muted pl-9 bg-primary pl-9 text-muted input-search"
               />
             </div>
 

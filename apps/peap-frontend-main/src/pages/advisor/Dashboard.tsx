@@ -30,7 +30,7 @@ function AdvisorActionCard({
 }) {
   const content = (
     <div
-      className={`panel h-full p-5 transition ${
+      className={`panel h-full p-5 transition card-border-left-orange ${
         disabled
           ? 'cursor-not-allowed opacity-60'
           : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
@@ -46,13 +46,13 @@ function AdvisorActionCard({
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="font-semibold text-foreground">{title}</h3>
               {badge ? (
-                <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                <span className="rounded-full border border-border bg-surface-muted px-2 py-0.5 text-[11px] text-muted-foreground ">
                   {badge}
                 </span>
               ) : null}
             </div>
 
-            <p className="mt-1 text-sm leading-6 text-muted-foreground ">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground max-w-[320px]">
               {description}
             </p>
           </div>

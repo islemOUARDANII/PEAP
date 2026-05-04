@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import {
   Eye,
   Filter,
@@ -10,31 +10,31 @@ import {
   Sparkles,
   Target,
   UserRound,
-} from "lucide-react";
-import { toast } from "sonner";
+} from 'lucide-react';
+import { toast } from 'sonner';
 
-import { PageHeader } from "@/components/common/PageHeader";
-import { ScoreBadge } from "@/components/common/ScoreBadge";
-import { SkillTag } from "@/components/common/SkillTag";
-import { StatusPill, statusToTone } from "@/components/common/StatusPill";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
+import { PageHeader } from '@/components/common/PageHeader';
+import { ScoreBadge } from '@/components/common/ScoreBadge';
+import { SkillTag } from '@/components/common/SkillTag';
+import { StatusPill, statusToTone } from '@/components/common/StatusPill';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
-import { Slider } from "@/components/ui/slider";
+} from '@/components/ui/select';
+import { Slider } from '@/components/ui/slider';
 import {
   Table,
   TableBody,
@@ -42,8 +42,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   createMatchingRunSafe,
   executeMatchingRunSafe,
@@ -54,7 +54,7 @@ import {
   getMatchingResultsSafe,
   isCandidateWithinEducationThreshold,
   isCandidateWithinLanguageThreshold,
-} from "@/services/api/demoGateway";
+} from '@/services/api/demoGateway';
 import {
   extractLanguageLevel,
   realDemoMatchingScenario,
@@ -63,7 +63,8 @@ import {
   type DemoMatchingModel,
   type DemoMatchingResult,
   type DemoOffer,
-} from "@/demo/demoData";
+} from '@/demo/demoData';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface MatchingFilters {
   educationLevel: DemoEducationLevel;
@@ -74,8 +75,8 @@ interface MatchingFilters {
   minScore: number;
 }
 
-const educationOptions: DemoEducationLevel[] = ["Bac", "Licence", "Master"];
-const languageOptions: DemoLanguageLevel[] = ["A2", "B1", "B2", "C1"];
+const educationOptions: DemoEducationLevel[] = ['Bac', 'Licence', 'Master'];
+const languageOptions: DemoLanguageLevel[] = ['A2', 'B1', 'B2', 'C1'];
 
 const buildFiltersFromOffer = (offer: DemoOffer): MatchingFilters => ({
   educationLevel: offer.educationLevel,
@@ -93,11 +94,11 @@ const getBestLanguageLevelFromResult = (
 ): DemoLanguageLevel =>
   result.languages.reduce<DemoLanguageLevel>((current, language) => {
     const nextLevel = extractLanguageLevel(language);
-    return ["A2", "B1", "B2", "C1"].indexOf(nextLevel) >
-      ["A2", "B1", "B2", "C1"].indexOf(current)
+    return ['A2', 'B1', 'B2', 'C1'].indexOf(nextLevel) >
+      ['A2', 'B1', 'B2', 'C1'].indexOf(current)
       ? nextLevel
       : current;
-  }, "A2");
+  }, 'A2');
 
 const normalizeRankedResults = (results: DemoMatchingResult[]) =>
   [...results]
@@ -108,59 +109,61 @@ const normalizeRankedResults = (results: DemoMatchingResult[]) =>
     }));
 
 const parseConfiguredIds = (value: string | null | undefined): string[] =>
-  (value ?? "")
-    .split(",")
+  (value ?? '')
+    .split(',')
     .map((item) => item.trim())
     .filter(Boolean);
 
 export default function DemoMatching() {
   const [searchParams] = useSearchParams();
-  const [selectedModelId, setSelectedModelId] = useState("");
-  const [selectedOfferId, setSelectedOfferId] = useState("");
+  const [selectedModelId, setSelectedModelId] = useState('');
+  const [selectedOfferId, setSelectedOfferId] = useState('');
   const [filters, setFilters] = useState<MatchingFilters | null>(null);
   const [baseResults, setBaseResults] = useState<DemoMatchingResult[]>([]);
-  const [selectedResult, setSelectedResult] = useState<DemoMatchingResult | null>(null);
-  const [executionNotice, setExecutionNotice] = useState("");
+  const [selectedResult, setSelectedResult] =
+    useState<DemoMatchingResult | null>(null);
+  const [executionNotice, setExecutionNotice] = useState('');
   const [executionDemoMode, setExecutionDemoMode] = useState(false);
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
-  const configuredScenario = useMemo(
-    () => {
-      const queryCandidateIds = parseConfiguredIds(
-        searchParams.get("candidateIds") ?? searchParams.get("candidates"),
-      );
+  const configuredScenario = useMemo(() => {
+    const queryCandidateIds = parseConfiguredIds(
+      searchParams.get('candidateIds') ?? searchParams.get('candidates'),
+    );
 
-      return {
-        offerId:
-          searchParams.get("offerId")?.trim() || realDemoMatchingScenario.offerId?.trim() || "",
-        modelVersionId:
-          searchParams.get("modelVersionId")?.trim() ||
-          realDemoMatchingScenario.modelVersionId?.trim() ||
-          "",
-        candidateIds:
-          queryCandidateIds.length > 0
-            ? queryCandidateIds
-            : (realDemoMatchingScenario.candidateIds ?? []).filter(Boolean),
-      };
-    },
-    [searchParams],
-  );
+    return {
+      offerId:
+        searchParams.get('offerId')?.trim() ||
+        realDemoMatchingScenario.offerId?.trim() ||
+        '',
+      modelVersionId:
+        searchParams.get('modelVersionId')?.trim() ||
+        realDemoMatchingScenario.modelVersionId?.trim() ||
+        '',
+      candidateIds:
+        queryCandidateIds.length > 0
+          ? queryCandidateIds
+          : (realDemoMatchingScenario.candidateIds ?? []).filter(Boolean),
+    };
+  }, [searchParams]);
 
   const modelsQuery = useQuery({
-    queryKey: ["demo", "advisor", "matching-models"],
+    queryKey: ['demo', 'advisor', 'matching-models'],
     queryFn: getMatchingModelsSafe,
     staleTime: 30_000,
   });
 
   const offersQuery = useQuery({
-    queryKey: ["demo", "advisor", "offers"],
+    queryKey: ['demo', 'advisor', 'offers'],
     queryFn: getAdvisorOffersSafe,
     staleTime: 30_000,
   });
 
   const models = modelsQuery.data?.data ?? [];
   const offers = offersQuery.data?.data ?? [];
-  const selectedModel = models.find((model) => model.id === selectedModelId) ?? models[0];
-  const selectedOffer = offers.find((offer) => offer.id === selectedOfferId) ?? offers[0];
+  const selectedModel =
+    models.find((model) => model.id === selectedModelId) ?? models[0];
+  const selectedOffer =
+    offers.find((offer) => offer.id === selectedOfferId) ?? offers[0];
   const scenarioNotice = useMemo(() => {
     const parts: string[] = [];
     if (configuredScenario.offerId) {
@@ -170,17 +173,21 @@ export default function DemoMatching() {
       parts.push(`modèle ${configuredScenario.modelVersionId}`);
     }
     if (configuredScenario.candidateIds.length > 0) {
-      parts.push(`${configuredScenario.candidateIds.length} candidat(s) imposé(s)`);
+      parts.push(
+        `${configuredScenario.candidateIds.length} candidat(s) imposé(s)`,
+      );
     }
     return parts.length > 0
-      ? `Scénario de démo ciblé: ${parts.join(" · ")}`
-      : "";
+      ? `Scénario de démo ciblé: ${parts.join(' · ')}`
+      : '';
   }, [configuredScenario]);
 
   useEffect(() => {
     if (!selectedModelId && models[0]) {
       const configuredModel =
-        models.find((model) => model.versionId === configuredScenario.modelVersionId) ?? models[0];
+        models.find(
+          (model) => model.versionId === configuredScenario.modelVersionId,
+        ) ?? models[0];
       setSelectedModelId(configuredModel.id);
     }
   }, [configuredScenario.modelVersionId, models, selectedModelId]);
@@ -188,7 +195,8 @@ export default function DemoMatching() {
   useEffect(() => {
     if (!selectedOfferId && offers[0]) {
       const configuredOffer =
-        offers.find((offer) => offer.id === configuredScenario.offerId) ?? offers[0];
+        offers.find((offer) => offer.id === configuredScenario.offerId) ??
+        offers[0];
       setSelectedOfferId(configuredOffer.id);
     }
   }, [configuredScenario.offerId, offers, selectedOfferId]);
@@ -201,21 +209,21 @@ export default function DemoMatching() {
     setFilters(buildFiltersFromOffer(selectedOffer));
     setBaseResults([]);
     setSelectedResult(null);
-    setExecutionNotice("");
+    setExecutionNotice('');
     setExecutionDemoMode(false);
   }, [selectedOffer?.id]);
 
   const launchMutation = useMutation({
     mutationFn: async () => {
       if (!selectedOffer || !selectedModel || !filters) {
-        throw new Error("Sélection incomplète pour lancer le matching.");
+        throw new Error('Sélection incomplète pour lancer le matching.');
       }
 
       const createResult = await createMatchingRunSafe({
-        run_type: "MANUAL",
+        run_type: 'MANUAL',
         direction: selectedModel.direction,
         model_version_id: selectedModel.versionId,
-        source_entity_type: "OFFER",
+        source_entity_type: 'OFFER',
         source_entity_id: selectedOffer.id,
         parameters_json: {
           education_level: filters.educationLevel,
@@ -246,7 +254,9 @@ export default function DemoMatching() {
     onSuccess: ({ createResult, executeResult, resultsResult }) => {
       setBaseResults(normalizeRankedResults(resultsResult.data));
       setExecutionDemoMode(
-        createResult.demoMode || executeResult.demoMode || resultsResult.demoMode,
+        createResult.demoMode ||
+          executeResult.demoMode ||
+          resultsResult.demoMode,
       );
 
       const notices = [
@@ -256,18 +266,20 @@ export default function DemoMatching() {
       ].filter(Boolean);
 
       setExecutionNotice(
-        createResult.demoMode || executeResult.demoMode || resultsResult.demoMode
-          ? "Mode démonstration utilisé pour cette exécution"
-          : notices[0] ?? "",
+        createResult.demoMode ||
+          executeResult.demoMode ||
+          resultsResult.demoMode
+          ? 'Mode démonstration utilisé pour cette exécution'
+          : (notices[0] ?? ''),
       );
 
-      toast.success("Matching lancé avec succès.");
+      toast.success('Matching lancé avec succès.');
     },
     onError: (error) => {
       const message =
         error instanceof Error
           ? error.message
-          : "Impossible de lancer le matching pour cette offre.";
+          : 'Impossible de lancer le matching pour cette offre.';
       setExecutionNotice(message);
       toast.error(message);
     },
@@ -284,7 +296,12 @@ export default function DemoMatching() {
 
     return normalizeRankedResults(
       (baseResults ?? []).filter((result) => {
-        if (!isCandidateWithinEducationThreshold(resultToCandidate(result), filters.educationLevel)) {
+        if (
+          !isCandidateWithinEducationThreshold(
+            resultToCandidate(result),
+            filters.educationLevel,
+          )
+        ) {
           return false;
         }
 
@@ -296,17 +313,30 @@ export default function DemoMatching() {
           return false;
         }
 
-        if (getDistanceForOffer(resultToCandidate(result), selectedOffer) > filters.maxDistanceKm) {
+        if (
+          getDistanceForOffer(resultToCandidate(result), selectedOffer) >
+          filters.maxDistanceKm
+        ) {
           return false;
         }
 
-        if (!isCandidateWithinLanguageThreshold(resultToCandidate(result), filters.languageLevel)) {
+        if (
+          !isCandidateWithinLanguageThreshold(
+            resultToCandidate(result),
+            filters.languageLevel,
+          )
+        ) {
           return false;
         }
 
         if (
           enabledSkills.length > 0 &&
-          !enabledSkills.every((skill) => getMatchedSkillsForOffer(resultToCandidate(result), selectedOffer).includes(skill))
+          !enabledSkills.every((skill) =>
+            getMatchedSkillsForOffer(
+              resultToCandidate(result),
+              selectedOffer,
+            ).includes(skill),
+          )
         ) {
           return false;
         }
@@ -355,7 +385,10 @@ export default function DemoMatching() {
         }
       />
 
-      {(modelsQuery.data?.errorMessage || offersQuery.data?.errorMessage || executionNotice || scenarioNotice) ? (
+      {modelsQuery.data?.errorMessage ||
+      offersQuery.data?.errorMessage ||
+      executionNotice ||
+      scenarioNotice ? (
         <section className="panel border-warning/30 bg-warning-soft/40 p-4">
           <div className="flex flex-col gap-2 text-sm text-foreground">
             {modelsQuery.data?.errorMessage ? (
@@ -364,150 +397,13 @@ export default function DemoMatching() {
             {offersQuery.data?.errorMessage ? (
               <p>{offersQuery.data.errorMessage}</p>
             ) : null}
-            {scenarioNotice ? (
-              <p>{scenarioNotice}</p>
-            ) : null}
+            {scenarioNotice ? <p>{scenarioNotice}</p> : null}
             {executionNotice ? (
               <p className="font-medium">{executionNotice}</p>
             ) : null}
           </div>
         </section>
       ) : null}
-
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
-        <section className="panel p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="stat-label">Modèles disponibles</p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">
-                Sélection du modèle de matching
-              </h2>
-            </div>
-            <StatusPill
-              label={`${(models ?? []).length} modèle(s)`}
-              tone="info"
-              dot={false}
-            />
-          </div>
-
-          {modelsQuery.isLoading ? (
-            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Chargement des modèles...
-            </div>
-          ) : (
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {(models ?? []).map((model) => (
-                <button
-                  key={model.id}
-                  type="button"
-                  onClick={() => setSelectedModelId(model.id)}
-                  className={cn(
-                    "rounded-3xl border p-4 text-left transition-all",
-                    selectedModel?.id === model.id
-                      ? "border-primary bg-primary-muted/40 shadow-sm"
-                      : "border-border bg-background hover:border-primary/40 hover:bg-primary-muted/10",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="rounded-2xl bg-primary-muted p-3 text-primary">
-                      <Sparkles className="h-5 w-5" />
-                    </div>
-                    <StatusPill
-                      label={model.status}
-                      tone={statusToTone(model.status)}
-                    />
-                  </div>
-
-                  <h3 className="mt-4 text-base font-semibold text-foreground">
-                    {model.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {model.direction === "OFFER_TO_CANDIDATES"
-                      ? "Offre vers candidats"
-                      : model.direction}
-                  </p>
-
-                  <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Version {model.version}</span>
-                    <span>{model.criteriaWeights.length} critères</span>
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(model.criteriaWeights ?? []).map((criterion) => (
-                      <SkillTag
-                        key={`${model.id}-${criterion.label}`}
-                        label={`${criterion.label} ${criterion.weight}%`}
-                        variant={criterion.isMust ? "matched" : "outline"}
-                      />
-                    ))}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <section className="panel p-5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="stat-label">Offres à matcher</p>
-              <h2 className="mt-1 text-lg font-semibold text-foreground">
-                Choix de l'offre
-              </h2>
-            </div>
-            <StatusPill
-              label={`${(offers ?? []).length} offre(s)`}
-              tone="info"
-              dot={false}
-            />
-          </div>
-
-          {offersQuery.isLoading ? (
-            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Chargement des offres...
-            </div>
-          ) : (
-            <div className="mt-5 space-y-3">
-              {(offers ?? []).map((offer) => (
-                <button
-                  key={offer.id}
-                  type="button"
-                  onClick={() => setSelectedOfferId(offer.id)}
-                  className={cn(
-                    "w-full rounded-3xl border p-4 text-left transition-all",
-                    selectedOffer?.id === offer.id
-                      ? "border-accent bg-accent-soft/30 shadow-sm"
-                      : "border-border bg-background hover:border-accent/40 hover:bg-accent-soft/10",
-                  )}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-sm font-semibold text-foreground">
-                        {offer.title}
-                      </h3>
-                      <p className="mt-1 text-xs text-muted-foreground">
-                        {offer.company} · {offer.location}
-                      </p>
-                    </div>
-                    <StatusPill
-                      label={offer.status}
-                      tone={statusToTone(offer.status)}
-                    />
-                  </div>
-
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    {(offer.requiredSkills ?? []).map((skill) => (
-                      <SkillTag key={`${offer.id}-${skill}`} label={skill} variant="matched" />
-                    ))}
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
 
       {selectedOffer && filters ? (
         <section className="panel overflow-hidden">
@@ -519,14 +415,16 @@ export default function DemoMatching() {
                   Ajustez les exigences de l'offre
                 </h2>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  Les filtres sont générés à partir des prérequis de l'offre sélectionnée et mettent à jour les résultats immédiatement côté frontend.
+                  Les filtres sont générés à partir des prérequis de l'offre
+                  sélectionnée et mettent à jour les résultats immédiatement
+                  côté frontend.
                 </p>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
                 <StatusPill
                   label={`${activeFiltersCount} filtre(s) ajusté(s)`}
-                  tone={activeFiltersCount > 0 ? "accent" : "neutral"}
+                  tone={activeFiltersCount > 0 ? 'accent' : 'neutral'}
                   dot={false}
                 />
                 <Button
@@ -541,8 +439,8 @@ export default function DemoMatching() {
                     <PlayCircle className="h-4 w-4" />
                   )}
                   {launchMutation.isPending
-                    ? "Matching en cours..."
-                    : "Lancer le matching"}
+                    ? 'Matching en cours...'
+                    : 'Lancer le matching'}
                 </Button>
               </div>
             </div>
@@ -555,7 +453,8 @@ export default function DemoMatching() {
                   {selectedOffer.title}
                 </p>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {selectedOffer.company} · {selectedOffer.location} · {selectedOffer.contractType} · {selectedOffer.workMode}
+                  {selectedOffer.company} · {selectedOffer.location} ·{' '}
+                  {selectedOffer.contractType} · {selectedOffer.workMode}
                 </p>
                 <p className="mt-4 text-sm leading-6 text-foreground/90">
                   {selectedOffer.description}
@@ -577,7 +476,12 @@ export default function DemoMatching() {
                   value={filters.educationLevel}
                   onValueChange={(value) =>
                     setFilters((current) =>
-                      current ? { ...current, educationLevel: value as DemoEducationLevel } : current,
+                      current
+                        ? {
+                            ...current,
+                            educationLevel: value as DemoEducationLevel,
+                          }
+                        : current,
                     )
                   }
                   options={educationOptions}
@@ -589,11 +493,14 @@ export default function DemoMatching() {
                   onValueChange={(value) =>
                     setFilters((current) =>
                       current
-                        ? { ...current, minExperienceYears: Number.parseInt(value, 10) }
+                        ? {
+                            ...current,
+                            minExperienceYears: Number.parseInt(value, 10),
+                          }
                         : current,
                     )
                   }
-                  options={["0", "1", "2", "3", "4", "5"]}
+                  options={['0', '1', '2', '3', '4', '5']}
                   formatter={(value) => `${value} an(s)`}
                 />
               </div>
@@ -659,7 +566,12 @@ export default function DemoMatching() {
                 value={filters.languageLevel}
                 onValueChange={(value) =>
                   setFilters((current) =>
-                    current ? { ...current, languageLevel: value as DemoLanguageLevel } : current,
+                    current
+                      ? {
+                          ...current,
+                          languageLevel: value as DemoLanguageLevel,
+                        }
+                      : current,
                   )
                 }
                 options={languageOptions}
@@ -684,12 +596,12 @@ export default function DemoMatching() {
                           setFilters((current) =>
                             current
                               ? {
-                                ...current,
-                                requiredSkills: {
-                                  ...current.requiredSkills,
-                                  [skill]: checked === true,
-                                },
-                              }
+                                  ...current,
+                                  requiredSkills: {
+                                    ...current.requiredSkills,
+                                    [skill]: checked === true,
+                                  },
+                                }
                               : current,
                           )
                         }
@@ -704,6 +616,146 @@ export default function DemoMatching() {
         </section>
       ) : null}
 
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <section className="panel p-5 card-border-top">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="stat-label">Modèles disponibles</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">
+                Sélection du modèle de matching
+              </h2>
+            </div>
+            <StatusPill
+              label={`${(models ?? []).length} modèle(s)`}
+              tone="info"
+              dot={false}
+            />
+          </div>
+
+          {modelsQuery.isLoading ? (
+            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Chargement des modèles...
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {(models ?? []).map((model) => (
+                <button
+                  key={model.id}
+                  type="button"
+                  onClick={() => setSelectedModelId(model.id)}
+                  className={cn(
+                    'rounded-3xl border p-4 text-left transition-all',
+                    selectedModel?.id === model.id
+                      ? 'border-primary bg-primary-muted/40 shadow-sm'
+                      : 'border-border bg-background hover:border-primary/40 hover:bg-primary-muted/10',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="rounded-2xl bg-primary-muted p-3 text-primary">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <StatusPill
+                      label={model.status}
+                      tone={statusToTone(model.status)}
+                    />
+                  </div>
+
+                  <h3 className="mt-4 text-base font-semibold text-foreground">
+                    {model.name}
+                  </h3>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {model.direction === 'OFFER_TO_CANDIDATES'
+                      ? 'Offre vers candidats'
+                      : model.direction}
+                  </p>
+
+                  <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>Version {model.version}</span>
+                    <span>{model.criteriaWeights.length} critères</span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {(model.criteriaWeights ?? []).map((criterion) => (
+                      <SkillTag
+                        key={`${model.id}-${criterion.label}`}
+                        label={`${criterion.label} ${criterion.weight}%`}
+                        variant={criterion.isMust ? 'matched' : 'outline'}
+                      />
+                    ))}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section className="panel p-5 card-border-top">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="stat-label">Offres à matcher</p>
+              <h2 className="mt-1 text-lg font-semibold text-foreground">
+                Choix de l'offre
+              </h2>
+            </div>
+            <StatusPill
+              label={`${(offers ?? []).length} offre(s)`}
+              tone="info"
+              dot={false}
+            />
+          </div>
+
+          {offersQuery.isLoading ? (
+            <div className="mt-6 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Chargement des offres...
+            </div>
+          ) : (
+            <ScrollArea className="h-full max-h-[800px] p-3">
+              <div className="space-y-1">
+                {(offers ?? []).map((offer) => (
+                  <button
+                    key={offer.id}
+                    type="button"
+                    onClick={() => setSelectedOfferId(offer.id)}
+                    className={cn(
+                      'w-full rounded-xl border p-2 text-left transition-all',
+                      selectedOffer?.id === offer.id
+                        ? 'border-accent bg-accent-soft/30 shadow-sm card-border-left-orange'
+                        : 'border-border bg-background hover:border-accent/40 hover:bg-accent-soft/10',
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-foreground">
+                          {offer.title}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {offer.company} · {offer.location}
+                        </p>
+                      </div>
+                      <StatusPill
+                        label={offer.status}
+                        tone={statusToTone(offer.status)}
+                      />
+                    </div>
+                    {/* <div className="mt-4 flex flex-wrap gap-2">
+                    {(offer.requiredSkills ?? []).map((skill) => (
+                      <SkillTag
+                        key={`${offer.id}-${skill}`}
+                        label={skill}
+                        variant="matched"
+                      />
+                    ))}
+                  </div> */}
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          )}
+        </section>
+      </div>
+
       <section className="panel overflow-hidden">
         <div className="border-b border-border bg-surface-muted px-5 py-4">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -713,18 +765,24 @@ export default function DemoMatching() {
                 Candidats classés
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                Consultez le score global, les compétences alignées et les écarts à traiter avant prise de décision.
+                Consultez le score global, les compétences alignées et les
+                écarts à traiter avant prise de décision.
               </p>
             </div>
 
             {filteredResults.length > 0 ? (
               <div className="grid grid-cols-3 gap-2">
-                <MetricCard label="Résultats" value={String(filteredResults.length)} />
+                <MetricCard
+                  label="Résultats"
+                  value={String(filteredResults.length)}
+                />
                 <MetricCard
                   label="Score moyen"
                   value={`${Math.round(
-                    filteredResults.reduce((total, item) => total + item.score, 0) /
-                    filteredResults.length,
+                    filteredResults.reduce(
+                      (total, item) => total + item.score,
+                      0,
+                    ) / filteredResults.length,
                   )}%`}
                 />
                 <MetricCard
@@ -749,7 +807,9 @@ export default function DemoMatching() {
           </div>
         ) : filteredResults.length === 0 ? (
           <div className="px-5 py-8 text-sm text-muted-foreground">
-            Aucun candidat ne correspond aux filtres courants. Essayez par exemple d'augmenter la distance maximum ou de réduire le score minimum.
+            Aucun candidat ne correspond aux filtres courants. Essayez par
+            exemple d'augmenter la distance maximum ou de réduire le score
+            minimum.
           </div>
         ) : (
           <Table>
@@ -795,27 +855,45 @@ export default function DemoMatching() {
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
                       {(result.matchedSkills ?? []).slice(0, 3).map((skill) => (
-                        <SkillTag key={`${result.id}-matched-${skill}`} label={skill} variant="matched" />
+                        <SkillTag
+                          key={`${result.id}-matched-${skill}`}
+                          label={skill}
+                          variant="matched"
+                        />
                       ))}
                       {result.matchedSkills.length === 0 ? (
-                        <span className="text-xs text-muted-foreground">Aucune</span>
+                        <span className="text-xs text-muted-foreground">
+                          Aucune
+                        </span>
                       ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1.5">
                       {(result.gaps ?? []).slice(0, 2).map((gap) => (
-                        <SkillTag key={`${result.id}-gap-${gap}`} label={gap} variant="missing" />
+                        <SkillTag
+                          key={`${result.id}-gap-${gap}`}
+                          label={gap}
+                          variant="missing"
+                        />
                       ))}
                       {result.gaps.length === 0 ? (
-                        <span className="text-xs text-success">Aucun écart majeur</span>
+                        <span className="text-xs text-success">
+                          Aucun écart majeur
+                        </span>
                       ) : null}
                     </div>
                   </TableCell>
                   <TableCell>
                     <StatusPill
                       label={result.status}
-                      tone={result.score >= 80 ? "success" : result.score >= 65 ? "accent" : "warning"}
+                      tone={
+                        result.score >= 80
+                          ? 'success'
+                          : result.score >= 65
+                            ? 'accent'
+                            : 'warning'
+                      }
                     />
                   </TableCell>
                   <TableCell className="text-right">
@@ -843,7 +921,7 @@ export default function DemoMatching() {
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {selectedResult?.candidateName ?? "Détail candidat"}
+              {selectedResult?.candidateName ?? 'Détail candidat'}
             </DialogTitle>
             <DialogDescription>
               Lecture détaillée du score, des points forts et des écarts.
@@ -853,16 +931,16 @@ export default function DemoMatching() {
           {selectedResult ? (
             <div className="space-y-5">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <DetailStat label="Score global" value={`${selectedResult.score}%`} />
+                <DetailStat
+                  label="Score global"
+                  value={`${selectedResult.score}%`}
+                />
                 <DetailStat label="Profil" value={selectedResult.title} />
                 <DetailStat
                   label="Distance"
                   value={`${selectedResult.distanceKm} km`}
                 />
-                <DetailStat
-                  label="Statut"
-                  value={selectedResult.status}
-                />
+                <DetailStat label="Statut" value={selectedResult.status} />
               </div>
 
               <div className="grid gap-5 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -887,8 +965,12 @@ export default function DemoMatching() {
                         </p>
                         <div className="mt-3">
                           <StatusPill
-                            label={criterion.matched ? "Critère validé" : "Point à traiter"}
-                            tone={criterion.matched ? "success" : "warning"}
+                            label={
+                              criterion.matched
+                                ? 'Critère validé'
+                                : 'Point à traiter'
+                            }
+                            tone={criterion.matched ? 'success' : 'warning'}
                           />
                         </div>
                       </div>
@@ -903,7 +985,11 @@ export default function DemoMatching() {
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(selectedResult.matchedItems ?? []).map((item) => (
-                        <SkillTag key={`${selectedResult.id}-ok-${item}`} label={item} variant="matched" />
+                        <SkillTag
+                          key={`${selectedResult.id}-ok-${item}`}
+                          label={item}
+                          variant="matched"
+                        />
                       ))}
                     </div>
                   </div>
@@ -914,7 +1000,11 @@ export default function DemoMatching() {
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {(selectedResult.missingItems ?? []).map((item) => (
-                        <SkillTag key={`${selectedResult.id}-missing-${item}`} label={item} variant="missing" />
+                        <SkillTag
+                          key={`${selectedResult.id}-missing-${item}`}
+                          label={item}
+                          variant="missing"
+                        />
                       ))}
                     </div>
                   </div>
@@ -1000,16 +1090,16 @@ function resultToCandidate(result: DemoMatchingResult) {
     name: result.candidateName,
     title: result.title,
     location: result.location,
-    email: "",
-    phone: "",
+    email: '',
+    phone: '',
     educationLevel: result.educationLevel,
     yearsExperience: result.yearsExperience,
     skills: result.skills,
     languages: result.languages.map((language) => {
-      const parts = language.split(" ");
+      const parts = language.split(' ');
       const level = parts[parts.length - 1];
       return {
-        name: parts.slice(0, -1).join(" ") || parts[0] || "Français",
+        name: parts.slice(0, -1).join(' ') || parts[0] || 'Français',
         level: extractLanguageLevel(level),
       };
     }),
