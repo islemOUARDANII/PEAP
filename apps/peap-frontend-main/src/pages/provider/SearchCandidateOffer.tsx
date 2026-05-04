@@ -154,7 +154,7 @@ function FiltersPanel({
         </div>
       </div>
 
-      <div>
+      {/* <div>
         <Label className="stat-label">Skills</Label>
         <div className="mt-2 flex flex-wrap gap-1">
           {availableSkills.slice(0, 16).map((skill) => {
@@ -175,7 +175,7 @@ function FiltersPanel({
             );
           })}
         </div>
-      </div>
+      </div> */}
 
       <div>
         <div className="flex items-center justify-between">
@@ -354,7 +354,7 @@ export default function SearchCandidateOffer() {
             disabled={shortlisted.length === 0}
           >
             <Download className="h-4 w-4 mr-1.5" />
-            Export shortlist ({shortlisted.length})
+            Exporter la sélection ({shortlisted.length})
           </Button>
         }
       />
@@ -436,11 +436,11 @@ export default function SearchCandidateOffer() {
           <div className="panel p-4 text-sm text-muted-foreground">
             {activeOffer ? (
               <>
-                Matching against{' '}
+                Correspondance avec{' '}
                 <span className="font-semibold text-foreground">
                   {activeOffer.title}
                 </span>
-                . Required skills:{' '}
+                . Compétences requises :{' '}
                 <span className="font-medium text-foreground">
                   {required.length > 0
                     ? required.join(', ')

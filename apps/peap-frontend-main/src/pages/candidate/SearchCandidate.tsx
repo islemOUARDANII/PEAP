@@ -378,7 +378,7 @@ export default function SearchCandidate() {
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search candidates by name, skills, or experience..."
-                className="h-9 bg-surface-muted pl-9"
+                className="h-9 bg-surface-muted pl-9 input-search"
               />
             </div>
 
@@ -426,11 +426,11 @@ export default function SearchCandidate() {
           <div className="panel p-4 text-sm text-muted-foreground">
             {activeOffer ? (
               <>
-                Matching against{' '}
+                Correspondance avec{' '}
                 <span className="font-semibold text-foreground">
                   {activeOffer.title}
                 </span>
-                . Required skills:{' '}
+                . Compétences requises :{' '}
                 <span className="font-medium text-foreground">
                   {required.length > 0
                     ? required.join(', ')

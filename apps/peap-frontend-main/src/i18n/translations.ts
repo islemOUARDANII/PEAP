@@ -212,7 +212,7 @@ const frExact: Record<string, string> = {
   'Name, role, or skill...': 'Nom, role ou competence...',
   'Name, role, skillâ€¦': 'Nom, role ou competence...',
   'Min experience': 'Expérience min.',
-  'Minimum match': 'Matching minimum',
+  'Minimum match': 'Correspondance min.',
   'Reset filters': 'Reinitialiser les filtres',
   'Search candidates by name, skills, or experience...':
     'Rechercher des candidats par nom, competences ou experience...',

@@ -248,13 +248,13 @@ export default function ProviderDashboard() {
         <div className="panel p-5 card-border-top">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-sm font-semibold text-foreground">
-              Top offers by visibility
+              Meilleures offres par visibilité
             </h2>
             <Link
               to="/provider/offers"
               className="text-xs text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-primary"
             >
-              All <ChevronRight className="h-3 w-3" />
+              Tous <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           <ul className="space-y-3">
@@ -285,27 +285,29 @@ export default function ProviderDashboard() {
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-sm font-semibold text-foreground">
-              Recent matched candidates
+              Liste de candidats identifiés
             </h2>
             <p className="text-xs text-muted-foreground">
-              Across all your active offers
+              Sur l’ensemble de vos offres actives
             </p>
           </div>
           <Link
             to="/provider/candidates"
             className="text-xs text-center text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-20"
           >
-            View all <ChevronRight className="h-3 w-3" />
+            Voir tout <ChevronRight className="h-3 w-3" />
           </Link>
         </div>
         <div className="overflow-x-auto -mx-5">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-xs text-muted-foreground border-b border-border">
-                <th className="text-left font-medium px-5 py-2.5">Candidate</th>
-                <th className="text-left font-medium px-2 py-2.5">Role</th>
-                <th className="text-left font-medium px-2 py-2.5">Location</th>
-                <th className="text-left font-medium px-2 py-2.5">Status</th>
+                <th className="text-left font-medium px-5 py-2.5">Candidat</th>
+                <th className="text-left font-medium px-2 py-2.5">Poste</th>
+                <th className="text-left font-medium px-2 py-2.5">
+                  Localisation
+                </th>
+                <th className="text-left font-medium px-2 py-2.5">Statut</th>
                 <th className="text-left font-medium px-2 py-2.5">Score</th>
                 <th className="text-right font-medium px-5 py-2.5"></th>
               </tr>

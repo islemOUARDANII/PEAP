@@ -25,11 +25,11 @@ export const CustomTooltip = ({ active, payload, label }: any) => {
           Offer Id : {label}
         </p>
         <p className="text-xs text-primary">
-          {'● '}Matches:{' '}
+          {'● '}Identifiés:{' '}
           <span className="font-semibold text-primary">{payload[0].value}</span>
         </p>
         <p className="text-xs text-accent">
-          {'● '}Application:{' '}
+          {'● '}Applicants:{' '}
           <span className="font-semibold text-accent">{payload[1].value}</span>
         </p>
       </div>
