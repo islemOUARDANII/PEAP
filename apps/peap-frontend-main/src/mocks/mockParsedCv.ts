@@ -135,7 +135,7 @@ export const mockCandidates: Candidate[] = [
     occupation: 'Developpeur frontend',
     location: 'Tunis, Tunisie',
     experienceYears: 3,
-    score: null,
+    score: 90,
     topSkills: ['React', 'TypeScript', 'Tailwind'],
     missing: ['Next.js', 'Testing'],
     summary: 'Developpeur frontend concevant des applications web modernes.',

@@ -30,6 +30,7 @@ import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
 import { chartsConfig } from '@/app/constants';
 import { useMemo } from 'react';
 import PdfContent from '@/components/common/PdfContent';
+import { mockCandidates } from '@/mocks/mockParsedCv';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -313,7 +314,7 @@ export default function ProviderDashboard() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {recent.map((c) => (
+              {mockCandidates.map((c) => (
                 <tr key={c.id} className="hover:bg-surface-muted">
                   <td className="px-5 py-3">
                     <div className="flex items-center gap-2.5">
