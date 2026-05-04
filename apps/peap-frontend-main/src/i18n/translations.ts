@@ -181,7 +181,7 @@ const frExact: Record<string, string> = {
   Admin: 'Administrateur',
   'Secure portal': 'Portail securise',
   'Back to Portal': 'Retour au portail',
-  'Welcome Back': 'Bon retour',
+  'Welcome Back': '',
   'Sign in to access your dashboard and continue your workflow.':
     'Connectez-vous pour acceder a votre tableau de bord et poursuivre votre travail.',
   'Username or email': "Nom d'utilisateur ou email",
@@ -199,7 +199,7 @@ const frExact: Record<string, string> = {
   'A unified workspace built for advisors, managers and operations teams â€” designed to surface the right candidate at the right moment.':
     'Un espace de travail unifie pour les conseillers, responsables et equipes operationnelles, concu pour faire ressortir le bon candidat au bon moment.',
   '"This platform helps our team stay efficient and deliver high-quality results. The matching intelligence cut our screening time in half."':
-    '"Cette plateforme aide notre equipe a rester efficace et a fournir des resultats de qualite. L\'intelligence de matching a reduit de moitie notre temps de tri."',
+    'La plateforme de l’ANETI est un espace digital dédié à la mise en relation entre candidats, conseillers ANETI et employeurs en Tunisie. Elle facilite la recherche d’emploi, l’accompagnement professionnel et le recrutement grâce à des outils intelligents et personnalisés.',
   'Platform User': 'Utilisateur de la plateforme',
   'MatchCore home': 'Accueil MatchCore',
   'Expand sidebar (Ctrl+B)': 'Developper la barre laterale (Ctrl+B)',

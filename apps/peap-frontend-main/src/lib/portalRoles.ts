@@ -25,17 +25,18 @@ export interface PortalRole {
 
 export const portalRoles: PortalRole[] = [
   {
-    id: 'advisor',
-    label: 'Conseiller ANETI',
-    subtitle: 'Accompagnement et orientation',
+    id: 'candidate',
+    label: 'Espace Candidat',
+    subtitle: "Chercheur d'emploi",
     description:
-      'Consulter les candidats, rechercher des offres, lancer des matchings et analyser les recommandations.',
-    icon: UserCog,
-    dashboard: '/advisor',
+      "Accéder à votre profil, consulter les offres, postuler et suivre vos recommandations d'emploi.",
+    icon: UserRound,
+    dashboard: '/candidate',
   },
+
   {
     id: 'provider',
-    label: 'Employeur',
+    label: 'Espace Employeur',
     subtitle: 'Entreprise / recruteur',
     description:
       'Publier des offres, rechercher des candidats, consulter les candidatures reçues et suivre vos recrutements.',
@@ -43,32 +44,32 @@ export const portalRoles: PortalRole[] = [
     dashboard: '/provider',
   },
   {
-    id: 'functional-admin',
-    label: 'Admin fonctionnel',
-    subtitle: 'Configuration métier',
+    id: 'advisor',
+    label: 'Espace Conseiller',
+    subtitle: 'Accompagnement et orientation',
     description:
-      'Configurer les modèles de matching, les critères, les poids, les règles métier et les référentiels.',
-    icon: SlidersHorizontal,
-    dashboard: '/advisor/functional-admin',
+      'Consulter les candidats, rechercher des offres, lancer des matchings et analyser les recommandations.',
+    icon: UserCog,
+    dashboard: '/advisor',
   },
-  {
-    id: 'technical-admin',
-    label: 'Admin technique',
-    subtitle: 'Monitoring plateforme',
-    description:
-      'Surveiller les services, les pipelines, les intégrations, les logs techniques et la santé du système.',
-    icon: Wrench,
-    dashboard: '/advisor/technical-admin',
-  },
-  {
-    id: 'candidate',
-    label: 'Candidat',
-    subtitle: "Chercheur d'emploi",
-    description:
-      "Accéder à votre profil, consulter les offres, postuler et suivre vos recommandations d'emploi.",
-    icon: UserRound,
-    dashboard: '/candidate',
-  },
+  // {
+  //   id: 'functional-admin',
+  //   label: 'Admin fonctionnel',
+  //   subtitle: 'Configuration métier',
+  //   description:
+  //     'Configurer les modèles de matching, les critères, les poids, les règles métier et les référentiels.',
+  //   icon: SlidersHorizontal,
+  //   dashboard: '/advisor/functional-admin',
+  // },
+  // {
+  //   id: 'technical-admin',
+  //   label: 'Admin technique',
+  //   subtitle: 'Monitoring plateforme',
+  //   description:
+  //     'Surveiller les services, les pipelines, les intégrations, les logs techniques et la santé du système.',
+  //   icon: Wrench,
+  //   dashboard: '/advisor/technical-admin',
+  // },
 ];
 
 export const getPortalRole = (id: string): PortalRole | undefined =>

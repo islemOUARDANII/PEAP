@@ -956,3 +956,15 @@
   border-color: #3B82F6;
   transition: border 0.08s ease-in-out
 }
+
+
+.card-button-portal {
+  border: 2px solid;
+
+  border-color: hsl(var(--accent));
+  border-radius: 2rem;
+}
+
+.card-button-portal:hover {
+  border-left: 12px solid hsl(var(--accent));
+}

@@ -47,7 +47,6 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getPortalRole } from '@/lib/portalRoles';
 
-
 interface LoginLocationState {
   from?: string;
 }
@@ -331,14 +330,14 @@ export default function Login() {
               <ArrowLeft className="h-4 w-4" />
               Back to Portal
             </Link>
-            <Link to="/" className="flex items-center gap-2 lg:hidden">
+            {/* <Link to="/" className="flex items-center gap-2 lg:hidden">
               <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
                 <ShieldCheck className="h-4 w-4" />
               </div>
               <span className="text-sm font-semibold text-foreground">
                 TalentMesh
               </span>
-            </Link>
+            </Link> */}
           </div>
           <div className="relative">
             <span className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-muted px-2.5 py-1 text-xs text-muted-foreground">
@@ -801,20 +800,18 @@ export default function Login() {
             <div className="w-full max-w-[440px]">
               <div className="p-8 sm:p-10">
                 {/* Role chip */}
-                <div className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 mb-6">
+                <div className="flex w-full items-center justify-center gap-2 rounded-full border border-border bg-surface px-3 py-1 mb-6">
                   {/* <Icon className="h-3.5 w-3.5 text-primary" /> */}
                   <span className="text-[16px] font-medium text-muted-foreground">
-                    Signing in as{' '}
+                    Connexion à l’{' '}
                     <span className="text-foreground font-semibold text-primary">
                       {roleLabel}
                     </span>
                   </span>
                 </div>
 
-                <h1 className="text-3xl font-semibold tracking-tight text-foreground">
-                  Welcome Back
-                </h1>
-                <p className="mt-2 text-sm text-muted-foreground">
+                <h1 className="text-3xl font-semibold tracking-tight text-foreground"></h1>
+                <p className="mt-2 text-sm text-muted-foreground px-2">
                   Sign in to access your dashboard and continue your workflow.
                 </p>
 
@@ -903,69 +900,62 @@ export default function Login() {
               </div>
             </div>
             {/* RIGHT — Brand panel */}
-            <aside className="hidden lg:flex relative overflow-hidden bg-primary text-primary-foreground rounded-2xl-right">
+            <aside className="hidden lg:flex relative overflow-hidden bg-primary text-primary-foreground rounded-2xl-right h-full flex-1">
               {/* Decorative gradients */}
               <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-accent opacity-95" />
               <div className="absolute -top-32 -right-32 h-96 w-96 rounded-full bg-primary-foreground/10 blur-3xl" />
               <div className="absolute -bottom-40 -left-20 h-[28rem] w-[28rem] rounded-full bg-accent/30 blur-3xl" />
 
-              <div className="relative z-10 flex flex-col justify-between p-10 w-full">
+              <div className="relative z-10 flex flex-col justify-between p-10 w-full h-full">
                 {/* Brand */}
-                <Link to="/" className="flex items-center gap-2.5 self-start">
-                  <div className="flex items-center gap-2.5 ">
-                    <div className="">
-                      <img
-                        src={myImage}
-                        alt="Logo"
-                        className="h-16 w-full object-contain object-left"
-                      />
+                <div className="flex flex-col flex-1 min-h-[400px] min-w-[380px] w-full ">
+                  <Link to="/" className="flex items-center gap-2.5 self-start">
+                    <div className="flex items-center gap-2.5 ">
+                      <div className="">
+                        <img
+                          src={myImage}
+                          alt="Logo"
+                          className="h-[120px] w-full object-contain object-left"
+                        />
+                      </div>
                     </div>
-                  </div>
-                </Link>
+                  </Link>
 
-                {/* Headline + testimonial */}
-                <div className="mt-5 max-w-md">
-                  <div>
-                    <div className="inline-flex items-center gap-2 rounded-full bg-primary-foreground/10 backdrop-blur-sm px-2 py-1 mb-2">
-                      <Sparkles className="h-3.5 w-3.5" />
-                      <span className="text-[10px] font-medium tracking-wider">
-                        Powered By
-                      </span>
-                      <span className="text-[11px] font-bold tracking-wider">
-                        MatchCore Engine
-                      </span>
-                    </div>
-                    <h2 className="text-4xl font-semibold tracking-tight leading-[1.15]">
+                  {/* Headline + testimonial */}
+                  <div className="mt-5 max-w-md">
+                    <div>
+                      <div className="inline-flex items-center gap-2 rounded-full bg-primary-foreground/10 backdrop-blur-sm px-2 py-1 mb-2">
+                        <Sparkles className="h-3.5 w-3.5" />
+                        <span className="text-[10px] font-medium tracking-wider">
+                          Powered By
+                        </span>
+                        <span className="text-[11px] font-bold tracking-wider">
+                          MatchCore Engine
+                        </span>
+                      </div>
+                      {/* <h2 className="text-4xl font-semibold tracking-tight leading-[1.15]">
                       Simplify your workflow with smart tools.
-                    </h2>
-                    <p className="my-4 text-base opacity-80 leading-relaxed">
+                    </h2> */}
+                      {/* <p className="my-4 text-base opacity-80 leading-relaxed">
                       A unified workspace built for advisors, managers and
                       operations teams — designed to surface the right candidate
                       at the right moment.
-                    </p>
+                    </p> */}
+                    </div>
+
+                    <figure className="rounded-xl bg-primary-foreground/10 backdrop-blur-sm border border-primary-foreground/15 p-6 mt-10">
+                      <Quote className="h-5 w-5 opacity-60 mb-3" />
+                      <blockquote className="text-sm leading-relaxed">
+                        La plateforme de l’ANETI est un espace digital dédié à
+                        la mise en relation entre candidats, conseillers ANETI
+                        et employeurs en Tunisie. Elle facilite la recherche
+                        d’emploi, l’accompagnement professionnel et le
+                        recrutement grâce à des outils intelligents et
+                        personnalisés.
+                      </blockquote>
+                    </figure>
                   </div>
-
-                  <figure className="rounded-xl bg-primary-foreground/10 backdrop-blur-sm border border-primary-foreground/15 p-6">
-                    <Quote className="h-5 w-5 opacity-60 mb-3" />
-                    <blockquote className="text-sm leading-relaxed">
-                      "This platform helps our team stay efficient and deliver
-                      high-quality results. The matching intelligence cut our
-                      screening time in half."
-                    </blockquote>
-                    {/* <figcaption className="mt-5 flex items-center gap-3">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary-foreground/20 text-sm font-semibold">
-                        CL
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold">Camille Laurent</p>
-                        <p className="text-xs opacity-70">
-                          Head of Talent · Pôle Emploi Innovation
-                        </p>
-                      </div>
-                    </figcaption> */}
-                  </figure>
                 </div>
-
                 {/* Bottom meta */}
                 <div className="flex items-center justify-between text-[11px] opacity-70 font-mono mt-8">
                   <span>env: sandbox</span>

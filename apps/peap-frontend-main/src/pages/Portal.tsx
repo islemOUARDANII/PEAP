@@ -46,25 +46,26 @@ export default function Portal() {
             </div>
             <CardHeader>
               <CardTitle className="justify-center text-sm flex items-center gap-2">
-                Veuillez selectionner votre role pour acceder a votre espace dedie.
+                Veuillez selectionner votre role pour acceder a votre espace
+                dedie.
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8 ">
                 {portalRoles.map((r) => {
                   const Icon = r.icon;
                   return (
                     <Link
                       key={r.id}
                       to={`/login/${r.id}`}
-                      className="group panel-elevated p-4 card-border-left  hover:border-accent border-10 hover:shadow-md transition-all"
+                      className="group panel-elevated p-10 card-button-portal card-border-top-orange hover:bg-accent/5  border-accent hover:border-accent border-10 hover:shadow-md transition-all"
                     >
-                      <div className="flex items-start gap-4 justify-between mb-6">
-                        <div className="flex items-center gap-4">
-                          <div className="flex h-10 w-10 items-center justify-center rounded-md shadow-sm border bg-primary-muted/10 text-primary group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
-                            <Icon className="h-5 w-5" />
+                      <div className="flex items-center gap-4 justify-center mb-6">
+                        <div className="flex flex-col items-center justify-center gap-4">
+                          <div className="flex h-20 w-20 items-center justify-center rounded-md shadow-sm border bg-primary-muted/10 text-primary group-hover:bg-accent group-hover:text-accent-foreground transition-colors">
+                            <Icon className="h-10 w-10" />
                           </div>
-                          <div>
+                          <div className="flex flex-col items-center justify-center">
                             <h3 className="text-base font-semibold text-foreground">
                               {r.label}
                             </h3>
@@ -73,18 +74,18 @@ export default function Portal() {
                             </p>
                           </div>
                         </div>
-                        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent group-hover:translate-x-0.5 transition-all" />
+                        {/* <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-accent group-hover:translate-x-0.5 transition-all" /> */}
                       </div>
 
-                      <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
+                      {/* <p className="mt-3 text-sm text-muted-foreground leading-relaxed">
                         {r.description}
-                      </p>
-                      <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
+                      </p> */}
+                      {/* <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                         <span className="font-mono">/login/{r.id}</span>
                         <span className="text-accent font-medium">
                           Continuer
                         </span>
-                      </div>
+                      </div> */}
                     </Link>
                   );
                 })}
@@ -96,7 +97,8 @@ export default function Portal() {
 
       <footer className="border-t border-border bg-surface">
         <div className="mx-auto max-w-7xl px-6 h-12 flex items-center justify-center text-xs text-muted-foreground text-center">
-          Vous serez redirige de maniere securisee vers la page de connexion appropriee.
+          Vous serez redirige de maniere securisee vers la page de connexion
+          appropriee.
         </div>
       </footer>
     </div>
