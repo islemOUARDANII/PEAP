@@ -1,4 +1,4 @@
-import { useRef, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { InlineTableSkeleton } from '@/components/common/PageSkeletons';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
@@ -21,122 +21,217 @@ import { useToast } from '@/hooks/use-toast';
 import { queryClient } from '@/app/queryClient';
 import {
   useDeleteProviderOfferMutation,
+  useProviderApplicationsQuery,
   useProviderOfferQuery,
 } from '@/services/api/queries';
 import { queryKeys } from '@/services/api/queryKeys';
-import {
-  ArrowLeft,
-  Brain,
-  Download,
-  MapPin,
-  Trash2,
-  Users,
-} from 'lucide-react';
+import { ArrowLeft, Brain, Download, MapPin, Trash2, Users } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 
-import PdfContent from '@/components/common/PdfContent';
-import { jsPDF } from 'jspdf';
-import html2canvas from 'html2canvas';
+type RawRequirement = {
+  criterionType?: string | null;
+  rawValue?: string | null;
+  nodeLabel?: string | null;
+  minYears?: number | null;
+  minLevel?: string | null;
+  isMust?: boolean;
+};
+
+type RawProviderOffer = {
+  id?: string;
+  companyName?: string | null;
+  employerName?: string | null;
+  title?: string | null;
+  description?: string | null;
+  numberOfPositions?: number | null;
+  contractType?: string | null;
+  workMode?: string | null;
+  salaryMin?: number | null;
+  salaryMax?: number | null;
+  country?: string | null;
+  locationLabel?: string | null;
+  governorateLabel?: string | null;
+  delegationLabel?: string | null;
+  publishedAt?: string | null;
+  deadlineAt?: string | null;
+  requirements?: RawRequirement[];
+};
+
+function formatPublishedAgo(days?: number | null) {
+  if (days == null || Number.isNaN(days)) return 'Non précisée';
+  if (days <= 0) return "Aujourd'hui";
+  if (days === 1) return 'Hier';
+  return `Il y a ${days} jours`;
+}
+
+function formatDate(value?: string | null) {
+  if (!value) return 'Non précisée';
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return 'Non précisée';
+
+  return parsed.toLocaleDateString('fr-FR');
+}
+
+function formatSalary(min?: number | null, max?: number | null) {
+  if (min == null && max == null) return 'Non précisé';
+  if (min != null && max != null) return `${min} - ${max} TND`;
+  if (min != null) return `À partir de ${min} TND`;
+  return `Jusqu’à ${max} TND`;
+}
+
+function isNumericText(value: string) {
+  return /^\d+(\.\d+)?$/.test(value.trim());
+}
+
+function cleanSkillList(values: string[]) {
+  return values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .filter((value) => !isNumericText(value))
+    .filter((value) => value.toLowerCase() !== 'offre sans titre');
+}
+
+function getExperienceYears(offer: RawProviderOffer | undefined, required: string[], preferred: string[]) {
+  const requirements = offer?.requirements ?? [];
+
+  const fromRequirement = requirements.find((requirement) => {
+    const type = String(requirement.criterionType ?? '').toUpperCase();
+    return type.includes('EXPERIENCE') || requirement.minYears != null;
+  });
+
+  if (fromRequirement?.minYears != null) {
+    return fromRequirement.minYears;
+  }
+
+  const numericValue = [...required, ...preferred].find((value) => isNumericText(value));
+
+  if (numericValue) {
+    return Number(numericValue);
+  }
+
+  return null;
+}
+
+function normalizeWorkMode(value?: string | null) {
+  switch (String(value ?? '').toUpperCase()) {
+    case 'ONSITE':
+      return 'Sur site';
+    case 'REMOTE':
+      return 'À distance';
+    case 'HYBRID':
+      return 'Hybride';
+    case 'MOBILE':
+      return 'Mobile';
+    case 'UNKNOWN':
+    case '':
+      return 'Non précisé';
+    default:
+      return value ?? 'Non précisé';
+  }
+}
+
+function normalizeContract(value?: string | null) {
+  if (!value) return 'Non précisé';
+  return value.toUpperCase();
+}
+
+function getApplicationDisplayName(application: {
+  candidateName?: string | null;
+  candidateEmail?: string | null;
+  jobSeekerId: string;
+}) {
+  const name = application.candidateName?.trim();
+
+  if (name) return name;
+
+  if (application.candidateEmail?.trim()) {
+    return application.candidateEmail.trim();
+  }
+
+  return `Candidat ${application.jobSeekerId.slice(0, 8)}`;
+}
+
+function getApplicationStatusTone(status: string) {
+  switch (status.toUpperCase()) {
+    case 'APPLIED':
+      return 'info';
+    case 'VIEWED':
+      return 'neutral';
+    case 'SHORTLISTED':
+      return 'success';
+    case 'ACCEPTED':
+      return 'success';
+    case 'REJECTED':
+      return 'destructive';
+    case 'WITHDRAWN':
+      return 'warning';
+    default:
+      return 'neutral';
+  }
+}
 
 export default function OfferDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+
   const { data, isLoading, isError, error } = useProviderOfferQuery(id);
+  const applicationsQuery = useProviderApplicationsQuery();
   const deleteMutation = useDeleteProviderOfferMutation();
-  const pdfRef = useRef();
+
   const offer = data?.offer;
-  // const candidates = data?.candidates ?? mockCandidates;
-  //! TODO : REMOVE ME
+  const rawOffer = data?.raw as RawProviderOffer | undefined;
+
+  const allApplications = applicationsQuery.data ?? [];
+  const applications = offer
+    ? allApplications.filter((application) => application.offerId === offer.id)
+    : [];
+
   const candidates = data?.candidates ?? [];
+
+  const requiredSkills = offer ? cleanSkillList(offer.required) : [];
+  const preferredSkills = offer ? cleanSkillList(offer.preferred) : [];
+  const experienceYears = offer
+    ? getExperienceYears(rawOffer, offer.required, offer.preferred)
+    : null;
+
+  const applicationsCount = applicationsQuery.isSuccess
+    ? applications.length
+    : offer?.applicants ?? 0;
+
+  const matchedCount = offer?.matched ?? candidates.length;
 
   const handleDelete = async () => {
     if (!id) return;
+
     try {
       await deleteMutation.mutateAsync(id);
+
       await queryClient.invalidateQueries({
         queryKey: queryKeys.provider.offers(),
       });
+
       await queryClient.invalidateQueries({
         queryKey: queryKeys.provider.dashboard(),
       });
+
       toast({
-        title: 'Offer deleted',
-        description: 'The offer has been removed from the provider dashboard.',
+        title: 'Offre supprimée',
+        description: "L'offre a été retirée de l'espace employeur.",
       });
+
       navigate('/provider/offers');
     } catch (caught) {
       toast({
-        title: 'Delete failed',
+        title: 'Suppression impossible',
         description:
           caught instanceof Error
             ? caught.message
-            : 'Unable to delete this offer.',
+            : 'Impossible de supprimer cette offre.',
         variant: 'destructive',
       });
     }
-  };
-
-  const handleGeneratePdf = async () => {
-    if (!pdfRef.current) return;
-
-    const canvas = await html2canvas(pdfRef.current, {
-      scale: 2,
-      useCORS: true,
-    });
-
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF('p', 'mm', 'a4');
-
-    // ===== Margins (mm)
-    const margin = {
-      top: 5,
-      bottom: 5,
-      left: 10,
-      right: 10,
-    };
-
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    const contentWidth = pageWidth - margin.left - margin.right;
-    const contentHeight = pageHeight - margin.top - margin.bottom;
-
-    const imgHeight = (canvas.height * contentWidth) / canvas.width;
-
-    let heightLeft = imgHeight;
-    let position = margin.top;
-
-    // First page
-    pdf.addImage(
-      imgData,
-      'PNG',
-      margin.left,
-      position,
-      contentWidth,
-      imgHeight,
-    );
-
-    heightLeft -= contentHeight;
-
-    // Extra pages
-    while (heightLeft > 0) {
-      pdf.addPage();
-      position = margin.top - (imgHeight - heightLeft);
-
-      pdf.addImage(
-        imgData,
-        'PNG',
-        margin.left,
-        position,
-        contentWidth,
-        imgHeight,
-      );
-
-      heightLeft -= contentHeight;
-    }
-
-    pdf.save(`rapport-${id}.pdf`);
   };
 
   if (isLoading) {
@@ -148,12 +243,14 @@ export default function OfferDetails() {
       <div className="space-y-4">
         <Button asChild variant="ghost" size="sm">
           <Link to="/provider/offers">
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back to offers
+            <ArrowLeft className="mr-1 h-4 w-4" />
+            Retour aux offres
           </Link>
         </Button>
+
         <div className="panel p-5 text-sm text-destructive">
-          Failed to load offer:{' '}
-          {error instanceof Error ? error.message : 'offer not found'}
+          Impossible de charger l’offre :{' '}
+          {error instanceof Error ? error.message : 'offre introuvable'}
         </div>
       </div>
     );
@@ -163,46 +260,46 @@ export default function OfferDetails() {
     <div className="space-y-6">
       <Link
         to="/provider/offers"
-        className="inline-flex items-center gap-1.5 text-xs text-muted-foreground rounded-md border border-border px-4 py-2 light-link-md-border-right-orange"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border px-4 py-2 text-xs text-muted-foreground light-link-md-border-right-orange"
       >
-        <ArrowLeft className="h-3.5 w-3.5" /> Back to offers
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Retour aux offres
       </Link>
+
       <PageHeader
         title={offer.title}
         description={`${offer.company} · ${offer.location} · ${offer.contract}`}
         actions={
           <div className="flex items-center gap-2">
-            {/* <Button asChild variant="outline" size="sm">
-              <Link to="/provider/offers">
-                <ArrowLeft className="h-4 w-4 mr-1" /> Back
-              </Link>
-            </Button> */}
-            <Button variant="outline" size="sm" onClick={handleGeneratePdf}>
-              <Download className="h-4 w-4 mr-1" />
-              Download PDF Report
+            <Button type="button" variant="outline" size="sm">
+              <Download className="mr-1.5 h-4 w-4" />
+              Télécharger PDF
             </Button>
+
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
-                  <Trash2 className="h-4 w-4 mr-1" /> Delete
+                  <Trash2 className="mr-1 h-4 w-4" />
+                  Delete
                 </Button>
               </AlertDialogTrigger>
+
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Delete this offer?</AlertDialogTitle>
+                  <AlertDialogTitle>Supprimer cette offre ?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    This will remove the offer from the provider dashboard.
-                    Candidate data and match history remain stored for
-                    auditability.
+                    Cette action retirera l’offre du tableau de bord employeur.
+                    Les candidatures et historiques de matching restent conservés.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
+
                 <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogCancel>Annuler</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={handleDelete}
                     disabled={deleteMutation.isPending}
                   >
-                    {deleteMutation.isPending ? 'Deleting...' : 'Delete offer'}
+                    {deleteMutation.isPending ? 'Suppression...' : 'Supprimer'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -210,15 +307,19 @@ export default function OfferDetails() {
           </div>
         }
       />
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="lg:col-span-2 card-border-top">
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <Card className="card-border-top lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-sm">Offer details</CardTitle>
+            <CardTitle className="text-base font-bold">
+              Détails de l’offre
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 text-sm">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+          <CardContent className="space-y-5 text-sm">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Info
-                label="Status"
+                label="Statut"
                 value={
                   <StatusPill
                     label={offer.status}
@@ -226,45 +327,108 @@ export default function OfferDetails() {
                   />
                 }
               />
+
               <Info
-                label="Offer ID"
+                label="ID de l’offre"
                 value={
-                  <span className="font-mono text-xs">
-                    {offer.anetiIdentifier ?? '—'}
+                  <span className="font-mono text-sm font-bold">
+                    {offer.anetiIdentifier ?? offer.id}
                   </span>
                 }
               />
-              <Info label="Level" value={offer.level || 'N/A'} />
-              <Info label="Posted" value={`${offer.postedDays}d ago`} />
+
+              <Info
+                label="Entreprise"
+                value={rawOffer?.companyName ?? offer.company ?? 'Non précisée'}
+              />
+
+              <Info
+                label="Contrat"
+                value={normalizeContract(rawOffer?.contractType ?? offer.contract)}
+              />
+
+              <Info
+                label="Mode de travail"
+                value={normalizeWorkMode(rawOffer?.workMode ?? offer.level)}
+              />
+
+              <Info
+                label="Localisation"
+                value={rawOffer?.locationLabel ?? offer.location}
+              />
+
+              <Info
+                label="Nombre de postes"
+                value={`${rawOffer?.numberOfPositions ?? 1} poste(s)`}
+              />
+
+              <Info
+                label="Expérience minimale"
+                value={
+                  experienceYears == null
+                    ? 'Non précisée'
+                    : `${experienceYears} an${experienceYears > 1 ? 's' : ''}`
+                }
+              />
+
+              <Info
+                label="Salaire"
+                value={formatSalary(rawOffer?.salaryMin, rawOffer?.salaryMax)}
+              />
+
+              <Info
+                label="Publiée"
+                value={formatPublishedAgo(offer.postedDays)}
+              />
+
+              <Info
+                label="Date limite"
+                value={formatDate(rawOffer?.deadlineAt)}
+              />
             </div>
+
+            {rawOffer?.description ? (
+              <div className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+                <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                  Description
+                </p>
+                <p className="mt-2 text-sm font-medium leading-6 text-foreground">
+                  {rawOffer.description}
+                </p>
+              </div>
+            ) : null}
+
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Required skills
+              <p className="mb-2 text-sm font-bold text-foreground">
+                Compétences obligatoires
               </p>
+
               <div className="flex flex-wrap gap-1.5">
-                {offer.required.length ? (
-                  offer.required.map((skill) => (
+                {requiredSkills.length ? (
+                  requiredSkills.map((skill) => (
                     <SkillTag key={skill} label={skill} />
                   ))
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    No required skills found.
+                    Aucune compétence obligatoire trouvée.
                   </span>
                 )}
               </div>
             </div>
+
             <div>
-              <p className="text-xs font-medium text-muted-foreground mb-2">
-                Preferred skills
+              <p className="mb-2 text-sm font-bold text-foreground">
+                Compétences préférées
               </p>
+
               <div className="flex flex-wrap gap-1.5">
-                {offer.preferred.length ? (
-                  offer.preferred.map((skill) => (
+                {preferredSkills.length ? (
+                  preferredSkills.map((skill) => (
                     <SkillTag key={skill} label={skill} variant="outline" />
                   ))
                 ) : (
                   <span className="text-xs text-muted-foreground">
-                    No preferred skills found.
+                    Aucune compétence préférée trouvée.
                   </span>
                 )}
               </div>
@@ -274,86 +438,92 @@ export default function OfferDetails() {
 
         <Card className="card-border-top">
           <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <Users className="h-4 w-4" /> Candidates
+            <CardTitle className="flex items-center gap-2 text-base font-bold">
+              <Users className="h-4 w-4" />
+              Candidats
             </CardTitle>
           </CardHeader>
+
           <CardContent className="space-y-3">
-            <Info label="Matched candidates" value={offer.matched} />
-            <Info label="Applications" value={offer.applicants} />
-            <p className="text-xs text-muted-foreground">
-              For now this list is built from match results. When a real
-              application table is added, this page can switch to true
-              applicants.
-            </p>
+            <Info
+              label="Candidats correspondants"
+              value={<span className="text-xl font-black">{matchedCount}</span>}
+            />
+
+            <Info
+              label="Applications"
+              value={<span className="text-xl font-black">{applicationsCount}</span>}
+            />
           </CardContent>
         </Card>
       </div>
 
       <div className="panel overflow-hidden card-border-top-orange">
-        <div className="px-4 py-3 border-b border-border bg-surface-muted flex items-center justify-between">
+        <div className="flex items-center justify-between border-b border-border bg-surface-muted px-4 py-3">
           <div>
-            <h2 className="text-sm font-semibold text-foreground">
-              Candidates linked to this offer
+            <h2 className="text-sm font-bold text-foreground">
+              Candidats liés à cette offre
             </h2>
             <p className="text-xs text-muted-foreground">
-              Applied candidates with their score and profile preview.
+              Candidats ayant postulé ou candidats proposés par le matching.
             </p>
           </div>
+
           <Button asChild type="button" variant="outline" size="sm">
-            <Link
-              to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}
-            >
-              <Brain className="h-4 w-4 mr-1.5" />
+            <Link to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}>
+              <Brain className="mr-1.5 h-4 w-4" />
               Candidats matchés
             </Link>
           </Button>
         </div>
-        {candidates.length === 0 ? (
-          <div className="px-4 py-4 text-sm text-muted-foreground">
-            No candidate has been linked to this offer yet.
-          </div>
-        ) : (
+
+        {applications.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-muted-foreground border-b border-border bg-surface-muted">
-                  <th className="text-left font-medium px-4 py-3">Candidate</th>
-                  <th className="text-left font-medium px-2 py-3">
-                    Occupation
-                  </th>
-                  <th className="text-left font-medium px-2 py-3">Location</th>
-                  <th className="text-left font-medium px-2 py-3">Score</th>
-                  <th className="text-right font-medium px-4 py-3">Action</th>
+                <tr className="border-b border-border bg-surface-muted text-xs text-muted-foreground">
+                  <th className="px-4 py-3 text-left font-bold">Candidat</th>
+                  <th className="px-2 py-3 text-left font-bold">Contact</th>
+                  <th className="px-2 py-3 text-left font-bold">Statut</th>
+                  <th className="px-2 py-3 text-left font-bold">Date candidature</th>
+                  <th className="px-4 py-3 text-right font-bold">Action</th>
                 </tr>
               </thead>
+
               <tbody className="divide-y divide-border">
-                {candidates.map((candidate) => (
-                  <tr key={candidate.id} className="hover:bg-surface-muted">
+                {applications.map((application) => (
+                  <tr key={application.id} className="hover:bg-surface-muted">
                     <td className="px-4 py-3">
-                      <p className="font-medium text-foreground">
-                        {candidate.name}
+                      <p className="font-bold text-foreground">
+                        {getApplicationDisplayName(application)}
                       </p>
                       <p className="text-[10px] font-mono text-muted-foreground">
-                        {candidate.id}
+                        {application.jobSeekerId}
                       </p>
                     </td>
-                    <td className="px-2 py-3 text-xs text-foreground">
-                      {candidate.occupation}
-                    </td>
+
                     <td className="px-2 py-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <MapPin className="h-3 w-3" />
-                        {candidate.location}
-                      </span>
+                      <div className="space-y-1">
+                        <p>{application.candidateEmail ?? 'Email non précisé'}</p>
+                        <p>{application.candidatePhone ?? 'Téléphone non précisé'}</p>
+                      </div>
                     </td>
+
                     <td className="px-2 py-3">
-                      <ScoreBadge score={candidate.score} size="sm" />
+                      <StatusPill
+                        label={application.status}
+                        tone={getApplicationStatusTone(application.status)}
+                      />
                     </td>
+
+                    <td className="px-2 py-3 text-xs font-medium text-foreground">
+                      {formatDate(application.appliedAt)}
+                    </td>
+
                     <td className="px-4 py-3 text-right">
                       <Button asChild variant="ghost" size="sm">
-                        <Link to={`/provider/candidates/${candidate.id}`}>
-                          View
+                        <Link to={`/provider/candidates/${application.jobSeekerId}`}>
+                          Voir
                         </Link>
                       </Button>
                     </td>
@@ -362,24 +532,63 @@ export default function OfferDetails() {
               </tbody>
             </table>
           </div>
+        ) : candidates.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-surface-muted text-xs text-muted-foreground">
+                  <th className="px-4 py-3 text-left font-bold">Candidat</th>
+                  <th className="px-2 py-3 text-left font-bold">Métier</th>
+                  <th className="px-2 py-3 text-left font-bold">Localisation</th>
+                  <th className="px-2 py-3 text-left font-bold">Score</th>
+                  <th className="px-4 py-3 text-right font-bold">Action</th>
+                </tr>
+              </thead>
+
+              <tbody className="divide-y divide-border">
+                {candidates.map((candidate) => (
+                  <tr key={candidate.id} className="hover:bg-surface-muted">
+                    <td className="px-4 py-3">
+                      <p className="font-bold text-foreground">
+                        {candidate.name}
+                      </p>
+                      <p className="text-[10px] font-mono text-muted-foreground">
+                        {candidate.id}
+                      </p>
+                    </td>
+
+                    <td className="px-2 py-3 text-xs font-medium text-foreground">
+                      {candidate.occupation}
+                    </td>
+
+                    <td className="px-2 py-3 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <MapPin className="h-3 w-3" />
+                        {candidate.location}
+                      </span>
+                    </td>
+
+                    <td className="px-2 py-3">
+                      <ScoreBadge score={candidate.score} size="sm" />
+                    </td>
+
+                    <td className="px-4 py-3 text-right">
+                      <Button asChild variant="ghost" size="sm">
+                        <Link to={`/provider/candidates/${candidate.id}`}>
+                          Voir
+                        </Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="px-4 py-4 text-sm text-muted-foreground">
+            Aucun candidat lié à cette offre pour le moment.
+          </div>
         )}
-      </div>
-      <div
-        ref={pdfRef}
-        style={{
-          position: 'absolute',
-          top: '-9999px',
-          left: '-9999px',
-          width: '800px',
-          background: 'white',
-        }}
-      >
-        <PdfContent
-          offer={offer}
-          matched={offer.matched}
-          applications={offer.applicants}
-          candidates={candidates}
-        />
       </div>
     </div>
   );
@@ -387,11 +596,14 @@ export default function OfferDetails() {
 
 function Info({ label, value }: { label: string; value: ReactNode }) {
   return (
-    <div className="rounded-lg border border-border bg-surface-muted px-3 py-2">
-      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+    <div className="rounded-xl border border-border bg-surface-muted px-4 py-3">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <div className="mt-1 text-sm font-medium text-foreground">{value}</div>
+
+      <div className="mt-2 text-base font-extrabold text-foreground">
+        {value}
+      </div>
     </div>
   );
 }
