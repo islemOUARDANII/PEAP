@@ -65,12 +65,12 @@ export default function ProviderDashboard() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link to="/provider/offers" className="block">
+        <Link to="/provider/offers" className="block flex-1">
           <StatCard
             label="Active offers"
             value={active.length}
             icon={FileText}
-            className="start-border-left-blue"
+            className="start-border-left-blue h-full"
             iconBackground={'start-background-color-blue'}
           />
         </Link>
@@ -79,7 +79,7 @@ export default function ProviderDashboard() {
             label="Matched candidates"
             value={dashboard?.matchedCandidates ?? 0}
             icon={Users}
-            className="start-border-left-green"
+            className="start-border-left-green h-full"
             iconBackground={'start-background-color-green'}
           />
         </Link>
@@ -89,7 +89,7 @@ export default function ProviderDashboard() {
             value={dashboard?.newApplications ?? 0}
             icon={Briefcase}
             hint="last 7 days"
-            className="start-border-left-orange"
+            className="start-border-left-orange h-full"
             iconBackground={'start-background-color-orange'}
           />
         </Link>
@@ -97,7 +97,7 @@ export default function ProviderDashboard() {
           label="Qualité moyenne du matching"
           value={`${dashboard?.averageMatchQuality ?? 0}%`}
           icon={TrendingUp}
-          className="start-border-left-teal"
+          className="start-border-left-teal h-full"
           iconBackground={'start-background-color-teal'}
         />
       </div>

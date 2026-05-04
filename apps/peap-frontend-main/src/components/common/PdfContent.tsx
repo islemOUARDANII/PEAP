@@ -76,12 +76,12 @@ const PdfContent = ({ offer, candidates, matched = 40, applications = 60 }) => {
                   <span> {offer.location}</span>
                 </div>
               </p>
-              <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
+              {/* <p className="mt-3 max-w-md text-sm leading-6 text-muted-foreground sm:text-base">
                 Lorem ipsum dolor, sit amet consectetur adipisicing elit.
                 Voluptates enim ab cum vitae sapiente, consectetur perferendis
                 tempore officia quas perspiciatis magnam quaerat rerum! Autem
                 cumque suscipit sed officia perspiciatis hic.
-              </p>
+              </p> */}
             </div>
             <div className="flex flex-col gap-4 items-center justify-center rounded-2xl border border-border bg-background p-4 profile-border-left-orange">
               <span>
