@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
+  Ban,
   Download,
   Grid3x3,
   List,
+  Loader2,
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
@@ -162,10 +164,11 @@ function FiltersPanel({
                 key={skill}
                 type="button"
                 onClick={() => toggleSkill(skill)}
-                className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${active
-                  ? 'border-accent bg-accent text-accent-foreground'
-                  : 'border-border bg-secondary text-secondary-foreground hover:border-accent/40'
-                  }`}
+                className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                  active
+                    ? 'border-accent bg-accent text-accent-foreground'
+                    : 'border-border bg-secondary text-secondary-foreground hover:border-accent/40'
+                }`}
               >
                 {skill}
               </button>
@@ -392,20 +395,22 @@ export default function SearchCandidateOffer() {
             <div className="flex overflow-hidden rounded-md border border-border">
               <button
                 onClick={() => setView('grid')}
-                className={`p-2 ${view === 'grid'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
+                className={`p-2 ${
+                  view === 'grid'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
                 aria-label="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setView('list')}
-                className={`p-2 ${view === 'list'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
+                className={`p-2 ${
+                  view === 'list'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
                 aria-label="List view"
               >
                 <List className="h-4 w-4" />
@@ -449,32 +454,61 @@ export default function SearchCandidateOffer() {
           </div>
 
           {offersQuery.isLoading ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              Chargement des offres employeur...
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Chargement des offres employeur...
+                </p>
+              </div>
             </div>
           ) : offersQuery.isError ? (
-            <div className="panel p-6 text-sm text-destructive">
-              {offersQuery.error instanceof Error
-                ? offersQuery.error.message
-                : 'Impossible de charger les offres employeur.'}
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+              <Ban className="h-6 w-6 text-destructive" />
+              <div>
+                <p className="text-sm text-destructive">
+                  {offersQuery.error instanceof Error
+                    ? offersQuery.error.message
+                    : 'Impossible de charger les offres employeur.'}
+                </p>
+              </div>
             </div>
           ) : !activeOffer ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              Aucune offre disponible. Créez d’abord une offre, puis revenez à la recherche candidats.
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Aucune offre disponible. Créez d’abord une offre, puis revenez
+                  à la recherche candidats.
+                </p>
+              </div>
             </div>
           ) : candidatesQuery.isLoading ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              Recherche des candidats indexés...
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Recherche des candidats indexés...
+                </p>
+              </div>
             </div>
           ) : candidatesQuery.isError ? (
-            <div className="panel p-6 text-sm text-destructive">
-              {candidatesQuery.error instanceof Error
-                ? candidatesQuery.error.message
-                : 'Impossible de rechercher les candidats.'}
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+              <Ban className="h-6 w-6 text-destructive" />
+              <div>
+                <p className="text-sm text-destructive">
+                  {candidatesQuery.error instanceof Error
+                    ? candidatesQuery.error.message
+                    : 'Impossible de rechercher les candidats.'}
+                </p>
+              </div>
             </div>
           ) : candidates.length === 0 ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              Aucun candidat trouvé pour cette offre.
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Aucun candidat trouvé pour cette offre.
+                </p>
+              </div>
             </div>
           ) : view === 'grid' ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">

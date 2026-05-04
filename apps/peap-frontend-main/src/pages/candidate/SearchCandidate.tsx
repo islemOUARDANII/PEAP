@@ -1,29 +1,37 @@
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Download, Grid3x3, List, Search, SlidersHorizontal } from "lucide-react";
+import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import {
+  Ban,
+  Download,
+  Grid3x3,
+  List,
+  Loader2,
+  Search,
+  SlidersHorizontal,
+} from 'lucide-react';
 
-import { PageHeader } from "@/components/common/PageHeader";
-import SearchCandidateCard from "@/components/common/SearchCandidateCard";
-import SearchCandidateRow from "@/components/common/SearchCandidateRow";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Slider } from "@/components/ui/slider";
+import { PageHeader } from '@/components/common/PageHeader';
+import SearchCandidateCard from '@/components/common/SearchCandidateCard';
+import SearchCandidateRow from '@/components/common/SearchCandidateRow';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select";
+} from '@/components/ui/select';
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "@/components/ui/sheet";
-import { gatewayApi, type EmployerOffer } from "@/services/api/gateway";
+} from '@/components/ui/sheet';
+import { gatewayApi, type EmployerOffer } from '@/services/api/gateway';
 
 interface SearchCandidateViewModel {
   id: string;
@@ -35,23 +43,30 @@ interface SearchCandidateViewModel {
   score: number;
   topSkills: string[];
   summary: string;
-  status: "New" | "Reviewed" | "Shortlisted" | "Rejected";
+  status: 'New' | 'Reviewed' | 'Shortlisted' | 'Rejected';
 }
 
 const normalizeScore = (value: number | null | undefined): number =>
-  typeof value === "number" ? (value <= 1 ? Math.round(value * 100) : Math.round(value)) : 0;
+  typeof value === 'number'
+    ? value <= 1
+      ? Math.round(value * 100)
+      : Math.round(value)
+    : 0;
 
-const toStringValue = (value: unknown, fallback = ""): string =>
-  typeof value === "string" ? value : value == null ? fallback : String(value);
+const toStringValue = (value: unknown, fallback = ''): string =>
+  typeof value === 'string' ? value : value == null ? fallback : String(value);
 
-const searchRawString = (raw: Record<string, unknown>, keys: string[]): string => {
+const searchRawString = (
+  raw: Record<string, unknown>,
+  keys: string[],
+): string => {
   for (const key of keys) {
     const value = toStringValue(raw[key]).trim();
     if (value) {
       return value;
     }
   }
-  return "";
+  return '';
 };
 
 const initialsFromName = (value: string): string =>
@@ -59,19 +74,21 @@ const initialsFromName = (value: string): string =>
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
-    .map((segment) => segment[0]?.toUpperCase() ?? "")
-    .join("") || "NA";
+    .map((segment) => segment[0]?.toUpperCase() ?? '')
+    .join('') || 'NA';
 
 const offerRequiredSkills = (offer: EmployerOffer | undefined): string[] =>
   (offer?.requirements ?? [])
     .filter((item) => item.isMust)
-    .map((item) => item.nodeLabel ?? item.rawValue ?? "")
+    .map((item) => item.nodeLabel ?? item.rawValue ?? '')
     .filter(Boolean);
 
-const mapCandidate = (result: Record<string, unknown>): SearchCandidateViewModel => {
+const mapCandidate = (
+  result: Record<string, unknown>,
+): SearchCandidateViewModel => {
   const raw = (result.raw as Record<string, unknown> | undefined) ?? {};
   const name =
-    searchRawString(raw, ["full_name", "candidate_label", "name", "label"]) ||
+    searchRawString(raw, ['full_name', 'candidate_label', 'name', 'label']) ||
     `Candidate ${toStringValue(result.candidateId).slice(0, 8)}`;
   const score = normalizeScore(result.score as number | undefined);
 
@@ -80,17 +97,17 @@ const mapCandidate = (result: Record<string, unknown>): SearchCandidateViewModel
     name,
     initials: initialsFromName(name),
     occupation:
-      searchRawString(raw, ["occupation", "occupation_label", "headline"]) ||
+      searchRawString(raw, ['occupation', 'occupation_label', 'headline']) ||
       toStringValue(result.education) ||
-      "Indexed candidate",
-    location: toStringValue(result.location) || "Location not specified",
+      'Indexed candidate',
+    location: toStringValue(result.location) || 'Location not specified',
     experienceYears: Number(result.yearsExperience ?? 0) || 0,
     score,
     topSkills: Array.isArray(result.skills) ? (result.skills as string[]) : [],
     summary:
-      searchRawString(raw, ["summary", "profile_summary", "headline"]) ||
-      "Candidate profile loaded from the search index.",
-    status: score >= 80 ? "Shortlisted" : score >= 50 ? "Reviewed" : "New",
+      searchRawString(raw, ['summary', 'profile_summary', 'headline']) ||
+      'Candidate profile loaded from the search index.',
+    status: score >= 80 ? 'Shortlisted' : score >= 50 ? 'Reviewed' : 'New',
   };
 };
 
@@ -148,8 +165,8 @@ function FiltersPanel({
                 onClick={() => toggleSkill(skill)}
                 className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${
                   active
-                    ? "border-accent bg-accent text-accent-foreground"
-                    : "border-border bg-secondary text-secondary-foreground hover:border-accent/40"
+                    ? 'border-accent bg-accent text-accent-foreground'
+                    : 'border-border bg-secondary text-secondary-foreground hover:border-accent/40'
                 }`}
               >
                 {skill}
@@ -162,7 +179,9 @@ function FiltersPanel({
       <div>
         <div className="flex items-center justify-between">
           <Label className="stat-label">Min experience</Label>
-          <span className="text-xs font-mono text-foreground">{minExp}+ yrs</span>
+          <span className="text-xs font-mono text-foreground">
+            {minExp}+ yrs
+          </span>
         </div>
         <Slider
           value={[minExp]}
@@ -209,36 +228,40 @@ function FiltersPanel({
 }
 
 export default function SearchCandidate() {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
   const [minExp, setMinExp] = useState(0);
-  const [location, setLocation] = useState("");
+  const [location, setLocation] = useState('');
   const [minScore, setMinScore] = useState(0);
-  const [view, setView] = useState<"grid" | "list">("grid");
+  const [view, setView] = useState<'grid' | 'list'>('grid');
   const [shortlisted, setShortlisted] = useState<string[]>([]);
-  const [activeOfferId, setActiveOfferId] = useState("");
+  const [activeOfferId, setActiveOfferId] = useState('');
 
   const offersQuery = useQuery({
-    queryKey: ["provider", "offers", "search-context"],
+    queryKey: ['provider', 'offers', 'search-context'],
     queryFn: () => gatewayApi.employer.listOffers(),
     staleTime: 30_000,
   });
 
   const offers = offersQuery.data ?? [];
-  const activeOffer = offers.find((offer) => offer.id === activeOfferId) ?? offers[0];
+  const activeOffer =
+    offers.find((offer) => offer.id === activeOfferId) ?? offers[0];
   const required = offerRequiredSkills(activeOffer);
   const availableSkills = useMemo(
-    () => Array.from(new Set([...(required ?? []), ...selectedSkills])).filter(Boolean),
+    () =>
+      Array.from(new Set([...(required ?? []), ...selectedSkills])).filter(
+        Boolean,
+      ),
     [required, selectedSkills],
   );
 
   const candidatesQuery = useQuery({
     queryKey: [
-      "search",
-      "candidates",
+      'search',
+      'candidates',
       {
         query,
-        offerId: activeOffer?.id ?? "",
+        offerId: activeOffer?.id ?? '',
         location,
         minExp,
         minScore,
@@ -248,8 +271,10 @@ export default function SearchCandidate() {
     queryFn: () =>
       gatewayApi.search.candidates({
         filters: {
-          query: [activeOffer?.title, query].filter(Boolean).join(" ").trim(),
-          skills: Array.from(new Set([...required, ...selectedSkills])).filter(Boolean),
+          query: [activeOffer?.title, query].filter(Boolean).join(' ').trim(),
+          skills: Array.from(new Set([...required, ...selectedSkills])).filter(
+            Boolean,
+          ),
           location: location.trim() || undefined,
           years_experience: minExp || undefined,
           size: 20,
@@ -275,10 +300,10 @@ export default function SearchCandidate() {
   };
 
   const reset = () => {
-    setQuery("");
+    setQuery('');
     setSelectedSkills([]);
     setMinExp(0);
-    setLocation("");
+    setLocation('');
     setMinScore(0);
   };
 
@@ -305,7 +330,11 @@ export default function SearchCandidate() {
         title="Find the Right Candidates"
         description="Search the real candidate index through `/search/candidates`, scoped by one of your real employer offers."
         actions={
-          <Button variant="outline" size="sm" disabled={shortlisted.length === 0}>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={shortlisted.length === 0}
+          >
             <Download className="h-4 w-4 mr-1.5" />
             Export shortlist ({shortlisted.length})
           </Button>
@@ -328,7 +357,7 @@ export default function SearchCandidate() {
         <div className="space-y-4">
           <div className="panel p-3 flex flex-wrap items-center gap-2 card-border-top-blue-aneti">
             <Select
-              value={activeOfferId || activeOffer?.id || ""}
+              value={activeOfferId || activeOffer?.id || ''}
               onValueChange={setActiveOfferId}
             >
               <SelectTrigger className="h-9 min-w-[240px] max-w-[360px]">
@@ -355,22 +384,22 @@ export default function SearchCandidate() {
 
             <div className="flex overflow-hidden rounded-md border border-border">
               <button
-                onClick={() => setView("grid")}
+                onClick={() => setView('grid')}
                 className={`p-2 ${
-                  view === "grid"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-background text-muted-foreground hover:text-foreground"
+                  view === 'grid'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
                 aria-label="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
               </button>
               <button
-                onClick={() => setView("list")}
+                onClick={() => setView('list')}
                 className={`p-2 ${
-                  view === "list"
-                    ? "bg-accent text-accent-foreground"
-                    : "bg-background text-muted-foreground hover:text-foreground"
+                  view === 'list'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
                 }`}
                 aria-label="List view"
               >
@@ -397,43 +426,76 @@ export default function SearchCandidate() {
           <div className="panel p-4 text-sm text-muted-foreground">
             {activeOffer ? (
               <>
-                Matching against <span className="font-semibold text-foreground">{activeOffer.title}</span>.
-                Required skills:{" "}
+                Matching against{' '}
+                <span className="font-semibold text-foreground">
+                  {activeOffer.title}
+                </span>
+                . Required skills:{' '}
                 <span className="font-medium text-foreground">
-                  {required.length > 0 ? required.join(", ") : "No explicit skill requirements"}
+                  {required.length > 0
+                    ? required.join(', ')
+                    : 'No explicit skill requirements'}
                 </span>
                 .
               </>
             ) : (
-              "Create or load an employer offer first to scope the candidate search."
+              'Create or load an employer offer first to scope the candidate search.'
             )}
           </div>
 
           {offersQuery.isLoading ? (
-            <div className="panel p-6 text-sm text-muted-foreground">Loading employer offers...</div>
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Loading employer offers...
+                </p>
+              </div>
+            </div>
           ) : offersQuery.isError ? (
             <div className="panel p-6 text-sm text-destructive">
               {offersQuery.error instanceof Error
                 ? offersQuery.error.message
-                : "Unable to load employer offers."}
+                : 'Unable to load employer offers.'}
             </div>
           ) : !activeOffer ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              No employer offers are available yet. Create one first, then come back to candidate search.
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  No employer offers are available yet. Create one first, then
+                  come back to candidate search.
+                </p>
+              </div>
             </div>
           ) : candidatesQuery.isLoading ? (
-            <div className="panel p-6 text-sm text-muted-foreground">Searching indexed candidates...</div>
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <Loader2 className="h-6 w-6 text-muted-foreground animate-spin" />
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  Searching indexed candidates...
+                </p>
+              </div>
+            </div>
           ) : candidatesQuery.isError ? (
-            <div className="panel p-6 text-sm text-destructive">
-              {candidatesQuery.error instanceof Error
-                ? candidatesQuery.error.message
-                : "Unable to query indexed candidates."}
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center card-border-destructive">
+              <Ban className="h-6 w-6 text-destructive" />
+              <div>
+                <p className="text-sm text-destructive">
+                  {candidatesQuery.error instanceof Error
+                    ? candidatesQuery.error.message
+                    : 'Unable to query indexed candidates.'}
+                </p>
+              </div>
             </div>
           ) : candidates.length === 0 ? (
-            <div className="panel p-6 text-sm text-muted-foreground">
-              No indexed results. Try syncing the search index first.
+            <div className="panel flex gap-2 items-center justify-center p-4 text-center">
+              <div>
+                <p className="text-sm text-muted-foreground">
+                  No indexed results. Try syncing the search index first.
+                </p>
+              </div>
             </div>
-          ) : view === "grid" ? (
+          ) : view === 'grid' ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {candidates.map((candidate, index) => {
                 const matched = required.filter((skill) =>

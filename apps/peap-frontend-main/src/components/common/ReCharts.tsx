@@ -11,7 +11,7 @@ export const CustomValueLabel = (props) => {
       fontWeight={'600'}
       fill={color}
     >
-      {value}
+      {value ? value : ''}
     </text>
   );
 };

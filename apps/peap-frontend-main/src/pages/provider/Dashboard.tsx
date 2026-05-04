@@ -29,6 +29,7 @@ import {
 import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
 import { chartsConfig } from '@/app/constants';
 import { useMemo } from 'react';
+import PdfContent from '@/components/common/PdfContent';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -38,9 +39,7 @@ export default function ProviderDashboard() {
   const matchingActivity = dashboard?.matchingActivity ?? [];
 
   const chartData = useMemo(() => {
-    return matchingActivity.length > 0
-      ? matchingActivity
-      : [];
+    return matchingActivity.length > 0 ? matchingActivity : [];
   }, [matchingActivity]);
 
   if (isLoading) {
@@ -124,7 +123,7 @@ export default function ProviderDashboard() {
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
-                  margin={{ left: -16, right: 8, top: 8, bottom: 0 }}
+                  margin={{ left: -16, right: 8, top: 20, bottom: 0 }}
                 >
                   <CartesianGrid
                     strokeDasharray="4 4"

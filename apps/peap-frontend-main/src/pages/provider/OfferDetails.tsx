@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { InlineTableSkeleton } from '@/components/common/PageSkeletons';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
@@ -24,9 +24,19 @@ import {
   useProviderOfferQuery,
 } from '@/services/api/queries';
 import { queryKeys } from '@/services/api/queryKeys';
-import { ArrowLeft, Brain, MapPin, Trash2, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Brain,
+  Download,
+  MapPin,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { mockCandidates } from '@/mocks/mockParsedCv';
+
+import PdfContent from '@/components/common/PdfContent';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
 
 export default function OfferDetails() {
   const { id } = useParams();
@@ -34,7 +44,7 @@ export default function OfferDetails() {
   const { toast } = useToast();
   const { data, isLoading, isError, error } = useProviderOfferQuery(id);
   const deleteMutation = useDeleteProviderOfferMutation();
-
+  const pdfRef = useRef();
   const offer = data?.offer;
   // const candidates = data?.candidates ?? mockCandidates;
   //! TODO : REMOVE ME
@@ -65,6 +75,68 @@ export default function OfferDetails() {
         variant: 'destructive',
       });
     }
+  };
+
+  const handleGeneratePdf = async () => {
+    if (!pdfRef.current) return;
+
+    const canvas = await html2canvas(pdfRef.current, {
+      scale: 2,
+      useCORS: true,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    // ===== Margins (mm)
+    const margin = {
+      top: 5,
+      bottom: 5,
+      left: 10,
+      right: 10,
+    };
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const contentWidth = pageWidth - margin.left - margin.right;
+    const contentHeight = pageHeight - margin.top - margin.bottom;
+
+    const imgHeight = (canvas.height * contentWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin.top;
+
+    // First page
+    pdf.addImage(
+      imgData,
+      'PNG',
+      margin.left,
+      position,
+      contentWidth,
+      imgHeight,
+    );
+
+    heightLeft -= contentHeight;
+
+    // Extra pages
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = margin.top - (imgHeight - heightLeft);
+
+      pdf.addImage(
+        imgData,
+        'PNG',
+        margin.left,
+        position,
+        contentWidth,
+        imgHeight,
+      );
+
+      heightLeft -= contentHeight;
+    }
+
+    pdf.save(`rapport-${id}.pdf`);
   };
 
   if (isLoading) {
@@ -105,6 +177,10 @@ export default function OfferDetails() {
                 <ArrowLeft className="h-4 w-4 mr-1" /> Back
               </Link>
             </Button> */}
+            <Button variant="outline" size="sm" onClick={handleGeneratePdf}>
+              <Download className="h-4 w-4 mr-1" />
+              Download PDF Report
+            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" size="sm">
@@ -134,7 +210,6 @@ export default function OfferDetails() {
           </div>
         }
       />
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <Card className="lg:col-span-2 card-border-top">
           <CardHeader>
@@ -153,7 +228,11 @@ export default function OfferDetails() {
               />
               <Info
                 label="Offer ID"
-                value={<span className="font-mono text-xs">{offer.anetiIdentifier ?? '—'}</span>}
+                value={
+                  <span className="font-mono text-xs">
+                    {offer.anetiIdentifier ?? '—'}
+                  </span>
+                }
               />
               <Info label="Level" value={offer.level || 'N/A'} />
               <Info label="Posted" value={`${offer.postedDays}d ago`} />
@@ -222,7 +301,9 @@ export default function OfferDetails() {
             </p>
           </div>
           <Button asChild type="button" variant="outline" size="sm">
-            <Link to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}>
+            <Link
+              to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}
+            >
               <Brain className="h-4 w-4 mr-1.5" />
               Candidats matchés
             </Link>
@@ -282,6 +363,23 @@ export default function OfferDetails() {
             </table>
           </div>
         )}
+      </div>
+      <div
+        ref={pdfRef}
+        style={{
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+          width: '800px',
+          background: 'white',
+        }}
+      >
+        <PdfContent
+          offer={offer}
+          matched={offer.matched}
+          applications={offer.applicants}
+          candidates={candidates}
+        />
       </div>
     </div>
   );
