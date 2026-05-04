@@ -447,8 +447,8 @@ export default function DemoMatching() {
           </div>
 
           <div className="grid gap-6 p-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <div className="space-y-4">
-              <div className="rounded-3xl border border-border bg-background p-4">
+            <div className="space-y-2">
+              <div className="rounded-xl border border-border bg-primary/5 p-4 border-color-primary card-border-top">
                 <p className="text-sm font-semibold text-foreground">
                   {selectedOffer.title}
                 </p>
@@ -506,8 +506,8 @@ export default function DemoMatching() {
               </div>
             </div>
 
-            <div className="space-y-5">
-              <div className="rounded-3xl border border-border bg-background p-4">
+            <div className="space-y-2">
+              <div className="rounded-xl  border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -535,7 +535,7 @@ export default function DemoMatching() {
                 />
               </div>
 
-              <div className="rounded-3xl border border-border bg-background p-4">
+              <div className="rounded-xl border border-border bg-background p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-foreground">
@@ -577,7 +577,7 @@ export default function DemoMatching() {
                 options={languageOptions}
               />
 
-              <div className="rounded-3xl border border-border bg-background p-4">
+              <div className="rounded-xl border border-border bg-background p-4">
                 <div className="flex items-center gap-2">
                   <Filter className="h-4 w-4 text-primary" />
                   <p className="text-sm font-semibold text-foreground">
@@ -647,7 +647,7 @@ export default function DemoMatching() {
                   className={cn(
                     'rounded-3xl border p-4 text-left transition-all',
                     selectedModel?.id === model.id
-                      ? 'border-primary bg-primary-muted/40 shadow-sm'
+                      ? 'border-primary bg-primary-muted/40 shadow-sm card-border-left-active'
                       : 'border-border bg-background hover:border-primary/40 hover:bg-primary-muted/10',
                   )}
                 >

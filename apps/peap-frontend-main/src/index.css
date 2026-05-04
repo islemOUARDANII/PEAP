@@ -268,6 +268,11 @@
   border-top: 8px solid #00548d;
 }
 
+.card-border-left-active {
+  border-left: 6px solid #00548d;
+  border-radius: 16px;
+}
+
 .card-border-left:hover {
   border-left: 6px solid #00548d;
   border-radius: 16px;
