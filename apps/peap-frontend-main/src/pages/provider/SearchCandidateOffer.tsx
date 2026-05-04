@@ -363,7 +363,7 @@ export default function SearchCandidateOffer() {
         <aside className="hidden lg:block">
           <div className="panel sticky top-4 p-4 card-border-top-blue-aneti">
             <div className="mb-4 flex items-center justify-between">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
                 <SlidersHorizontal className="h-4 w-4" />
                 Filters
               </p>

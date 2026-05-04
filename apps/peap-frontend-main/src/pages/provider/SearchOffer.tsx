@@ -413,7 +413,7 @@ export default function SearchOffer() {
         <aside className="hidden lg:block">
           <div className="panel p-4 sticky top-4 card-border-top-blue-aneti">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-primary flex items-center gap-1.5">
                 <SlidersHorizontal className="h-4 w-4" /> Filters
               </p>
               <button

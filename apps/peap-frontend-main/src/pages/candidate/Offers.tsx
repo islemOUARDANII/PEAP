@@ -187,7 +187,7 @@ function FiltersPanel({
         </div>
       </div>
 
-      <div>
+      {/* <div>
         <div className="flex items-center justify-between">
           <Label className="stat-label">Min experience</Label>
           <span className="text-xs font-mono text-foreground">
@@ -202,12 +202,12 @@ function FiltersPanel({
           step={1}
           className="mt-3"
         />
-      </div>
+      </div> */}
 
-      <div>
-        <Label className="stat-label">Education level</Label>
+      {/* <div>
+        <Label className="stat-label">Niveau d’études</Label>
         <div className="mt-2 flex flex-col gap-1.5">
-          {/* {educationLevels.map((e) => (
+          {educationLevels.map((e) => (
             <label
               key={e}
               className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
@@ -218,31 +218,31 @@ function FiltersPanel({
               />
               {e}
             </label>
-          ))} */}
+          ))}
         </div>
-      </div>
+      </div> */}
 
-      <div>
-        <Label className="stat-label">Location</Label>
+      {/* <div>
+        <Label className="stat-label">Localisation</Label>
         <Select value={loc} onValueChange={setLoc}>
           <SelectTrigger className="h-9 mt-1.5">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All locations</SelectItem>
-            {/* {locations.map((l) => (
+            {locations.map((l) => (
               <SelectItem key={l} value={l}>
                 {l}
               </SelectItem>
-            ))} */}
+            ))}
           </SelectContent>
         </Select>
-      </div>
+      </div> */}
 
-      <div>
-        <Label className="stat-label">Availability</Label>
+      {/* <div>
+        <Label className="stat-label">Disponibilité</Label>
         <div className="mt-2 flex flex-col gap-1.5">
-          {/* {availabilities.map((a) => (
+          {availabilities.map((a) => (
             <label
               key={a}
               className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
@@ -253,14 +253,14 @@ function FiltersPanel({
               />
               {a}
             </label>
-          ))} */}
+          ))}
         </div>
-      </div>
+      </div> */}
 
-      <div>
-        <Label className="stat-label">Languages</Label>
+      {/* <div>
+        <Label className="stat-label">Langues</Label>
         <div className="mt-2 grid grid-cols-2 gap-1.5">
-          {/* {languages.map((l) => (
+          {languages.map((l) => (
             <label
               key={l}
               className="flex items-center gap-2 text-xs text-foreground cursor-pointer"
@@ -271,13 +271,13 @@ function FiltersPanel({
               />
               {l}
             </label>
-          ))} */}
+          ))}
         </div>
-      </div>
+      </div> */}
 
       <div>
         <div className="flex items-center justify-between">
-          <Label className="stat-label">Minimum match</Label>
+          <Label className="stat-label">Correspondance min.</Label>
           <span className="text-xs font-mono text-foreground">{minScore}%</span>
         </div>
         <Slider
@@ -543,11 +543,12 @@ export default function CandidateOffers() {
         title="Offres"
         description="Consultez toutes les offres, les offres liees a vos centres d'interet et vos recommandations personnalisees."
       />
-      <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
-        <aside className="hidden lg:block">
+      {/* <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6"> */}
+      <div className="grid grid-cols-1">
+        {/* <aside className="hidden lg:block">
           <div className="panel p-4 sticky top-4 card-border-top-blue-aneti">
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-primary flex items-center gap-1.5">
                 <SlidersHorizontal className="h-4 w-4" /> Filters
               </p>
               <button
@@ -559,7 +560,7 @@ export default function CandidateOffers() {
             </div>
             <FiltersPanel />
           </div>
-        </aside>
+        </aside> */}
         <div className="space-y-4">
           <section className="panel space-y-4 p-5 card-border-top">
             <form
@@ -571,12 +572,12 @@ export default function CandidateOffers() {
             >
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem_auto_auto]">
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
                   <Input
                     value={searchInput}
                     onChange={(event) => setSearchInput(event.target.value)}
                     placeholder="Rechercher par metier, competence, entreprise ou mot-cle..."
-                    className="h-10 bg-surface-muted pl-9"
+                    className="h-10 bg-primary pl-9 text-muted input-search"
                   />
                 </div>
 
@@ -936,27 +937,29 @@ export default function CandidateOffers() {
                   secondaryMessage="Reinitialisez pour revoir toutes vos recommandations."
                 />
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div
+                  className={
+                    view === 'grid'
+                      ? 'grid grid-cols-1 xl:grid-cols-3 gap-4'
+                      : 'panel divide-y divide-border'
+                  }
+                >
                   {filteredRecommendedOffers.map((offer) => (
                     <>
                       {view === 'grid' ? (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          <RecommendedOfferCard
-                            key={offer.matchingResultId}
-                            offer={offer}
-                            isApplied={appliedOfferIds.includes(offer.offerId)}
-                            onSelect={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+                        <RecommendedOfferCard
+                          key={offer.matchingResultId}
+                          offer={offer}
+                          isApplied={appliedOfferIds.includes(offer.offerId)}
+                          onSelect={() => setSelectedOffer(offer)}
+                        />
                       ) : (
-                        <div className="panel divide-y divide-border">
-                          <SearchOfferRow
-                            key={`all-${offer.offerId ?? offer.title}`}
-                            offer={offer}
-                            matchedCount={offer.score}
-                            onClick={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+                        <SearchOfferRow
+                          key={`all-${offer.offerId ?? offer.title}`}
+                          offer={offer}
+                          matchedCount={offer.score}
+                          onClick={() => setSelectedOffer(offer)}
+                        />
                       )}
                     </>
                   ))}
@@ -1020,27 +1023,32 @@ export default function CandidateOffers() {
                   secondaryMessage="Reinitialisez pour revoir toutes vos recommandations."
                 />
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div
+                  className={
+                    view === 'grid'
+                      ? 'grid grid-cols-1 xl:grid-cols-2 gap-4'
+                      : 'panel divide-y divide-border'
+                  }
+                >
                   {filteredRecommendedOffers.map((offer) => (
                     <>
                       {view === 'grid' ? (
-                        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                          <RecommendedOfferCard
-                            key={offer.matchingResultId}
-                            offer={offer}
-                            isApplied={appliedOfferIds.includes(offer.offerId)}
-                            onSelect={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+                        // <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                        <RecommendedOfferCard
+                          key={offer.matchingResultId}
+                          offer={offer}
+                          isApplied={appliedOfferIds.includes(offer.offerId)}
+                          onSelect={() => setSelectedOffer(offer)}
+                        />
                       ) : (
-                        <div className="panel divide-y divide-border">
-                          <SearchOfferRow
-                            key={`all-${offer.offerId ?? offer.title}`}
-                            offer={offer}
-                            matchedCount={offer.score}
-                            onClick={() => setSelectedOffer(offer)}
-                          />
-                        </div>
+                        // </div>
+
+                        <SearchOfferRow
+                          key={`all-${offer.offerId ?? offer.title}`}
+                          offer={offer}
+                          matchedCount={offer.score}
+                          onClick={() => setSelectedOffer(offer)}
+                        />
                       )}
                     </>
                   ))}
@@ -1471,7 +1479,7 @@ function RecommendedOfferCard({
   const publishedAt = formatDate(offer.publishedAt);
 
   return (
-    <article className="panel flex h-full flex-col p-5 card-border-left">
+    <article className="panel p-5 flex flex-col w-full group hover:border-accent transition-colors card-border-left">
       <div className="flex items-start justify-between mb-3 gap-3">
         {/* <div className="min-w-0">
           <h2 className="text-base font-semibold text-foreground">

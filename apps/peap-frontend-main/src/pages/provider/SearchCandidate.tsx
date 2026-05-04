@@ -78,7 +78,6 @@ const initialsFromName = (value: string): string =>
     .map((segment) => segment[0]?.toUpperCase() ?? '')
     .join('') || 'NA';
 
-
 const mapCandidate = (
   result: Record<string, unknown>,
 ): SearchCandidateViewModel => {
@@ -202,7 +201,10 @@ function CandidateDetailsDialog({
   onClose: () => void;
 }) {
   return (
-    <Dialog open={Boolean(candidate)} onOpenChange={(open) => !open && onClose()}>
+    <Dialog
+      open={Boolean(candidate)}
+      onOpenChange={(open) => !open && onClose()}
+    >
       <DialogContent className="max-w-2xl">
         {!candidate ? null : (
           <>
@@ -252,7 +254,9 @@ function CandidateDetailsDialog({
                 <div className="flex items-start gap-2 rounded-xl border border-border p-3">
                   <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Localisation</p>
+                    <p className="text-xs text-muted-foreground">
+                      Localisation
+                    </p>
                     <p className="text-sm font-medium text-foreground">
                       {candidate.location}
                     </p>
@@ -262,7 +266,9 @@ function CandidateDetailsDialog({
                 <div className="flex items-start gap-2 rounded-xl border border-border p-3">
                   <Briefcase className="mt-0.5 h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-xs text-muted-foreground">Métier / profil</p>
+                    <p className="text-xs text-muted-foreground">
+                      Métier / profil
+                    </p>
                     <p className="text-sm font-medium text-foreground">
                       {candidate.occupation}
                     </p>
@@ -339,7 +345,9 @@ export default function SearchCandidate() {
     const results = candidatesQuery.data?.results ?? [];
 
     return results
-      .map((result) => mapCandidate(result as unknown as Record<string, unknown>))
+      .map((result) =>
+        mapCandidate(result as unknown as Record<string, unknown>),
+      )
       .filter((candidate) => candidate.score >= minScore)
       .filter((candidate) => candidate.experienceYears >= minExp);
   }, [candidatesQuery.data?.results, minScore, minExp]);
@@ -387,7 +395,7 @@ export default function SearchCandidate() {
         <aside className="hidden lg:block">
           <div className="panel sticky top-4 p-4 card-border-top-blue-aneti">
             <div className="mb-4 flex items-center justify-between">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-primary">
                 <SlidersHorizontal className="h-4 w-4" />
                 Filters
               </p>
@@ -423,10 +431,11 @@ export default function SearchCandidate() {
               <button
                 type="button"
                 onClick={() => setView('grid')}
-                className={`p-2 ${view === 'grid'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
+                className={`p-2 ${
+                  view === 'grid'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
                 aria-label="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
@@ -434,10 +443,11 @@ export default function SearchCandidate() {
               <button
                 type="button"
                 onClick={() => setView('list')}
-                className={`p-2 ${view === 'list'
-                  ? 'bg-accent text-accent-foreground'
-                  : 'bg-background text-muted-foreground hover:text-foreground'
-                  }`}
+                className={`p-2 ${
+                  view === 'list'
+                    ? 'bg-accent text-accent-foreground'
+                    : 'bg-background text-muted-foreground hover:text-foreground'
+                }`}
                 aria-label="List view"
               >
                 <List className="h-4 w-4" />
@@ -514,7 +524,9 @@ export default function SearchCandidate() {
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div className="rounded-lg bg-surface-muted p-2">
                       <p className="text-muted-foreground">Score</p>
-                      <p className="font-semibold text-foreground">{candidate.score}%</p>
+                      <p className="font-semibold text-foreground">
+                        {candidate.score}%
+                      </p>
                     </div>
 
                     <div className="rounded-lg bg-surface-muted p-2">
@@ -526,7 +538,9 @@ export default function SearchCandidate() {
 
                     <div className="rounded-lg bg-surface-muted p-2">
                       <p className="text-muted-foreground">Statut</p>
-                      <p className="font-semibold text-foreground">{candidate.status}</p>
+                      <p className="font-semibold text-foreground">
+                        {candidate.status}
+                      </p>
                     </div>
                   </div>
 
@@ -691,6 +705,6 @@ export default function SearchCandidate() {
         candidate={selectedCandidate}
         onClose={() => setSelectedCandidate(null)}
       />
-    </div >
+    </div>
   );
 }

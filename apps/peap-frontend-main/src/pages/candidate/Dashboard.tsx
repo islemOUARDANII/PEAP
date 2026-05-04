@@ -247,7 +247,7 @@ export default function CandidateDashboard() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <DashboardActionCard
           icon={FileText}
-          title="Complétion du profil"
+          title="État du profil"
           value={`${profileCompletion}%`}
           hint="Voir les éléments complets et manquants"
           onClick={() =>
@@ -309,11 +309,11 @@ export default function CandidateDashboard() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">
-              Complétion du profil
+              État du profil
             </h2>
             <p className="text-sm text-muted-foreground">
-              Identifiez rapidement ce qui est complet et ce qui manque pour
-              améliorer vos recommandations.
+              Identifiez rapidement les éléments complétés et ceux manquants
+              afin d’améliorer vos recommandations.
             </p>
           </div>
           <StatusPill
