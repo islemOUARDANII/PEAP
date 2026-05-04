@@ -43,11 +43,15 @@ export const homePathForRoles = (roles: string[], fallbackRole?: Role): string =
   }
 
   if (hasRole(normalizedRoles, "TECH_ADMIN")) {
-    return "/advisor/tech-admin";
+    return "/advisor/technical-admin";
   }
 
   if (hasRole(normalizedRoles, "FUNCTIONAL_ADMIN")) {
-    return "/advisor/settings";
+    return "/advisor/functional-admin";
+  }
+
+  if (hasRole(normalizedRoles, "ADVISOR")) {
+    return "/advisor";
   }
 
   return "/advisor";

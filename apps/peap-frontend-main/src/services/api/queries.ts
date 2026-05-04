@@ -383,7 +383,7 @@ const mapEmployerOfferToJob = (offer: EmployerOffer): Job => {
     id: offer.id,
     anetiIdentifier: offer.anetiIdentifier ?? null,
     title: offer.title,
-    company: offer.employerName ?? "Employer",
+    company: offer.companyName ?? offer.employerName ?? "Employer",
     location: offer.locationLabel || "Location not specified",
     contract: humanizeContractType(offer.contractType),
     level: startCase(offer.workMode) || "Not specified",
@@ -833,8 +833,11 @@ export function useProviderDashboardQuery() {
   return useQuery({
     queryKey: queryKeys.provider.dashboard(),
     queryFn: async (): Promise<ProviderDashboardData> => {
-      const [offers, candidateSearch] = await Promise.all([
+      const [offers, applications, candidateSearch] = await Promise.all([
         gatewayApi.employer.listOffers(),
+
+        gatewayApi.employer.listApplications().catch(() => []),
+
         gatewayApi.search.candidates({ filters: { size: 8 } }).catch(() => ({
           total: 0,
           filtersApplied: {},
@@ -843,25 +846,105 @@ export function useProviderDashboardQuery() {
         })),
       ]);
 
-      const activeOffers = offers
-        .filter((offer) => mapOfferStatus(offer.status) === "Active")
-        .map(mapEmployerOfferToJob);
+      const activeOffersRaw = offers.filter(
+        (offer) => mapOfferStatus(offer.status) === "Active",
+      );
+
+      const activeOffers = activeOffersRaw.map(mapEmployerOfferToJob);
       const topOffers = offers.slice(0, 5).map(mapEmployerOfferToJob);
+
       const recentCandidates = candidateSearch.results.map((result) =>
         mapSearchCandidateToCandidate(result),
       );
-      const scores = recentCandidates.map((candidate) => candidate.score).filter((score) => score > 0);
+
+      const scores = recentCandidates
+        .map((candidate) => candidate.score)
+        .filter((score) => score > 0);
+
+      const applicationsByOffer = new Map<string, number>();
+
+      for (const application of applications) {
+        applicationsByOffer.set(
+          application.offerId,
+          (applicationsByOffer.get(application.offerId) ?? 0) + 1,
+        );
+      }
+
+      const offersForChart = activeOffersRaw.slice(0, 8);
+
+      const matchedCountsByOffer = await Promise.all(
+        offersForChart.map(async (offer) => {
+          const skills = offer.requirements
+            .map((item) => item.nodeLabel ?? item.rawValue ?? "")
+            .filter(Boolean)
+            .slice(0, 5);
+
+          const response = await gatewayApi.search
+            .candidates({
+              filters: {
+                query: [offer.title, ...skills].join(" ").trim(),
+                skills,
+                location: offer.governorateLabel ?? undefined,
+                size: 50,
+              },
+            })
+            .catch(() => ({
+              total: 0,
+              filtersApplied: {},
+              results: [] as SearchCandidateResult[],
+              raw: {},
+            }));
+
+          return {
+            offer,
+            matchedCount: response.total || response.results.length,
+            applicationsCount: applicationsByOffer.get(offer.id) ?? 0,
+          };
+        }),
+      );
+
+      const matchingActivity = matchedCountsByOffer.map((item) => {
+        const shortTitle =
+          item.offer.title.length > 18
+            ? `${item.offer.title.slice(0, 18)}...`
+            : item.offer.title;
+
+        return {
+          // On garde "day" pour ne pas casser le type existant MatchingActivityPoint
+          // mais ici la valeur représente le nom de l'offre.
+          day: item.offer.anetiIdentifier
+            ? `${item.offer.anetiIdentifier}`
+            : shortTitle,
+          matches: item.matchedCount,
+          applications: item.applicationsCount,
+        };
+      });
 
       return {
         activeOffers,
         topOffers,
         recentCandidates,
-        matchingActivity: groupByDay(offers.map((offer) => offer.createdAt)),
-        matchedCandidates: recentCandidates.length,
-        newApplications: 0,
+        matchingActivity,
+
+        matchedCandidates: matchedCountsByOffer.reduce(
+          (total, item) => total + item.matchedCount,
+          0,
+        ),
+
+        newApplications: applications.filter((application) => {
+          const appliedAt = Date.parse(application.appliedAt);
+          if (!Number.isFinite(appliedAt)) return false;
+
+          const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+          return appliedAt >= sevenDaysAgo;
+        }).length,
+
         averageMatchQuality:
           scores.length > 0
-            ? Math.round(scores.reduce((total, value) => total + value, 0) / scores.length)
+            ? Math.round(
+              scores.reduce((total, value) => total + value, 0) /
+              scores.length,
+            )
             : 0,
       };
     },
@@ -873,6 +956,14 @@ export function useProviderOffersQuery() {
   return useQuery({
     queryKey: queryKeys.provider.offers(),
     queryFn: async () => (await gatewayApi.employer.listOffers()).map(mapEmployerOfferToJob),
+    staleTime: 30_000,
+  });
+}
+
+export function useProviderApplicationsQuery() {
+  return useQuery({
+    queryKey: ['provider', 'applications'],
+    queryFn: () => gatewayApi.employer.listApplications(),
     staleTime: 30_000,
   });
 }
@@ -934,10 +1025,16 @@ export function useCreateOfferMutation() {
       gatewayApi.employer.createOffer({
         title: payload.title,
         description: payload.rawText,
-        number_of_positions: 1,
+        number_of_positions: payload.numberOfPositions ?? 1,
         contract_type: payload.contract || null,
-        work_mode: null,
+        work_mode: payload.workMode ?? "UNKNOWN",
+        salary_min: payload.salaryMin ?? null,
+        salary_max: payload.salaryMax ?? null,
         country: "TN",
+        company_name: payload.company_name ?? payload.companyName ?? null,
+        governorate_code: payload.governorate_code ?? payload.governorateCode ?? null,
+        delegation_code: payload.delegation_code ?? payload.delegationCode ?? null,
+        deadline_at: payload.deadlineAt ?? null,
         requirements: [
           ...toArray(payload.targetOccupations).map((occupation) => ({
             criterion_type: "OCCUPATION",
@@ -1129,6 +1226,28 @@ export function useParseOfferMutation() {
   });
 }
 
+export function useSearchCandidatesQuery(params?: {
+  filters?: {
+    query?: string;
+    skills?: string[];
+    location?: string;
+    size?: number;
+  };
+}) {
+  return useQuery({
+    queryKey: ['search', 'candidates', params],
+    queryFn: () =>
+      gatewayApi.search.candidates({
+        filters: {
+          query: params?.filters?.query,
+          skills: params?.filters?.skills,
+          location: params?.filters?.location,
+          size: params?.filters?.size ?? 50,
+        },
+      }),
+    staleTime: 30_000,
+  });
+}
 export function useProviderCandidatesQuery() {
   return useQuery({
     queryKey: queryKeys.provider.candidates(),
@@ -1136,6 +1255,40 @@ export function useProviderCandidatesQuery() {
       const response = await gatewayApi.search.candidates({ filters: { size: 20 } });
       return response.results.map((result) => mapSearchCandidateToCandidate(result));
     },
+  });
+}
+
+export function useSearchOffersQuery(params?: {
+  query?: string;
+  size?: number;
+  filters?: Record<string, unknown>;
+}) {
+  return useQuery({
+    queryKey: ['search', 'offers', params],
+    queryFn: () =>
+      gatewayApi.search.offers({
+        query: params?.query?.trim() || undefined,
+        size: params?.size ?? 50,
+        filters: params?.filters ?? {},
+      }),
+    staleTime: 30_000,
+  });
+}
+
+export function useMatchingModelsQuery() {
+  return useQuery({
+    queryKey: ['matching', 'models'],
+    queryFn: () => gatewayApi.matchingConfig.listModels(),
+    staleTime: 30_000,
+  });
+}
+
+export function useMatchingModelCriteriaQuery(versionId?: string) {
+  return useQuery({
+    queryKey: ['matching', 'model-criteria', versionId],
+    queryFn: () => gatewayApi.matchingConfig.listModelCriteria(versionId!),
+    enabled: Boolean(versionId),
+    staleTime: 30_000,
   });
 }
 

@@ -1,18 +1,18 @@
 import {
   UserCog,
-  Briefcase,
+  BriefcaseBusiness,
   SlidersHorizontal,
   Wrench,
-  Building2,
+  UserRound,
   type LucideIcon,
 } from 'lucide-react';
 
 export type PortalRoleId =
-  | 'conseiller'
-  | 'office-manager'
+  | 'advisor'
+  | 'provider'
   | 'functional-admin'
   | 'technical-admin'
-  | 'executive';
+  | 'candidate';
 
 export interface PortalRole {
   id: PortalRoleId;
@@ -20,52 +20,56 @@ export interface PortalRole {
   subtitle: string;
   description: string;
   icon: LucideIcon;
-  /** Dashboard route to land on after login */
   dashboard: string;
 }
 
 export const portalRoles: PortalRole[] = [
   {
-    id: 'conseiller',
-    label: 'Conseiller',
-    subtitle: 'Conseiller ANETI',
-    description: 'Guide candidates, review matches and curate recommendations.',
+    id: 'advisor',
+    label: 'Conseiller ANETI',
+    subtitle: 'Accompagnement et orientation',
+    description:
+      'Consulter les candidats, rechercher des offres, lancer des matchings et analyser les recommandations.',
     icon: UserCog,
     dashboard: '/advisor',
   },
   {
-    id: 'office-manager',
-    label: 'Chef de bureau',
-    subtitle: 'BETI - Chef de bureau',
-    description: "Oversee your team's pipeline, workload and performance.",
-    icon: Briefcase,
-    dashboard: '/advisor',
+    id: 'provider',
+    label: 'Employeur',
+    subtitle: 'Entreprise / recruteur',
+    description:
+      'Publier des offres, rechercher des candidats, consulter les candidatures reçues et suivre vos recrutements.',
+    icon: BriefcaseBusiness,
+    dashboard: '/provider',
   },
   {
     id: 'functional-admin',
-    label: 'Admin Fonctionnel',
-    subtitle: 'Configuration metie ',
-    description: 'Manage taxonomy, matching models, criteria weights and business rules.',
+    label: 'Admin fonctionnel',
+    subtitle: 'Configuration métier',
+    description:
+      'Configurer les modèles de matching, les critères, les poids, les règles métier et les référentiels.',
     icon: SlidersHorizontal,
-    dashboard: '/advisor/matching-config',
+    dashboard: '/advisor/functional-admin',
   },
   {
     id: 'technical-admin',
-    label: 'Admin Technique',
-    subtitle: 'Operations de Platform',
-    description: 'Monitor pipelines, audit logs and system integrations.',
+    label: 'Admin technique',
+    subtitle: 'Monitoring plateforme',
+    description:
+      'Surveiller les services, les pipelines, les intégrations, les logs techniques et la santé du système.',
     icon: Wrench,
-    dashboard: '/advisor/pipeline',
+    dashboard: '/advisor/technical-admin',
   },
   {
-    id: 'executive',
-    label: 'Candidate',
-    subtitle: 'Chercheur d\'emploi',
-    description: 'Accédez à votre profil, et gérez votre recherche d\'emploi.',
-    icon: Building2,
-    dashboard: '/advisor',
+    id: 'candidate',
+    label: 'Candidat',
+    subtitle: "Chercheur d'emploi",
+    description:
+      "Accéder à votre profil, consulter les offres, postuler et suivre vos recommandations d'emploi.",
+    icon: UserRound,
+    dashboard: '/candidate',
   },
 ];
 
 export const getPortalRole = (id: string): PortalRole | undefined =>
-  portalRoles.find((r) => r.id === id);
+  portalRoles.find((role) => role.id === id);

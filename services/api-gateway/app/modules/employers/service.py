@@ -13,6 +13,7 @@ from .schemas import (
     EmployerLocationUpsertRequest,
     EmployerProfileResponse,
     EmployerUpdateRequest,
+    EmployerApplicationResponse,
 )
 
 
@@ -149,3 +150,11 @@ def list_employers(db: Session) -> list[dict]:
 
 def employer_counts(db: Session) -> dict:
     return repository.count_employers(db)
+
+def list_my_applications(db: Session, current_user: CurrentUserResponse) -> list[dict]:
+    employer = resolve_current_employer(db, current_user)
+    rows = repository.list_employer_applications(db, employer["id"])
+    return [
+        EmployerApplicationResponse(**row).model_dump(mode="json")
+        for row in rows
+    ]

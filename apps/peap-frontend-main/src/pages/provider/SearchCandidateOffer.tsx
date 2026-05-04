@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Download,
@@ -30,7 +30,7 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { gatewayApi, type EmployerOffer } from '@/services/api/gateway';
-import { mockCandidates } from '@/mocks/mockParsedCv';
+import { useSearchParams } from 'react-router-dom';
 
 interface SearchCandidateViewModel {
   id: string;
@@ -162,11 +162,10 @@ function FiltersPanel({
                 key={skill}
                 type="button"
                 onClick={() => toggleSkill(skill)}
-                className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${
-                  active
-                    ? 'border-accent bg-accent text-accent-foreground'
-                    : 'border-border bg-secondary text-secondary-foreground hover:border-accent/40'
-                }`}
+                className={`rounded-md border px-2 py-0.5 text-xs transition-colors ${active
+                  ? 'border-accent bg-accent text-accent-foreground'
+                  : 'border-border bg-secondary text-secondary-foreground hover:border-accent/40'
+                  }`}
               >
                 {skill}
               </button>
@@ -236,6 +235,9 @@ export default function SearchCandidateOffer() {
   const [shortlisted, setShortlisted] = useState<string[]>([]);
   const [activeOfferId, setActiveOfferId] = useState('');
 
+  const [searchParams] = useSearchParams();
+  const offerIdFromUrl = searchParams.get('offerId') ?? '';
+
   const offersQuery = useQuery({
     queryKey: ['provider', 'offers', 'search-context'],
     queryFn: () => gatewayApi.employer.listOffers(),
@@ -243,6 +245,13 @@ export default function SearchCandidateOffer() {
   });
 
   const offers = offersQuery.data ?? [];
+
+  useEffect(() => {
+    if (offerIdFromUrl && offers.some((offer) => offer.id === offerIdFromUrl)) {
+      setActiveOfferId(offerIdFromUrl);
+    }
+  }, [offerIdFromUrl, offers]);
+
   const activeOffer =
     offers.find((offer) => offer.id === activeOfferId) ?? offers[0];
   const required = offerRequiredSkills(activeOffer);
@@ -290,11 +299,12 @@ export default function SearchCandidateOffer() {
   //     .filter((candidate) => candidate.score >= minScore);
   // }, [candidatesQuery.data?.results, minScore]);
 
-  //! TODO : REMOVE ME
   const candidates = useMemo(() => {
-    const results = mockCandidates;
-    return results;
-  }, []);
+    const results = candidatesQuery.data?.results ?? [];
+    return results
+      .map((result) => mapCandidate(result as Record<string, unknown>))
+      .filter((candidate) => candidate.score >= minScore);
+  }, [candidatesQuery.data?.results, minScore]);
 
   const toggleSkill = (value: string) => {
     setSelectedSkills((current) =>
@@ -382,22 +392,20 @@ export default function SearchCandidateOffer() {
             <div className="flex overflow-hidden rounded-md border border-border">
               <button
                 onClick={() => setView('grid')}
-                className={`p-2 ${
-                  view === 'grid'
-                    ? 'bg-accent text-accent-foreground'
-                    : 'bg-background text-muted-foreground hover:text-foreground'
-                }`}
+                className={`p-2 ${view === 'grid'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
                 aria-label="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
               </button>
               <button
                 onClick={() => setView('list')}
-                className={`p-2 ${
-                  view === 'list'
-                    ? 'bg-accent text-accent-foreground'
-                    : 'bg-background text-muted-foreground hover:text-foreground'
-                }`}
+                className={`p-2 ${view === 'list'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
                 aria-label="List view"
               >
                 <List className="h-4 w-4" />
@@ -440,18 +448,61 @@ export default function SearchCandidateOffer() {
             )}
           </div>
 
-          {view === 'grid' ? (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-2">
+          {offersQuery.isLoading ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              Chargement des offres employeur...
+            </div>
+          ) : offersQuery.isError ? (
+            <div className="panel p-6 text-sm text-destructive">
+              {offersQuery.error instanceof Error
+                ? offersQuery.error.message
+                : 'Impossible de charger les offres employeur.'}
+            </div>
+          ) : !activeOffer ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              Aucune offre disponible. Créez d’abord une offre, puis revenez à la recherche candidats.
+            </div>
+          ) : candidatesQuery.isLoading ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              Recherche des candidats indexés...
+            </div>
+          ) : candidatesQuery.isError ? (
+            <div className="panel p-6 text-sm text-destructive">
+              {candidatesQuery.error instanceof Error
+                ? candidatesQuery.error.message
+                : 'Impossible de rechercher les candidats.'}
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              Aucun candidat trouvé pour cette offre.
+            </div>
+          ) : view === 'grid' ? (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
               {candidates.map((candidate, index) => {
+                const matched = required.filter((skill) =>
+                  candidate.topSkills.some(
+                    (candidateSkill) =>
+                      candidateSkill.toLowerCase() === skill.toLowerCase(),
+                  ),
+                );
+
+                const missing = required.filter(
+                  (skill) =>
+                    !candidate.topSkills.some(
+                      (candidateSkill) =>
+                        candidateSkill.toLowerCase() === skill.toLowerCase(),
+                    ),
+                );
+
                 return (
                   <SearchCandidateCard
                     key={candidate.id}
                     index={index}
                     candidate={candidate}
                     shortlisted={shortlisted}
-                    matched={[0, 4, 8]}
-                    missing={['Hello', 'Testing']}
-                    required={[0, 4, 8, 7]}
+                    matched={matched}
+                    missing={missing}
+                    required={required}
                   />
                 );
               })}
@@ -459,13 +510,28 @@ export default function SearchCandidateOffer() {
           ) : (
             <div className="panel overflow-hidden">
               {candidates.map((candidate) => {
+                const matched = required.filter((skill) =>
+                  candidate.topSkills.some(
+                    (candidateSkill) =>
+                      candidateSkill.toLowerCase() === skill.toLowerCase(),
+                  ),
+                );
+
+                const missing = required.filter(
+                  (skill) =>
+                    !candidate.topSkills.some(
+                      (candidateSkill) =>
+                        candidateSkill.toLowerCase() === skill.toLowerCase(),
+                    ),
+                );
+
                 return (
                   <SearchCandidateRow
                     key={candidate.id}
                     candidate={candidate}
-                    matched={[0, 4, 8]}
-                    missing={['Hello', 'Testing']}
-                    required={[0, 4, 8, 7]}
+                    matched={matched}
+                    missing={missing}
+                    required={required}
                     isShort={shortlisted.includes(candidate.id)}
                   />
                 );

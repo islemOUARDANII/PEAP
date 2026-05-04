@@ -20,12 +20,24 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const inferDemoRole = (email: string): AuthSession["user"]["role"] => {
     const normalized = email.trim().toLowerCase();
-    if (normalized.includes("provider") || normalized.includes("company")) {
+
+    if (
+        normalized.includes("provider") ||
+        normalized.includes("employer") ||
+        normalized.includes("company")
+    ) {
         return "provider";
     }
-    if (normalized.includes("advisor") || normalized.includes("admin")) {
+
+    if (
+        normalized.includes("advisor") ||
+        normalized.includes("admin") ||
+        normalized.includes("functional") ||
+        normalized.includes("technical")
+    ) {
         return "advisor";
     }
+
     return "candidate";
 };
 
@@ -43,7 +55,16 @@ const displayNameFromEmail = (email: string): string => {
 const createDemoSession = (emailInput: string): AuthSession => {
     const email = emailInput.trim().toLowerCase() || "candidate@matchcore.demo";
     const role = inferDemoRole(email);
-
+    const backendRoles =
+        email.includes("technical")
+            ? ["TECH_ADMIN"]
+            : email.includes("functional")
+                ? ["FUNCTIONAL_ADMIN"]
+                : role === "provider"
+                    ? ["EMPLOYER"]
+                    : role === "candidate"
+                        ? ["JOB_SEEKER"]
+                        : ["ADVISOR"];
     return {
         token: `demo-${role}-token`,
         tokenHeader: appEnv.authHeader,
@@ -51,7 +72,8 @@ const createDemoSession = (emailInput: string): AuthSession => {
         user: {
             email,
             role,
-            backendRole: role,
+            backendRole: backendRoles[0],
+            roles: backendRoles,
             name: displayNameFromEmail(email),
         },
     };

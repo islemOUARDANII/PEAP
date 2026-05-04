@@ -81,3 +81,20 @@ class EmployerListItemResponse(BaseModel):
     delegation_code: str | None = None
     delegation_label: str | None = None
     updated_at: datetime
+
+class EmployerApplicationResponse(BaseModel):
+    id: str
+    job_seeker_id: str
+    offer_id: str
+    offer_title: str | None = None
+    offer_aneti_identifier: str | None = None
+
+    candidate_name: str | None = None
+    candidate_email: str | None = None
+    candidate_phone: str | None = None
+
+    matching_result_id: str | None = None
+    status: str
+    cover_message: str | None = None
+    applied_at: datetime
+    updated_at: datetime

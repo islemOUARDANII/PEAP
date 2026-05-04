@@ -1,10 +1,13 @@
 import type { Role } from '@/models';
 import {
+  Activity,
   Briefcase,
   FilePlus2,
   FileText,
   LayoutDashboard,
+  Search,
   SlidersHorizontal,
+  UserCog,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -88,30 +91,92 @@ export const navByRole: Record<Role, RoleNavigation> = {
       },
     ],
   },
+
   advisor: {
-    brand: 'Espace Conseiller',
+    brand: 'Espace Conseiller ANETI',
     groups: [
       {
         label: 'Navigation',
-        items: [{ to: '/advisor', label: 'Dashboard', icon: LayoutDashboard }],
+        items: [
+          { to: '/advisor', label: 'Dashboard', icon: LayoutDashboard },
+          { to: '/advisor/account', label: 'Gestion du compte', icon: UserCog },
+          {
+            to: '/advisor/activity',
+            label: "Sommaire d'activité",
+            icon: Activity,
+          },
+        ],
       },
       {
-        label: 'Matching',
+        label: 'Moteurs',
         items: [
           {
-            to: '/advisor/matching',
-            label: 'Lancer un matching',
-            icon: FileText,
+            to: '/advisor/search',
+            label: 'Moteur de recherche',
+            icon: Search,
           },
           {
-            to: '/advisor/matching-config',
-            label: 'Configuration matching',
-            icon: SlidersHorizontal,
+            to: '/advisor/matching',
+            label: 'Moteur de matching',
+            icon: FileText,
           },
         ],
       },
     ],
   },
+
+  functionalAdmin: {
+    brand: 'Admin fonctionnel',
+    groups: [
+      {
+        label: 'Configuration métier',
+        items: [
+          {
+            to: '/advisor/functional-admin',
+            label: 'Configuration moteurs',
+            icon: SlidersHorizontal,
+          },
+          {
+            to: '/advisor/matching-config',
+            label: 'Critères & poids',
+            icon: FileText,
+          },
+          {
+            to: '/advisor/activity',
+            label: "Sommaire d'activité",
+            icon: Activity,
+          },
+        ],
+      },
+    ],
+  },
+
+  techAdmin: {
+    brand: 'Admin technique',
+    groups: [
+      {
+        label: 'Monitoring',
+        items: [
+          {
+            to: '/advisor/technical-admin',
+            label: 'Santé système',
+            icon: LayoutDashboard,
+          },
+          {
+            to: '/advisor/pipeline',
+            label: 'Pipelines',
+            icon: Activity,
+          },
+          {
+            to: '/advisor/audit',
+            label: 'Logs & audit',
+            icon: FileText,
+          },
+        ],
+      },
+    ],
+  },
+
 };
 
 export const searchTargetsByRole: Record<Role, SearchTarget[]> = {
@@ -164,16 +229,73 @@ export const searchTargetsByRole: Record<Role, SearchTarget[]> = {
   ],
   advisor: [
     {
+      to: '/advisor/search',
+      label: 'Moteur de recherche',
+      description: 'Rechercher des candidats ou des offres via le search-service.',
+      keywords: ['search', 'recherche', 'candidat', 'offre', 'index'],
+    },
+    {
       to: '/advisor/matching',
-      label: 'Matching',
-      description: 'Lancer un matching reel, suivre le run et relire les resultats.',
-      keywords: ['matching', 'run', 'result', 'decision', 'score', 'model'],
+      label: 'Moteur de matching',
+      description:
+        'Lancer un matching réel, choisir le modèle et consulter les résultats.',
+      keywords: ['matching', 'score', 'model', 'criteria', 'poids'],
+    },
+    {
+      to: '/advisor/account',
+      label: 'Gestion du compte',
+      description: 'Consulter les paramètres du compte conseiller.',
+      keywords: ['compte', 'profil', 'advisor'],
+    },
+    {
+      to: '/advisor/activity',
+      label: "Sommaire d'activité",
+      description: 'Consulter les dernières actions du conseiller.',
+      keywords: ['activité', 'audit', 'historique', 'logs'],
+    },
+  ],
+  functionalAdmin: [
+    {
+      to: '/advisor/functional-admin',
+      label: 'Configuration moteurs',
+      description:
+        'Créer, modifier ou consulter les modèles de matching et les règles métier.',
+      keywords: ['configuration', 'moteur', 'matching', 'critères', 'poids'],
     },
     {
       to: '/advisor/matching-config',
-      label: 'Configuration matching',
-      description: 'Creer les modeles, versions, criteres et hard filters du matching.',
-      keywords: ['model', 'criteria', 'weights', 'version', 'admin', 'matching'],
+      label: 'Critères & poids',
+      description:
+        'Gérer les critères, les poids et les versions des modèles de matching.',
+      keywords: ['critères', 'poids', 'modèle', 'version', 'matching'],
+    },
+    {
+      to: '/advisor/activity',
+      label: "Sommaire d'activité",
+      description: "Consulter l'activité fonctionnelle récente.",
+      keywords: ['activité', 'historique', 'audit'],
+    },
+  ],
+
+  techAdmin: [
+    {
+      to: '/advisor/technical-admin',
+      label: 'Santé système',
+      description:
+        'Superviser la disponibilité des services et composants techniques.',
+      keywords: ['monitoring', 'service', 'health', 'santé', 'technique'],
+    },
+    {
+      to: '/advisor/pipeline',
+      label: 'Pipelines',
+      description: 'Surveiller les pipelines techniques de la plateforme.',
+      keywords: ['pipeline', 'kafka', 'sync', 'indexation'],
+    },
+    {
+      to: '/advisor/audit',
+      label: 'Logs & audit',
+      description: 'Consulter les logs et événements techniques.',
+      keywords: ['logs', 'audit', 'erreur', 'trace'],
     },
   ],
 };

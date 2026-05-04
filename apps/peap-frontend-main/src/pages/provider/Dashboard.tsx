@@ -28,8 +28,7 @@ import {
 } from 'recharts';
 import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
 import { chartsConfig } from '@/app/constants';
-import { mockDataChart } from '@/mocks/mockParsedCv';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -37,9 +36,12 @@ export default function ProviderDashboard() {
   const top = dashboard?.topOffers ?? [];
   const recent = dashboard?.recentCandidates ?? [];
   const matchingActivity = dashboard?.matchingActivity ?? [];
-  // const data = useMemo(() => mockDataChart, []);
 
-  const [chartData, setChartData] = useState(mockDataChart);
+  const chartData = useMemo(() => {
+    return matchingActivity.length > 0
+      ? matchingActivity
+      : [];
+  }, [matchingActivity]);
 
   if (isLoading) {
     return <ProviderDashboardSkeleton />;
@@ -64,30 +66,36 @@ export default function ProviderDashboard() {
       />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link to="/provider/offers" className="block">
+          <StatCard
+            label="Active offers"
+            value={active.length}
+            icon={FileText}
+            className="start-border-left-blue"
+            iconBackground={'start-background-color-blue'}
+          />
+        </Link>
+        <Link to="/provider/offers/search/offer" className="block">
+          <StatCard
+            label="Matched candidates"
+            value={dashboard?.matchedCandidates ?? 0}
+            icon={Users}
+            className="start-border-left-green"
+            iconBackground={'start-background-color-green'}
+          />
+        </Link>
+        <Link to="/provider/applications" className="block">
+          <StatCard
+            label="New applications"
+            value={dashboard?.newApplications ?? 0}
+            icon={Briefcase}
+            hint="last 7 days"
+            className="start-border-left-orange"
+            iconBackground={'start-background-color-orange'}
+          />
+        </Link>
         <StatCard
-          label="Active offers"
-          value={active.length}
-          icon={FileText}
-          className="start-border-left-blue"
-          iconBackground={'start-background-color-blue'}
-        />
-        <StatCard
-          label="Matched candidates"
-          value={dashboard?.matchedCandidates ?? 0}
-          icon={Users}
-          className="start-border-left-green"
-          iconBackground={'start-background-color-green'}
-        />
-        <StatCard
-          label="New applications"
-          value={dashboard?.newApplications ?? 0}
-          icon={Briefcase}
-          hint="last 7 days"
-          className="start-border-left-orange"
-          iconBackground={'start-background-color-orange'}
-        />
-        <StatCard
-          label="Avg. match quality"
+          label="Qualité moyenne du matching"
           value={`${dashboard?.averageMatchQuality ?? 0}%`}
           icon={TrendingUp}
           className="start-border-left-teal"
@@ -100,38 +108,43 @@ export default function ProviderDashboard() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-semibold text-foreground">
-                Matching activity
+                Performance des offres
               </h2>
               <p className="text-xs text-muted-foreground">
-                Matches vs. applications
+                Candidats correspondants vs candidatures réelles
               </p>
             </div>
           </div>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={chartData}
-                margin={{ left: -16, right: 8, top: 8, bottom: 0 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="4 4"
-                  stroke="hsl(var(--border))"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="offerId"
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <YAxis
-                  stroke="hsl(var(--muted-foreground))"
-                  fontSize={11}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                {/* <Tooltip
+            {chartData.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+                Aucune activité de matching disponible pour le moment.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ left: -16, right: 8, top: 8, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="4 4"
+                    stroke="hsl(var(--border))"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="offerId"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  {/* <Tooltip
                   contentStyle={{
                     backgroundColor: 'hsl(var(--popover))',
                     border: '1px solid hsl(var(--border))',
@@ -139,7 +152,7 @@ export default function ProviderDashboard() {
                     fontSize: 12,
                   }}
                 /> */}
-                {/* <Bar
+                  {/* <Bar
                   dataKey="matches"
                   fill="hsl(var(--accent))"
                   radius={[4, 4, 0, 0]}
@@ -150,7 +163,7 @@ export default function ProviderDashboard() {
                   radius={[4, 4, 0, 0]}
                 /> */}
 
-                {/* <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
+                  {/* <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
                   <LabelList dataKey="matches" content={<CustomValueLabel />} />
                   <Cell
                     key={`cell-matches`}
@@ -167,7 +180,7 @@ export default function ProviderDashboard() {
                     fill={chartsConfig.chartProvider.colors[1]}
                   />
                 </Bar> */}
-                {/* <Bar dataKey="matches" radius={[4, 4, 0, 0]}>
+                  {/* <Bar dataKey="matches" radius={[4, 4, 0, 0]}>
                   <LabelList dataKey="matches" content={<CustomValueLabel />} />
                   {mockDataChart.map((entry, index) => (
                     <Cell
@@ -189,7 +202,7 @@ export default function ProviderDashboard() {
                     />
                   ))}
                 </Bar> */}
-                {/* <Tooltip
+                  {/* <Tooltip
                   isAnimationActive={false}
                   cursor={{ fill: 'transparent' }}
                   contentStyle={{
@@ -199,36 +212,37 @@ export default function ProviderDashboard() {
                     fontSize: 12,
                   }}
                 /> */}
-                <Tooltip
-                  content={<CustomTooltip />}
-                  wrapperStyle={{ pointerEvents: 'none' }}
-                  isAnimationActive={false}
-                />
-                <Bar
-                  dataKey="matches"
-                  fill="hsl(var(--primary))"
-                  radius={[4, 4, 0, 0]}
-                  barSize={30}
-                >
-                  <LabelList
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    wrapperStyle={{ pointerEvents: 'none' }}
+                    isAnimationActive={false}
+                  />
+                  <Bar
                     dataKey="matches"
-                    content={<CustomValueLabel color="hsl(var(--primary))" />}
-                  />
-                </Bar>
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  >
+                    <LabelList
+                      dataKey="matches"
+                      content={<CustomValueLabel color="hsl(var(--primary))" />}
+                    />
+                  </Bar>
 
-                <Bar
-                  dataKey="applications"
-                  fill="hsl(var(--accent))"
-                  radius={[4, 4, 0, 0]}
-                  barSize={30}
-                >
-                  <LabelList
+                  <Bar
                     dataKey="applications"
-                    content={<CustomValueLabel color="hsl(var(--accent))" />}
-                  />
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                    fill="hsl(var(--accent))"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  >
+                    <LabelList
+                      dataKey="applications"
+                      content={<CustomValueLabel color="hsl(var(--accent))" />}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </div>
         </div>
 

@@ -25,13 +25,13 @@ export default function Landing() {
             </div>
             <div className="leading-tight">
               <p className="text-sm font-semibold text-foreground">MatchCore</p>
-              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Match Intelligence Platform</p>
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Plateforme intelligente de matching</p>
             </div>
           </div>
           <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-muted px-2.5 py-1">
               <span className="h-1.5 w-1.5 rounded-full bg-success" />
-              All systems operational
+              Tous les systemes sont operationnels
             </span>
             <span className="font-mono">v0.4.2</span>
           </div>
@@ -43,23 +43,23 @@ export default function Landing() {
           <div className="max-w-3xl">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Choose your workspace to continue
+              Choisissez votre espace pour continuer
             </span>
             <h1 className="mt-6 text-4xl sm:text-5xl font-semibold text-foreground leading-[1.05]">
-              Connect talent and opportunity through{" "}
-              <span className="text-accent">explainable matching</span>.
+              Connectez les talents et les opportunites grace au{" "}
+              <span className="text-accent">matching explicable</span>.
             </h1>
             <p className="mt-5 text-base text-muted-foreground max-w-2xl leading-relaxed">
-              MatchCore ingests CVs and job offers, enriches them against a curated occupational
-              taxonomy, and surfaces the strongest matches with full transparency on what counted
-              and what was missing.
+              MatchCore integre les CV et les offres d'emploi, les enrichit avec une taxonomie
+              metier structuree et fait ressortir les meilleures correspondances en indiquant
+              clairement ce qui a compte et ce qui manque.
             </p>
           </div>
         </section>
 
         <section className="mx-auto max-w-7xl px-6 pb-24">
           <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground mb-3">
-            Sign in as
+            Se connecter en tant que
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {roles.map((r) => {
@@ -80,7 +80,7 @@ export default function Landing() {
                   <p className="mt-1.5 text-sm text-muted-foreground leading-relaxed">{r.description}</p>
                   <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                     <span className="font-mono">/{r.id}</span>
-                    <span className="text-accent font-medium">Enter workspace</span>
+                    <span className="text-accent font-medium">Entrer dans l'espace</span>
                   </div>
                 </Link>
               );
@@ -89,10 +89,10 @@ export default function Landing() {
 
           <div className="mt-16 grid grid-cols-2 sm:grid-cols-4 gap-px bg-border rounded-lg overflow-hidden border border-border">
             {[
-              { v: "1,284", l: "Active candidates" },
-              { v: "342", l: "Open offers" },
-              { v: "8,510", l: "Taxonomy nodes" },
-              { v: "99.7%", l: "Pipeline uptime" },
+              { v: "1,284", l: "Candidats actifs" },
+              { v: "342", l: "Offres ouvertes" },
+              { v: "8,510", l: "Noeuds de taxonomie" },
+              { v: "99.7%", l: "Disponibilite du pipeline" },
             ].map((s) => (
               <div key={s.l} className="bg-surface p-5">
                 <p className="text-2xl font-semibold text-foreground">{s.v}</p>
@@ -105,7 +105,7 @@ export default function Landing() {
 
       <footer className="border-t border-border bg-surface">
         <div className="mx-auto max-w-7xl px-6 h-14 flex items-center justify-between text-xs text-muted-foreground">
-          <span>&copy; 2026 MatchCore. All rights reserved.</span>
+          <span>&copy; 2026 MatchCore. Tous droits reserves.</span>
           <span className="font-mono">region: eu-west-3</span>
         </div>
       </footer>

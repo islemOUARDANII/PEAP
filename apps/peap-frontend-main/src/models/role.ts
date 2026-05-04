@@ -1,4 +1,9 @@
-export type Role = "candidate" | "provider" | "advisor";
+export type Role =
+  | 'candidate'
+  | 'provider'
+  | 'advisor'
+  | 'functionalAdmin'
+  | 'techAdmin';
 
 export interface RoleOption {
   id: Role;

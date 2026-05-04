@@ -10,8 +10,15 @@ from .schemas import (
     EmployerLocationUpsertRequest,
     EmployerProfileResponse,
     EmployerUpdateRequest,
+    EmployerApplicationResponse,
 )
-from .service import get_my_profile, update_my_profile, upsert_contact, upsert_location
+from .service import (
+    get_my_profile,
+    list_my_applications,
+    update_my_profile,
+    upsert_contact,
+    upsert_location,
+)
 
 router = APIRouter(prefix="/employers", tags=["Employers"])
 
@@ -49,3 +56,10 @@ def upsert_location_endpoint(
     current_user: CurrentUserResponse = Depends(require_roles("EMPLOYER", "FUNCTIONAL_ADMIN", "TECH_ADMIN")),
 ):
     return upsert_location(db, current_user, payload)
+
+@router.get("/me/applications", response_model=list[EmployerApplicationResponse])
+def list_my_applications_endpoint(
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("EMPLOYER")),
+):
+    return list_my_applications(db, current_user)

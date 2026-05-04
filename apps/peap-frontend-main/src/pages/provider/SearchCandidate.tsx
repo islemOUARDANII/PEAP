@@ -1,27 +1,21 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import {
+  Briefcase,
   Download,
+  Eye,
   Grid3x3,
   List,
+  MapPin,
   Search,
   SlidersHorizontal,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/common/PageHeader';
-import SearchCandidateCard from '@/components/common/SearchCandidateCard';
-import SearchCandidateRow from '@/components/common/SearchCandidateRow';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+
 import {
   Sheet,
   SheetContent,
@@ -29,8 +23,16 @@ import {
   SheetTitle,
   SheetTrigger,
 } from '@/components/ui/sheet';
-import { gatewayApi, type EmployerOffer } from '@/services/api/gateway';
-import { mockCandidates } from '@/mocks/mockParsedCv';
+
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+
+import { useSearchCandidatesQuery } from '@/services/api/queries';
 
 interface SearchCandidateViewModel {
   id: string;
@@ -76,11 +78,6 @@ const initialsFromName = (value: string): string =>
     .map((segment) => segment[0]?.toUpperCase() ?? '')
     .join('') || 'NA';
 
-const offerRequiredSkills = (offer: EmployerOffer | undefined): string[] =>
-  (offer?.requirements ?? [])
-    .filter((item) => item.isMust)
-    .map((item) => item.nodeLabel ?? item.rawValue ?? '')
-    .filter(Boolean);
 
 const mapCandidate = (
   result: Record<string, unknown>,
@@ -123,8 +120,6 @@ function FiltersPanel({
 }: {
   query: string;
   setQuery: (value: string) => void;
-  selectedSkills: string[];
-  toggleSkill: (value: string) => void;
   minExp: number;
   setMinExp: (value: number) => void;
   location: string;
@@ -199,32 +194,159 @@ function FiltersPanel({
   );
 }
 
+function CandidateDetailsDialog({
+  candidate,
+  onClose,
+}: {
+  candidate: SearchCandidateViewModel | null;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open={Boolean(candidate)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-2xl">
+        {!candidate ? null : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-3">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                  {candidate.initials}
+                </span>
+                <span>
+                  <span className="block text-lg">{candidate.name}</span>
+                  <span className="block text-sm font-normal text-muted-foreground">
+                    {candidate.occupation}
+                  </span>
+                </span>
+              </DialogTitle>
+
+              <DialogDescription>
+                Profil candidat provenant de l’index de recherche.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5">
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-border bg-surface-muted p-3">
+                  <p className="text-xs text-muted-foreground">Score search</p>
+                  <p className="mt-1 text-xl font-semibold text-foreground">
+                    {candidate.score}%
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border bg-surface-muted p-3">
+                  <p className="text-xs text-muted-foreground">Expérience</p>
+                  <p className="mt-1 text-xl font-semibold text-foreground">
+                    {candidate.experienceYears} ans
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-border bg-surface-muted p-3">
+                  <p className="text-xs text-muted-foreground">Statut</p>
+                  <p className="mt-1 text-sm font-semibold text-foreground">
+                    {candidate.status}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="flex items-start gap-2 rounded-xl border border-border p-3">
+                  <MapPin className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Localisation</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {candidate.location}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2 rounded-xl border border-border p-3">
+                  <Briefcase className="mt-0.5 h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-xs text-muted-foreground">Métier / profil</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {candidate.occupation}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-foreground">
+                  Résumé
+                </p>
+                <p className="rounded-xl border border-border bg-surface-muted p-3 text-sm text-muted-foreground">
+                  {candidate.summary}
+                </p>
+              </div>
+
+              <div>
+                <p className="mb-2 text-sm font-semibold text-foreground">
+                  Compétences principales
+                </p>
+
+                {candidate.topSkills.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aucune compétence disponible dans l’index.
+                  </p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {candidate.topSkills.map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-full border border-border bg-background px-3 py-1 text-xs text-foreground"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-xl border border-border bg-background p-3">
+                <p className="text-xs text-muted-foreground">ID candidat</p>
+                <p className="mt-1 break-all font-mono text-xs text-foreground">
+                  {candidate.id}
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function SearchCandidate() {
   const [query, setQuery] = useState('');
-  const [selectedSkills, setSelectedSkills] = useState<string[]>([]);
+  const [submittedQuery, setSubmittedQuery] = useState('');
   const [minExp, setMinExp] = useState(0);
   const [location, setLocation] = useState('');
   const [minScore, setMinScore] = useState(0);
   const [view, setView] = useState<'grid' | 'list'>('grid');
-  const [shortlisted, setShortlisted] = useState<string[]>([]);
+  const [shortlisted] = useState<string[]>([]);
+  const [selectedCandidate, setSelectedCandidate] =
+    useState<SearchCandidateViewModel | null>(null);
 
-  //! TODO : REMOVE ME
+  const candidatesQuery = useSearchCandidatesQuery({
+    filters: {
+      query: submittedQuery.trim() || undefined,
+      location: location.trim() || undefined,
+      size: 50,
+    },
+  });
+
   const candidates = useMemo(() => {
-    const results = mockCandidates;
-    return results;
-  }, []);
+    const results = candidatesQuery.data?.results ?? [];
 
-  const toggleSkill = (value: string) => {
-    setSelectedSkills((current) =>
-      current.includes(value)
-        ? current.filter((item) => item !== value)
-        : [...current, value],
-    );
-  };
+    return results
+      .map((result) => mapCandidate(result as unknown as Record<string, unknown>))
+      .filter((candidate) => candidate.score >= minScore)
+      .filter((candidate) => candidate.experienceYears >= minExp);
+  }, [candidatesQuery.data?.results, minScore, minExp]);
 
   const reset = () => {
     setQuery('');
-    setSelectedSkills([]);
+    setSubmittedQuery('');
     setMinExp(0);
     setLocation('');
     setMinScore(0);
@@ -234,8 +356,6 @@ export default function SearchCandidate() {
     <FiltersPanel
       query={query}
       setQuery={setQuery}
-      selectedSkills={selectedSkills}
-      toggleSkill={toggleSkill}
       minExp={minExp}
       setMinExp={setMinExp}
       location={location}
@@ -250,7 +370,7 @@ export default function SearchCandidate() {
     <div className="space-y-6">
       <PageHeader
         title="Find the Right Candidates"
-        description="Search the real candidate index through `/search/candidates`, scoped by one of your real employer offers."
+        description="Rechercher tous les candidats indexés via le service de recherche."
         actions={
           <Button
             variant="outline"
@@ -277,7 +397,13 @@ export default function SearchCandidate() {
         </aside>
 
         <div className="space-y-4">
-          <div className="panel p-3 flex flex-wrap items-center gap-2 card-border-top-blue-aneti">
+          <form
+            className="panel p-3 flex flex-wrap items-center gap-2 card-border-top-blue-aneti"
+            onSubmit={(event) => {
+              event.preventDefault();
+              setSubmittedQuery(query);
+            }}
+          >
             <div className="relative flex-1 min-w-[220px]">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -288,25 +414,30 @@ export default function SearchCandidate() {
               />
             </div>
 
+            <Button type="submit" size="sm">
+              <Search className="h-4 w-4 mr-1.5" />
+              Search
+            </Button>
+
             <div className="flex overflow-hidden rounded-md border border-border">
               <button
+                type="button"
                 onClick={() => setView('grid')}
-                className={`p-2 ${
-                  view === 'grid'
-                    ? 'bg-accent text-accent-foreground'
-                    : 'bg-background text-muted-foreground hover:text-foreground'
-                }`}
+                className={`p-2 ${view === 'grid'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
                 aria-label="Grid view"
               >
                 <Grid3x3 className="h-4 w-4" />
               </button>
               <button
+                type="button"
                 onClick={() => setView('list')}
-                className={`p-2 ${
-                  view === 'list'
-                    ? 'bg-accent text-accent-foreground'
-                    : 'bg-background text-muted-foreground hover:text-foreground'
-                }`}
+                className={`p-2 ${view === 'list'
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-background text-muted-foreground hover:text-foreground'
+                  }`}
                 aria-label="List view"
               >
                 <List className="h-4 w-4" />
@@ -327,38 +458,141 @@ export default function SearchCandidate() {
                 {filtersPanel}
               </SheetContent>
             </Sheet>
-          </div>
+          </form>
 
-          {view === 'grid' ? (
+          {candidatesQuery.isLoading ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              Loading indexed candidates...
+            </div>
+          ) : candidatesQuery.isError ? (
+            <div className="panel p-6 text-sm text-destructive">
+              {candidatesQuery.error instanceof Error
+                ? candidatesQuery.error.message
+                : 'Unable to load indexed candidates.'}
+            </div>
+          ) : candidates.length === 0 ? (
+            <div className="panel p-6 text-sm text-muted-foreground">
+              No candidates found.
+            </div>
+          ) : view === 'grid' ? (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-2">
-              {candidates.map((candidate, index) => {
-                return (
-                  <SearchCandidateCard
-                    key={candidate.id}
-                    index={index}
-                    candidate={candidate}
-                    shortlisted={shortlisted}
-                    matched={[0, 4, 8]}
-                    missing={['Hello', 'Testing']}
-                    required={[0, 4, 8, 7]}
-                  />
-                );
-              })}
+              {candidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  className="panel space-y-4 p-5 transition hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-11 w-11 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                        {candidate.initials}
+                      </div>
+
+                      <div>
+                        <h3 className="font-semibold text-foreground">
+                          {candidate.name}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {candidate.occupation}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCandidate(candidate)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {candidate.summary}
+                  </p>
+
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="rounded-lg bg-surface-muted p-2">
+                      <p className="text-muted-foreground">Score</p>
+                      <p className="font-semibold text-foreground">{candidate.score}%</p>
+                    </div>
+
+                    <div className="rounded-lg bg-surface-muted p-2">
+                      <p className="text-muted-foreground">Exp.</p>
+                      <p className="font-semibold text-foreground">
+                        {candidate.experienceYears} ans
+                      </p>
+                    </div>
+
+                    <div className="rounded-lg bg-surface-muted p-2">
+                      <p className="text-muted-foreground">Statut</p>
+                      <p className="font-semibold text-foreground">{candidate.status}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <MapPin className="h-3.5 w-3.5" />
+                    {candidate.location}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5">
+                    {candidate.topSkills.slice(0, 6).map((skill) => (
+                      <span
+                        key={skill}
+                        className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground"
+                      >
+                        {skill}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="panel overflow-hidden">
-              {candidates.map((candidate) => {
-                return (
-                  <SearchCandidateRow
+              <div className="divide-y divide-border">
+                {candidates.map((candidate) => (
+                  <div
                     key={candidate.id}
-                    candidate={candidate}
-                    matched={[0, 4, 8]}
-                    missing={['Hello', 'Testing']}
-                    required={[0, 4, 8, 7]}
-                    isShort={shortlisted.includes(candidate.id)}
-                  />
-                );
-              })}
+                    className="flex items-center justify-between gap-4 p-4 hover:bg-surface-muted"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-accent text-sm font-semibold text-accent-foreground">
+                        {candidate.initials}
+                      </div>
+
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-foreground">
+                          {candidate.name}
+                        </p>
+                        <p className="truncate text-sm text-muted-foreground">
+                          {candidate.occupation}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {candidate.location}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="hidden text-sm text-muted-foreground md:block">
+                      {candidate.experienceYears} ans exp.
+                    </div>
+
+                    <div className="hidden text-sm font-semibold text-foreground md:block">
+                      {candidate.score}%
+                    </div>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedCandidate(candidate)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -453,6 +687,10 @@ export default function SearchCandidate() {
           )} */}
         </div>
       </div>
-    </div>
+      <CandidateDetailsDialog
+        candidate={selectedCandidate}
+        onClose={() => setSelectedCandidate(null)}
+      />
+    </div >
   );
 }

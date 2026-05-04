@@ -60,10 +60,28 @@ interface NavGroup {
   label: string;
   items: NavItem[];
 }
+
 const roleProfile: Record<Role, { name: string; email: string }> = {
-  candidate: { name: 'Amélie Laurent', email: 'amelie.laurent@talentmesh.io' },
-  provider: { name: 'Pascal Bouchard', email: 'p.bouchard@northbridge.io' },
-  advisor: { name: 'Alice Martin', email: 'alice.martin@talentmesh.io' },
+  candidate: {
+    name: 'Candidat',
+    email: 'candidate@aneti.tn',
+  },
+  provider: {
+    name: 'Employeur',
+    email: 'employeur@aneti.tn',
+  },
+  advisor: {
+    name: 'Conseiller ANETI',
+    email: 'advisor@aneti.tn',
+  },
+  functionalAdmin: {
+    name: 'Admin fonctionnel',
+    email: 'functional.admin@aneti.tn',
+  },
+  techAdmin: {
+    name: 'Admin technique',
+    email: 'tech.admin@aneti.tn',
+  },
 };
 
 const isParent = (i: NavItem): i is NavParent => 'children' in i;
@@ -200,7 +218,7 @@ export function Sidebar({ role }: SidebarProps) {
                                 'group relative flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm font-medium',
                                 'text-sidebar-foreground/80 transition-colors hover:bg-white/10 hover:text-white',
                                 hasActiveChild &&
-                                  '!bg-white/10 !text-white shadow-[inset_3px_0_0_hsl(var(--accent))]',
+                                '!bg-white/10 !text-white shadow-[inset_3px_0_0_hsl(var(--accent))]',
                               )}
                             >
                               <item.icon className="h-4 w-4 shrink-0" />
@@ -230,7 +248,7 @@ export function Sidebar({ role }: SidebarProps) {
                                     className={cn(
                                       'flex items-center justify-between rounded-md px-2 py-1.5 text-xs text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-white transition-colors',
                                       childActive &&
-                                        'bg-sidebar-accent text-white font-semibold',
+                                      'bg-sidebar-accent text-white font-semibold',
                                     )}
                                   >
                                     <span>{child.label}</span>

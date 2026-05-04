@@ -58,6 +58,7 @@ def list_offers(db: Session, employer_id: str | None = None) -> list[dict]:
             o.id::text AS id,
             o.aneti_identifier AS aneti_identifier,
             o.employer_id::text AS employer_id,
+            o.company_name,
             o.title,
             o.description,
             o.number_of_positions,
@@ -100,6 +101,7 @@ def get_offer_by_id(db: Session, offer_id: str) -> dict | None:
             o.id::text AS id,
             o.aneti_identifier AS aneti_identifier,
             o.employer_id::text AS employer_id,
+            o.company_name,
             o.title,
             o.description,
             o.number_of_positions,
@@ -139,42 +141,46 @@ def create_offer(db: Session, payload: Mapping[str, object]) -> dict:
         db,
         """
         INSERT INTO aneti.job_offer (
-            employer_id,
-            rtmc_occupation_id,
-            title,
-            description,
-            number_of_positions,
-            status,
-            contract_type,
-            work_mode,
-            salary_min,
-            salary_max,
-            country,
-            governorate_code,
-            delegation_code,
-            deadline_at,
-            created_by_user_id
-        )
-        VALUES (
-            CAST(:employer_id AS uuid),
-            CAST(:rtmc_occupation_id AS uuid),
-            :title,
-            :description,
-            :number_of_positions,
-            :status,
-            :contract_type,
-            :work_mode,
-            :salary_min,
-            :salary_max,
-            :country,
-            :governorate_code,
-            :delegation_code,
-            :deadline_at,
-            CAST(:created_by_user_id AS uuid)
-        )
-        RETURNING 
-            id::text AS id,
-            aneti_identifier AS aneti_identifier;
+        employer_id,
+        rtmc_occupation_id,
+        company_name,
+        title,
+        description,
+        number_of_positions,
+        status,
+        contract_type,
+        work_mode,
+        salary_min,
+        salary_max,
+        country,
+        governorate_code,
+        delegation_code,
+        deadline_at,
+        published_at,
+        created_by_user_id
+    )
+    VALUES (
+        :employer_id,
+        :rtmc_occupation_id,
+        :company_name,
+        :title,
+        :description,
+        :number_of_positions,
+        'PUBLISHED',
+        :contract_type,
+        :work_mode,
+        :salary_min,
+        :salary_max,
+        :country,
+        :governorate_code,
+        :delegation_code,
+        :deadline_at,
+        now(),
+        :created_by_user_id
+    )
+    RETURNING
+        id::text AS id,
+        aneti_identifier AS aneti_identifier;
         """,
         dict(payload),
     )
@@ -189,6 +195,7 @@ def update_offer(db: Session, offer_id: str, payload: Mapping[str, object]) -> d
         UPDATE aneti.job_offer
         SET
             rtmc_occupation_id = CAST(:rtmc_occupation_id AS uuid),
+            company_name = :company_name,
             title = :title,
             description = :description,
             number_of_positions = :number_of_positions,

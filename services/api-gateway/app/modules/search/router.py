@@ -3,6 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends
 from sqlalchemy.orm import Session
+import time
+from app.modules.advisor_activity.service import log_advisor_activity
 
 from app.clients.search_client import (
     get_offer_detail,
@@ -19,14 +21,16 @@ CANDIDATE_SEARCH_ROLES = ("EMPLOYER", "ANETI_ADVISOR", "FUNCTIONAL_ADMIN", "TECH
 
 router = APIRouter(tags=["Search"])
 
-
 @router.post("/search/offers")
 def search_offers_endpoint(
     payload: dict[str, Any] = Body(...),
     db: Session = Depends(get_db),
-    _current_user=Depends(require_roles(*ALL_ROLES)),
+    current_user=Depends(require_roles(*ALL_ROLES)),
 ):
+    started_at = time.perf_counter()
+
     response = search_offers(payload)
+
     results = response.get("results", [])
     metadata_by_offer_id = repository.list_offer_metadata(
         db,
@@ -40,15 +44,56 @@ def search_offers_endpoint(
         item["status"] = metadata.get("status")
         item["work_mode"] = metadata.get("work_mode")
 
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+    log_advisor_activity(
+        db,
+        current_user,
+        activity_type="SEARCH",
+        target_type="OFFER",
+        action_label="Recherche offres",
+        query_text=payload.get("query"),
+        filters_json=payload.get("filters") or {},
+        result_count=response.get("total") or len(response.get("results", [])),
+        duration_ms=duration_ms,
+        metadata_json={
+            "endpoint": "/search/offers",
+            "payload": payload,
+        },
+    )
+
     return response
 
 
 @router.post("/search/candidates")
 def search_candidates_endpoint(
     payload: dict[str, Any] = Body(...),
-    _current_user=Depends(require_roles(*CANDIDATE_SEARCH_ROLES)),
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles(*CANDIDATE_SEARCH_ROLES)),
 ):
-    return search_candidates(payload)
+    started_at = time.perf_counter()
+
+    response = search_candidates(payload)
+
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+
+    log_advisor_activity(
+        db,
+        current_user,
+        activity_type="SEARCH",
+        target_type="CANDIDATE",
+        action_label="Recherche candidats",
+        query_text=payload.get("query"),
+        filters_json=payload.get("filters") or {},
+        result_count=response.get("total") or len(response.get("results", [])),
+        duration_ms=duration_ms,
+        metadata_json={
+            "endpoint": "/search/candidates",
+            "payload": payload,
+        },
+    )
+
+    return response
 
 
 @router.get("/search/offers/{offer_id}")

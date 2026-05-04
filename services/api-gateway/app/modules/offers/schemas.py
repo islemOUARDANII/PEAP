@@ -56,6 +56,7 @@ class JobOfferRequirementResponse(BaseModel):
 
 class JobOfferWriteRequest(OfferBaseModel):
     title: str = Field(min_length=1)
+    company_name: str | None = None
     description: str | None = None
     rtmc_occupation_id: UUID | None = None
     number_of_positions: int = Field(default=1, ge=1)
@@ -97,6 +98,7 @@ class JobOfferListItemResponse(BaseModel):
     id: str
     aneti_identifier: str | None = None
     employer_id: str
+    company_name: str | None = None
     title: str
     description: str | None = None
     number_of_positions: int

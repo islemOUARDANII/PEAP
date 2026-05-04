@@ -38,7 +38,7 @@ export default function OfferDetails() {
   const offer = data?.offer;
   // const candidates = data?.candidates ?? mockCandidates;
   //! TODO : REMOVE ME
-  const candidates = mockCandidates;
+  const candidates = data?.candidates ?? [];
 
   const handleDelete = async () => {
     if (!id) return;
@@ -153,7 +153,7 @@ export default function OfferDetails() {
               />
               <Info
                 label="Offer ID"
-                value={<span className="font-mono text-xs">{offer.id}</span>}
+                value={<span className="font-mono text-xs">{offer.anetiIdentifier ?? '—'}</span>}
               />
               <Info label="Level" value={offer.level || 'N/A'} />
               <Info label="Posted" value={`${offer.postedDays}d ago`} />
@@ -221,15 +221,11 @@ export default function OfferDetails() {
               Applied candidates with their score and profile preview.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => {}}
-            // className="hover:bg-accent/90 text-accent-foreground"
-          >
-            <Brain className="h-4 w-4 mr-1.5" />
-            Candidats matchés
+          <Button asChild type="button" variant="outline" size="sm">
+            <Link to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}>
+              <Brain className="h-4 w-4 mr-1.5" />
+              Candidats matchés
+            </Link>
           </Button>
         </div>
         {candidates.length === 0 ? (

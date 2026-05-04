@@ -46,7 +46,7 @@ import myImage from '@/assets/ANETI-RAW-LOGO-WHITE-ORANGE.png';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { getPortalRole } from '@/lib/portalRoles';
-import { stat } from 'fs';
+
 
 interface LoginLocationState {
   from?: string;
@@ -194,7 +194,7 @@ export default function Login() {
 
       const target = canReturnToRequestedRoute
         ? fromPath!
-        : roleHomePath(session.user.role);
+        : roleHomePath(session.user.role, session.user.roles ?? []);
 
       navigate(target, { replace: true });
     } catch (error) {

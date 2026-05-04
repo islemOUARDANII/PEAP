@@ -20,7 +20,7 @@ export default function Portal() {
           </div>
           <span className="hidden card-action sm:inline-flex items-center gap-1.5 rounded-md border border-border bg-surface-muted px-2.5 py-1 text-xs text-muted-foreground">
             <span className="h-1.5 w-1.5 rounded-full bg-success" />
-            Secure portal
+            Portail securise
           </span>
         </div>
       </header>
@@ -41,12 +41,12 @@ export default function Portal() {
             <div className="card-action p-2">
               <span className="inline-flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs font-medium text-muted-foreground">
                 <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                Role-based access
+                Acces par role
               </span>
             </div>
             <CardHeader>
               <CardTitle className="justify-center text-sm flex items-center gap-2">
-                Please select your role to continue to your dedicated workspace.
+                Veuillez selectionner votre role pour acceder a votre espace dedie.
               </CardTitle>
             </CardHeader>
             <CardContent className="p-6">
@@ -82,7 +82,7 @@ export default function Portal() {
                       <div className="mt-6 pt-4 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
                         <span className="font-mono">/login/{r.id}</span>
                         <span className="text-accent font-medium">
-                          Continue
+                          Continuer
                         </span>
                       </div>
                     </Link>
@@ -96,7 +96,7 @@ export default function Portal() {
 
       <footer className="border-t border-border bg-surface">
         <div className="mx-auto max-w-7xl px-6 h-12 flex items-center justify-center text-xs text-muted-foreground text-center">
-          You will be securely redirected to the appropriate login page.
+          Vous serez redirige de maniere securisee vers la page de connexion appropriee.
         </div>
       </footer>
     </div>

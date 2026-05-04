@@ -259,3 +259,38 @@ def count_employers(db: Session) -> dict:
         FROM aneti.employer;
         """,
     )
+
+def list_employer_applications(db: Session, employer_id: str) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            ja.id::text AS id,
+            ja.job_seeker_id::text AS job_seeker_id,
+            ja.offer_id::text AS offer_id,
+            jo.title AS offer_title,
+            jo.aneti_identifier AS offer_aneti_identifier,
+
+            TRIM(
+                COALESCE(jsi.first_name, '') || ' ' || COALESCE(jsi.last_name, '')
+            ) AS candidate_name,
+            jsc.email AS candidate_email,
+            jsc.phone AS candidate_phone,
+
+            ja.matching_result_id::text AS matching_result_id,
+            ja.status,
+            ja.cover_message,
+            ja.applied_at,
+            ja.updated_at
+        FROM aneti.job_application ja
+        JOIN aneti.job_offer jo
+            ON jo.id = ja.offer_id
+        LEFT JOIN aneti.job_seeker_identity jsi
+            ON jsi.job_seeker_id = ja.job_seeker_id
+        LEFT JOIN aneti.job_seeker_contact jsc
+            ON jsc.job_seeker_id = ja.job_seeker_id
+        WHERE jo.employer_id = CAST(:employer_id AS uuid)
+        ORDER BY ja.applied_at DESC;
+        """,
+        {"employer_id": employer_id},
+    )

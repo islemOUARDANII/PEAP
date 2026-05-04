@@ -169,7 +169,7 @@ export default function Offers() {
                 {filteredJobs.map((job) => (
                   <tr key={job.id} className="hover:bg-surface-muted">
                     <td className="px-2 align-center text-[11px] font-mono text-muted-foreground">
-                      {job.anetiIdentifier ?? job.id}
+                      {job.anetiIdentifier ?? '-'}
                     </td>
                     <td className="px-2 py-3 align-center ">
                       <Link

@@ -20,7 +20,7 @@ export function tonePercentageFor(score: number): {
   if (score >= 80) {
     return {
       tone: 'success',
-      label: 'Strong match',
+      label: 'Correspondance forte',
       color: 'hsl(var(--success))',
       soft: 'hsl(var(--success-soft))',
       ring: 'text-success',
@@ -29,7 +29,7 @@ export function tonePercentageFor(score: number): {
   if (score >= 50) {
     return {
       tone: 'warning',
-      label: 'Good match',
+      label: 'Bonne correspondance',
       color: 'hsl(var(--warning))',
       soft: 'hsl(var(--warning-soft))',
       ring: 'text-warning',
@@ -37,7 +37,7 @@ export function tonePercentageFor(score: number): {
   }
   return {
     tone: 'destructive',
-    label: 'Low match',
+    label: 'Correspondance faible',
     color: 'hsl(var(--destructive))',
     soft: 'hsl(var(--destructive-soft))',
     ring: 'text-destructive',
@@ -131,7 +131,7 @@ export function MatchBar({
   score,
   showLabel = true,
   helperText,
-  tooltip = 'Based on skills, experience, and preferences',
+  tooltip = 'Base sur les competences, l experience et les preferences',
   className,
 }: MatchBarProps) {
   const clamped = Math.max(0, Math.min(100, score));
@@ -148,7 +148,7 @@ export function MatchBar({
       {showLabel && (
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1.5">
-            <span className="font-medium text-foreground">Match Score</span>
+            <span className="font-medium text-foreground">Score de matching</span>
             {tooltip && (
               <TooltipProvider>
                 <Tooltip>

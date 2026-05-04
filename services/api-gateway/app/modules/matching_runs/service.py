@@ -1,3 +1,5 @@
+import time
+
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -5,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.clients.matching_client import execute_run as execute_matching_service_run
 from app.modules.auth.schemas import CurrentUserResponse
 from app.modules.matching_config import repository as matching_config_repository
+from app.modules.advisor_activity.service import log_advisor_activity
 
 from . import repository
 from .schemas import (
@@ -200,14 +203,23 @@ def execute_matching_run(
     if not run:
         _raise_not_found("Matching run")
 
-    version = matching_config_repository.get_model_version_by_id(db, run["model_version_id"])
+    version = matching_config_repository.get_model_version_by_id(
+        db,
+        run["model_version_id"],
+    )
     if not version:
         _raise_not_found("Matching model version")
 
     if version["status"] != "ACTIVE":
-        has_admin_override = payload.admin_override and bool(_ADMIN_OVERRIDE_ROLES.intersection(current_user.roles))
+        has_admin_override = payload.admin_override and bool(
+            _ADMIN_OVERRIDE_ROLES.intersection(current_user.roles)
+        )
         if not has_admin_override:
-            _raise_conflict("Only published model versions can be executed unless an admin override is enabled")
+            _raise_conflict(
+                "Only published model versions can be executed unless an admin override is enabled"
+            )
+
+    started_at = time.perf_counter()
 
     response = execute_matching_service_run(
         run_id,
@@ -218,7 +230,64 @@ def execute_matching_run(
             "admin_override": payload.admin_override,
         },
     )
-    return MatchingExecutionResponse(**response).model_dump(mode="json")
+
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    execution_response = MatchingExecutionResponse(**response).model_dump(mode="json")
+
+    direction = str(run.get("direction") or "").upper()
+    source_entity_type = str(run.get("source_entity_type") or "")
+    source_entity_id = str(run.get("source_entity_id") or "")
+
+    if direction in ("CANDIDATE_TO_OFFER", "CANDIDATE_TO_OFFERS"):
+        activity_direction = "CANDIDATE_TO_OFFERS"
+        target_type = "OFFER"
+        action_label = "Matching candidat vers offres"
+    else:
+        activity_direction = "OFFER_TO_CANDIDATES"
+        target_type = "CANDIDATE"
+        action_label = "Matching offre vers candidats"
+
+    model_code = (
+        version.get("model_code")
+        or version.get("code")
+        or version.get("model_key")
+    )
+
+    model_label = (
+        version.get("model_label")
+        or version.get("label")
+        or version.get("name")
+    )
+
+    try:
+        log_advisor_activity(
+            db,
+            current_user,
+            activity_type="MATCHING",
+            target_type=target_type,
+            direction=activity_direction,
+            action_label=action_label,
+            model_version_id=str(run["model_version_id"]),
+            model_code=model_code,
+            model_label=model_label,
+            source_entity_type=source_entity_type,
+            source_entity_id=source_entity_id,
+            run_id=run_id,
+            result_count=execution_response.get("results_count")
+            or len(execution_response.get("results", [])),
+            duration_ms=duration_ms,
+            metadata_json={
+                "endpoint": f"/matching/runs/{run_id}/execute",
+                "run_direction": direction,
+                "payload": payload.model_dump(mode="json"),
+                "model_version_status": version.get("status"),
+            },
+        )
+    except Exception:
+        # Le matching ne doit pas échouer juste parce que le log d'activité a échoué.
+        db.rollback()
+
+    return execution_response
 
 
 def list_matching_results(db: Session, run_id: str) -> list[dict]:

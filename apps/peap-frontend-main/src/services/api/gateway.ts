@@ -1,4 +1,3 @@
-import { request } from "https";
 import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
 
 const toStringValue = (value: unknown, fallback = ""): string =>
@@ -469,6 +468,7 @@ export interface CandidateMatchedOffersRecord {
   offers: CandidateMatchedOfferRecord[];
 }
 
+
 interface EmployerProfileResponse {
   id: string;
   user_id?: string | null;
@@ -512,6 +512,22 @@ export interface EmployerProfile {
   location?: EmployerProfileResponse["location"];
 }
 
+const mapEmployerProfile = (
+  item: EmployerProfileResponse,
+): EmployerProfile => ({
+  id: item.id,
+  legalName: item.legal_name ?? null,
+  commercialName: item.commercial_name ?? null,
+  taxIdentifier: item.tax_identifier ?? null,
+  employerTypeCode: item.employer_type_code ?? null,
+  sizeBandCode: item.size_band_code ?? null,
+  websiteUrl: item.website_url ?? null,
+  logoUrl: item.logo_url ?? null,
+  status: item.status,
+  contact: item.contact ?? null,
+  location: item.location ?? null,
+});
+
 export interface EmployerOfferRequirement {
   id?: string;
   criterionType: string;
@@ -543,6 +559,7 @@ interface EmployerOfferResponse {
   aneti_identifier?: string | null;
   employer_id: string;
   employer_name?: string | null;
+  company_name?: string | null;
   title: string;
   description?: string | null;
   number_of_positions: number;
@@ -572,6 +589,7 @@ export interface EmployerOffer {
   anetiIdentifier?: string | null;
   employerId: string;
   employerName?: string | null;
+  companyName?: string | null;
   title: string;
   description?: string | null;
   numberOfPositions: number;
@@ -596,6 +614,56 @@ export interface EmployerOffer {
   warning?: string | null;
   actionReason?: string | null;
 }
+
+export interface EmployerApplication {
+  id: string;
+  jobSeekerId: string;
+  offerId: string;
+  offerTitle?: string | null;
+  offerAnetiIdentifier?: string | null;
+  candidateName?: string | null;
+  candidateEmail?: string | null;
+  candidatePhone?: string | null;
+  matchingResultId?: string | null;
+  status: string;
+  coverMessage?: string | null;
+  appliedAt: string;
+  updatedAt: string;
+}
+
+interface EmployerApplicationResponse {
+  id: string;
+  job_seeker_id: string;
+  offer_id: string;
+  offer_title?: string | null;
+  offer_aneti_identifier?: string | null;
+  candidate_name?: string | null;
+  candidate_email?: string | null;
+  candidate_phone?: string | null;
+  matching_result_id?: string | null;
+  status: string;
+  cover_message?: string | null;
+  applied_at: string;
+  updated_at: string;
+}
+
+const mapEmployerApplication = (
+  item: EmployerApplicationResponse,
+): EmployerApplication => ({
+  id: item.id,
+  jobSeekerId: item.job_seeker_id,
+  offerId: item.offer_id,
+  offerTitle: item.offer_title ?? null,
+  offerAnetiIdentifier: item.offer_aneti_identifier ?? null,
+  candidateName: item.candidate_name ?? null,
+  candidateEmail: item.candidate_email ?? null,
+  candidatePhone: item.candidate_phone ?? null,
+  matchingResultId: item.matching_result_id ?? null,
+  status: item.status,
+  coverMessage: item.cover_message ?? null,
+  appliedAt: item.applied_at,
+  updatedAt: item.updated_at,
+});
 
 interface EmployerOfferDraftResponse {
   parsing_status: string;
@@ -1267,6 +1335,7 @@ const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
   anetiIdentifier: item.aneti_identifier ?? null,
   employerId: item.employer_id,
   employerName: item.employer_name ?? null,
+  companyName: item.company_name ?? item.employer_name ?? null,
   title: item.title,
   description: item.description ?? null,
   numberOfPositions: item.number_of_positions,
@@ -2175,6 +2244,14 @@ export const gatewayApi = {
             : extractedRequirements,
         },
       };
+    },
+    async listApplications(): Promise<EmployerApplication[]> {
+      return (
+        await apiRequest<EmployerApplicationResponse[]>(
+          "/employers/me/applications",
+          { method: "GET" },
+        )
+      ).map(mapEmployerApplication);
     },
   },
   advisor: {

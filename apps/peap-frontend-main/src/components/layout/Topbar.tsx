@@ -12,21 +12,52 @@ import { searchTargetsByRole, type SearchTarget } from "@/config/navigation";
 import { UserRole } from "@/app/constants";
 
 const roleLabels: Record<Role, string> = {
-  candidate: "Candidate",
-  provider: "Job Provider",
-  advisor: "Advisor",
+  candidate: 'Candidat',
+  provider: 'Employeur',
+  advisor: 'Conseiller ANETI',
+  functionalAdmin: 'Admin fonctionnel',
+  techAdmin: 'Admin technique',
 };
 
 const fallbackProfiles: Record<Role, RoleProfile> = {
-  candidate: { role: "candidate", name: "Candidate", email: "candidate@matchcore.io", initials: "CA" },
-  provider: { role: "provider", name: "Provider", email: "provider@matchcore.io", initials: "PR" },
-  advisor: { role: "advisor", name: "Advisor", email: "advisor@matchcore.io", initials: "AD" },
+  candidate: {
+    role: 'candidate',
+    name: 'Candidat',
+    email: 'candidate@aneti.tn',
+    initials: 'CA',
+  },
+  provider: {
+    role: 'provider',
+    name: 'Employeur',
+    email: 'employeur@aneti.tn',
+    initials: 'EM',
+  },
+  advisor: {
+    role: 'advisor',
+    name: 'Conseiller ANETI',
+    email: 'advisor@aneti.tn',
+    initials: 'CA',
+  },
+  functionalAdmin: {
+    role: 'functionalAdmin',
+    name: 'Admin fonctionnel',
+    email: 'functional.admin@aneti.tn',
+    initials: 'AF',
+  },
+  techAdmin: {
+    role: 'techAdmin',
+    name: 'Admin technique',
+    email: 'tech.admin@aneti.tn',
+    initials: 'AT',
+  },
 };
 
 const searchPlaceholders: Record<Role, string> = {
-  candidate: "Search jobs, matches, skills...",
-  provider: "Search offers or candidates...",
-  advisor: "Search taxonomy, users, audit...",
+  candidate: 'Rechercher des offres, compétences...',
+  provider: 'Rechercher offres ou candidats...',
+  advisor: 'Rechercher moteurs, candidats, offres...',
+  functionalAdmin: 'Rechercher modèles, critères, règles...',
+  techAdmin: 'Rechercher logs, services, pipelines...',
 };
 
 interface TopbarProps {

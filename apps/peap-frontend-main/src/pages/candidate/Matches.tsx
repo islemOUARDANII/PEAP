@@ -70,7 +70,7 @@ export default function Matches() {
 
     return (
       <div className="panel p-6 text-sm text-destructive">
-        Failed to load candidate matches: {error instanceof Error ? error.message : "unknown error"}
+        Impossible de charger les correspondances candidat : {error instanceof Error ? error.message : "erreur inconnue"}
       </div>
     );
   }
@@ -78,12 +78,12 @@ export default function Matches() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Legacy Matches"
-        description={`${sorted.length} canonical match result${sorted.length !== 1 ? "s" : ""} stored for your candidate profile`}
+        title="Correspondances historiques"
+        description={`${sorted.length} resultat${sorted.length !== 1 ? "s" : ""} de matching enregistres pour votre profil candidat`}
       />
 
       <div className="panel p-4 text-sm text-muted-foreground">
-        Legacy Matches reads persisted `match_result` records already saved in the platform database. Use this page when you want the stable historical match view rather than the live CV-session scoring view.
+        Cette page lit les enregistrements `match_result` deja sauvegardes dans la base de la plateforme. Utilisez-la si vous souhaitez consulter l'historique stable des matchings plutot que le score en direct base sur la session CV.
       </div>
 
       <div className="panel p-3 flex flex-wrap items-center gap-2">
@@ -92,38 +92,38 @@ export default function Matches() {
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search by title, company, skill..."
+            placeholder="Rechercher par intitule, entreprise, competence..."
             className="h-9 pl-9 bg-surface-muted"
           />
         </div>
         <Select value={location} onValueChange={setLocation}>
-          <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Location" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-[160px]"><SelectValue placeholder="Localisation" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All locations</SelectItem>
+            <SelectItem value="all">Toutes les localisations</SelectItem>
             {locations.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={contract} onValueChange={setContract}>
-          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="Contract" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="Contrat" /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All contracts</SelectItem>
+            <SelectItem value="all">Tous les contrats</SelectItem>
             {contractTypes.map((item) => <SelectItem key={item} value={item}>{item}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={minScore} onValueChange={setMinScore}>
-          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Min score" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-[140px]"><SelectValue placeholder="Score min." /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="any">Any score</SelectItem>
-            <SelectItem value="60">60% or more</SelectItem>
-            <SelectItem value="75">75% or more</SelectItem>
-            <SelectItem value="90">90% or more</SelectItem>
+            <SelectItem value="any">Tout score</SelectItem>
+            <SelectItem value="60">60% ou plus</SelectItem>
+            <SelectItem value="75">75% ou plus</SelectItem>
+            <SelectItem value="90">90% ou plus</SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       {sorted.length === 0 ? (
         <div className="panel p-6 text-sm text-muted-foreground">
-          No legacy matches are available for the current filters.
+          Aucune correspondance historique n'est disponible pour les filtres actuels.
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
@@ -150,20 +150,20 @@ export default function Matches() {
               </div>
 
               <div className="mt-4">
-                <p className="stat-label mb-1.5">Matched skills</p>
+                <p className="stat-label mb-1.5">Competences correspondantes</p>
                 <div className="flex flex-wrap gap-1">
                   {job.matchedSkills?.slice(0, 4).map((skill) => <SkillTag key={skill} label={skill} variant="matched" />)}
-                  {(job.matchedSkills ?? []).length === 0 && <p className="text-xs text-muted-foreground">No matched skill labels available.</p>}
+                  {(job.matchedSkills ?? []).length === 0 && <p className="text-xs text-muted-foreground">Aucune competence correspondante disponible.</p>}
                 </div>
               </div>
 
               <div className="mt-3 pt-3 border-t border-border flex items-center justify-between text-xs text-muted-foreground">
-                <span>Posted {job.postedDays}d ago</span>
+                <span>Publiee il y a {job.postedDays} j</span>
                 <Link
                   to={`/candidate/matches/${job.id}`}
                   className="inline-flex items-center gap-1 font-medium text-accent group-hover:underline"
                 >
-                  View match <ArrowRight className="h-3 w-3" />
+                  Voir le matching <ArrowRight className="h-3 w-3" />
                 </Link>
               </div>
             </div>

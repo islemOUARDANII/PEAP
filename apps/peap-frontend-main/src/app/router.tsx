@@ -30,6 +30,14 @@ import Portal from '@/pages/Portal';
 import SearchOffer from '@/pages/provider/SearchOffer';
 import SearchCandidate from '@/pages/provider/SearchCandidate';
 import SearchCandidateOffer from '@/pages/provider/SearchCandidateOffer';
+import Applications from '@/pages/provider/Applications';
+import AdvisorSearchHub from '@/pages/advisor/SearchHub';
+import AdvisorAccount from '@/pages/advisor/Account';
+import AdvisorActivitySummary from '@/pages/advisor/ActivitySummary';
+import AdvisorSearchCandidates from '@/pages/advisor/SearchCandidates';
+import AdvisorSearchOffers from '@/pages/advisor/SearchOffers';
+import AdvisorMatchingHub from '@/pages/advisor/MatchingHub';
+import AdvisorCandidateToOffersMatching from '@/pages/advisor/CandidateToOffersMatching';
 
 export function AppRouter() {
   return (
@@ -103,6 +111,7 @@ export function AppRouter() {
             <Route path=":id" element={<OfferDetails />} />
           </Route>
           <Route path="/provider/candidates" element={<Candidates />} />
+          <Route path="/provider/applications" element={<Applications />} />
           <Route
             path="/provider/demo-offer"
             element={<Navigate to="/provider/offers/new" replace />}
@@ -125,11 +134,33 @@ export function AppRouter() {
           }
         >
           <Route path="/advisor" element={<AdvisorDashboard />} />
+          <Route path="/advisor/search" element={<AdvisorSearchHub />} />
+          <Route path="/advisor/search/candidates" element={<AdvisorSearchCandidates />} />
+          <Route path="/advisor/search/offers" element={<AdvisorSearchOffers />} />
+          <Route path="/advisor/account" element={<AdvisorAccount />} />
+          <Route path="/advisor/activity" element={<AdvisorActivitySummary />} />
           <Route path="/advisor/taxonomy" element={<Taxonomy />} />
+
+          <Route
+            path="/advisor/technical-admin"
+            element={<PipelineMonitoring />}
+          />
+
+          <Route
+            path="/advisor/functional-admin"
+            element={<Settings />}
+          />
           <Route path="/advisor/pipeline" element={<PipelineMonitoring />} />
           <Route path="/advisor/tech-admin" element={<PipelineMonitoring />} />
+          <Route path="/advisor/matching-config" element={<Settings />} />
+          <Route path="/advisor/settings" element={<Settings />} />
           <Route path="/advisor/data-explorer" element={<DataExplorer />} />
-          <Route path="/advisor/matching" element={<DemoMatching />} />
+          <Route path="/advisor/matching" element={<AdvisorMatchingHub />} />
+          <Route path="/advisor/matching/offer-candidates" element={<DemoMatching />} />
+          <Route
+            path="/advisor/matching/candidate-offers"
+            element={<AdvisorCandidateToOffersMatching />}
+          />
           <Route path="/advisor/users" element={<Users />} />
           <Route
             path="/advisor/demo-matching"
