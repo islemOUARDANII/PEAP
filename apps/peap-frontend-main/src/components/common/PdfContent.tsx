@@ -14,7 +14,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { CustomTooltip, CustomValueLabel } from './ReCharts';
+import { CustomValueLabel } from './ReCharts';
 import { useMemo } from 'react';
 import { mockDataChart } from '@/mocks/mockParsedCv';
 import { ScoreBadge } from './ScoreBadge';

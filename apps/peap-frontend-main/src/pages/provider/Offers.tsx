@@ -125,9 +125,9 @@ export default function Offers() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="recent">Most recent</SelectItem>
-            <SelectItem value="matches">Most matched</SelectItem>
-            <SelectItem value="applicants">Most applicants</SelectItem>
+            <SelectItem value="recent">Les plus récents</SelectItem>
+            <SelectItem value="matches">Les mieux identifiés</SelectItem>
+            <SelectItem value="applicants">Le plus de candidatures</SelectItem>
           </SelectContent>
         </Select>
       </div>

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { InlineTableSkeleton } from '@/components/common/PageSkeletons';
 import { ScoreBadge } from '@/components/common/ScoreBadge';
@@ -25,8 +25,18 @@ import {
   useProviderOfferQuery,
 } from '@/services/api/queries';
 import { queryKeys } from '@/services/api/queryKeys';
-import { ArrowLeft, Brain, Download, MapPin, Trash2, Users } from 'lucide-react';
+import {
+  ArrowLeft,
+  Brain,
+  Download,
+  MapPin,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { jsPDF } from 'jspdf';
+import html2canvas from 'html2canvas';
+import PdfContent from '@/components/common/PdfContent';
 
 type RawRequirement = {
   criterionType?: string | null;
@@ -92,7 +102,11 @@ function cleanSkillList(values: string[]) {
     .filter((value) => value.toLowerCase() !== 'offre sans titre');
 }
 
-function getExperienceYears(offer: RawProviderOffer | undefined, required: string[], preferred: string[]) {
+function getExperienceYears(
+  offer: RawProviderOffer | undefined,
+  required: string[],
+  preferred: string[],
+) {
   const requirements = offer?.requirements ?? [];
 
   const fromRequirement = requirements.find((requirement) => {
@@ -104,7 +118,9 @@ function getExperienceYears(offer: RawProviderOffer | undefined, required: strin
     return fromRequirement.minYears;
   }
 
-  const numericValue = [...required, ...preferred].find((value) => isNumericText(value));
+  const numericValue = [...required, ...preferred].find((value) =>
+    isNumericText(value),
+  );
 
   if (numericValue) {
     return Number(numericValue);
@@ -198,7 +214,7 @@ export default function OfferDetails() {
 
   const applicationsCount = applicationsQuery.isSuccess
     ? applications.length
-    : offer?.applicants ?? 0;
+    : (offer?.applicants ?? 0);
 
   const matchedCount = offer?.matched ?? candidates.length;
 
@@ -232,6 +248,69 @@ export default function OfferDetails() {
         variant: 'destructive',
       });
     }
+  };
+
+  const pdfRef = useRef();
+  const handleGeneratePdf = async () => {
+    if (!pdfRef.current) return;
+
+    const canvas = await html2canvas(pdfRef.current, {
+      scale: 2,
+      useCORS: true,
+    });
+
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new jsPDF('p', 'mm', 'a4');
+
+    // ===== Margins (mm)
+    const margin = {
+      top: 5,
+      bottom: 5,
+      left: 10,
+      right: 10,
+    };
+
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    const contentWidth = pageWidth - margin.left - margin.right;
+    const contentHeight = pageHeight - margin.top - margin.bottom;
+
+    const imgHeight = (canvas.height * contentWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = margin.top;
+
+    // First page
+    pdf.addImage(
+      imgData,
+      'PNG',
+      margin.left,
+      position,
+      contentWidth,
+      imgHeight,
+    );
+
+    heightLeft -= contentHeight;
+
+    // Extra pages
+    while (heightLeft > 0) {
+      pdf.addPage();
+      position = margin.top - (imgHeight - heightLeft);
+
+      pdf.addImage(
+        imgData,
+        'PNG',
+        margin.left,
+        position,
+        contentWidth,
+        imgHeight,
+      );
+
+      heightLeft -= contentHeight;
+    }
+
+    pdf.save(`rapport-${id}.pdf`);
   };
 
   if (isLoading) {
@@ -271,7 +350,12 @@ export default function OfferDetails() {
         description={`${offer.company} · ${offer.location} · ${offer.contract}`}
         actions={
           <div className="flex items-center gap-2">
-            <Button type="button" variant="outline" size="sm">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleGeneratePdf}
+            >
               <Download className="mr-1.5 h-4 w-4" />
               Télécharger PDF
             </Button>
@@ -289,7 +373,8 @@ export default function OfferDetails() {
                   <AlertDialogTitle>Supprimer cette offre ?</AlertDialogTitle>
                   <AlertDialogDescription>
                     Cette action retirera l’offre du tableau de bord employeur.
-                    Les candidatures et historiques de matching restent conservés.
+                    Les candidatures et historiques de matching restent
+                    conservés.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
 
@@ -344,7 +429,9 @@ export default function OfferDetails() {
 
               <Info
                 label="Contrat"
-                value={normalizeContract(rawOffer?.contractType ?? offer.contract)}
+                value={normalizeContract(
+                  rawOffer?.contractType ?? offer.contract,
+                )}
               />
 
               <Info
@@ -452,7 +539,9 @@ export default function OfferDetails() {
 
             <Info
               label="Applications"
-              value={<span className="text-xl font-black">{applicationsCount}</span>}
+              value={
+                <span className="text-xl font-black">{applicationsCount}</span>
+              }
             />
           </CardContent>
         </Card>
@@ -470,7 +559,9 @@ export default function OfferDetails() {
           </div>
 
           <Button asChild type="button" variant="outline" size="sm">
-            <Link to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}>
+            <Link
+              to={`/provider/offers/search/offer?offerId=${encodeURIComponent(offer.id)}`}
+            >
               <Brain className="mr-1.5 h-4 w-4" />
               Candidats matchés
             </Link>
@@ -485,7 +576,9 @@ export default function OfferDetails() {
                   <th className="px-4 py-3 text-left font-bold">Candidat</th>
                   <th className="px-2 py-3 text-left font-bold">Contact</th>
                   <th className="px-2 py-3 text-left font-bold">Statut</th>
-                  <th className="px-2 py-3 text-left font-bold">Date candidature</th>
+                  <th className="px-2 py-3 text-left font-bold">
+                    Date candidature
+                  </th>
                   <th className="px-4 py-3 text-right font-bold">Action</th>
                 </tr>
               </thead>
@@ -504,8 +597,13 @@ export default function OfferDetails() {
 
                     <td className="px-2 py-3 text-xs text-muted-foreground">
                       <div className="space-y-1">
-                        <p>{application.candidateEmail ?? 'Email non précisé'}</p>
-                        <p>{application.candidatePhone ?? 'Téléphone non précisé'}</p>
+                        <p>
+                          {application.candidateEmail ?? 'Email non précisé'}
+                        </p>
+                        <p>
+                          {application.candidatePhone ??
+                            'Téléphone non précisé'}
+                        </p>
                       </div>
                     </td>
 
@@ -522,7 +620,9 @@ export default function OfferDetails() {
 
                     <td className="px-4 py-3 text-right">
                       <Button asChild variant="ghost" size="sm">
-                        <Link to={`/provider/candidates/${application.jobSeekerId}`}>
+                        <Link
+                          to={`/provider/candidates/${application.jobSeekerId}`}
+                        >
                           Voir
                         </Link>
                       </Button>
@@ -539,7 +639,9 @@ export default function OfferDetails() {
                 <tr className="border-b border-border bg-surface-muted text-xs text-muted-foreground">
                   <th className="px-4 py-3 text-left font-bold">Candidat</th>
                   <th className="px-2 py-3 text-left font-bold">Métier</th>
-                  <th className="px-2 py-3 text-left font-bold">Localisation</th>
+                  <th className="px-2 py-3 text-left font-bold">
+                    Localisation
+                  </th>
                   <th className="px-2 py-3 text-left font-bold">Score</th>
                   <th className="px-4 py-3 text-right font-bold">Action</th>
                 </tr>
@@ -589,6 +691,23 @@ export default function OfferDetails() {
             Aucun candidat lié à cette offre pour le moment.
           </div>
         )}
+      </div>
+      <div
+        ref={pdfRef}
+        style={{
+          position: 'absolute',
+          top: '-9999px',
+          left: '-9999px',
+          width: '800px',
+          background: 'white',
+        }}
+      >
+        <PdfContent
+          offer={offer}
+          matched={offer.matched}
+          applications={offer.applicants}
+          candidates={candidates}
+        />
       </div>
     </div>
   );

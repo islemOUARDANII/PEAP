@@ -93,7 +93,7 @@ export const navByRole: Record<Role, RoleNavigation> = {
   },
 
   advisor: {
-    brand: 'Espace Conseiller ANETI',
+    brand: 'Espace Conseiller',
     groups: [
       {
         label: 'Navigation',
@@ -176,7 +176,6 @@ export const navByRole: Record<Role, RoleNavigation> = {
       },
     ],
   },
-
 };
 
 export const searchTargetsByRole: Record<Role, SearchTarget[]> = {
@@ -198,40 +197,30 @@ export const searchTargetsByRole: Record<Role, SearchTarget[]> = {
     {
       to: '/provider/offers',
       label: 'Mes offres',
-      description: 'Consulter les offres stockees dans la vraie base employeur.',
+      description:
+        'Consulter les offres stockees dans la vraie base employeur.',
       keywords: ['offer', 'job', 'list', 'db', 'backend'],
     },
     {
       to: '/provider/offers/new',
       label: 'Creer une offre',
       description: 'Parser une offre avec le backend reel puis la soumettre.',
-      keywords: [
-        'job',
-        'offer',
-        'parser',
-        'create',
-        'backend',
-        'requirements',
-      ],
+      keywords: ['job', 'offer', 'parser', 'create', 'backend', 'requirements'],
     },
     {
       to: '/provider/offers/search',
       label: 'Recherche candidats',
-      description: 'Rechercher de vrais candidats a partir de vos vraies offres.',
-      keywords: [
-        'candidate',
-        'search',
-        'matching',
-        'skills',
-        'location',
-      ],
+      description:
+        'Rechercher de vrais candidats a partir de vos vraies offres.',
+      keywords: ['candidate', 'search', 'matching', 'skills', 'location'],
     },
   ],
   advisor: [
     {
       to: '/advisor/search',
       label: 'Moteur de recherche',
-      description: 'Rechercher des candidats ou des offres via le search-service.',
+      description:
+        'Rechercher des candidats ou des offres via le search-service.',
       keywords: ['search', 'recherche', 'candidat', 'offre', 'index'],
     },
     {

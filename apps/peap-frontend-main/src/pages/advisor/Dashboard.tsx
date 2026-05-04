@@ -30,10 +30,11 @@ function AdvisorActionCard({
 }) {
   const content = (
     <div
-      className={`panel h-full p-5 transition ${disabled
+      className={`panel h-full p-5 transition ${
+        disabled
           ? 'cursor-not-allowed opacity-60'
           : 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
-        }`}
+      }`}
     >
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
@@ -51,17 +52,21 @@ function AdvisorActionCard({
               ) : null}
             </div>
 
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">
+            <p className="mt-1 text-sm leading-6 text-muted-foreground ">
               {description}
             </p>
           </div>
         </div>
 
-        {disabled ? (
+        {disabled && (
+          <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
+        )}
+
+        {/* {disabled ? (
           <Lock className="h-4 w-4 shrink-0 text-muted-foreground" />
         ) : (
           <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-        )}
+        )} */}
       </div>
     </div>
   );
@@ -81,7 +86,7 @@ export default function AdvisorDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Espace Conseiller ANETI"
+        title="Espace Conseiller"
         description="Pilotez la recherche, le matching et l’analyse des profils candidats et des offres."
         actions={
           <Button asChild size="sm" variant="outline">
@@ -119,7 +124,7 @@ export default function AdvisorDashboard() {
         />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      {/* <div className="grid gap-4 md:grid-cols-2">
         <AdvisorActionCard
           title="Gestion de votre compte"
           description="Consulter les informations du compte conseiller, rôle, accès et paramètres personnels."
@@ -133,9 +138,9 @@ export default function AdvisorDashboard() {
           icon={Activity}
           to="/advisor/activity"
         />
-      </div>
+      </div> */}
 
-      <div className="panel p-5">
+      {/* <div className="panel p-5">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-surface-muted">
             <Settings className="h-5 w-5 text-muted-foreground" />
@@ -152,7 +157,7 @@ export default function AdvisorDashboard() {
             </p>
           </div>
         </div>
-      </div>
+      </div> */}
     </div>
   );
 }

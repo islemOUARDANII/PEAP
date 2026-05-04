@@ -1,20 +1,24 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
-import { Search, ChevronDown, LogOut } from "lucide-react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import type { Role, RoleProfile } from "@/models";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Search, ChevronDown, LogOut } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import type { Role, RoleProfile } from '@/models';
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { useAuth } from "@/app/auth";
-import { searchTargetsByRole, type SearchTarget } from "@/config/navigation";
-import { UserRole } from "@/app/constants";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { useAuth } from '@/app/auth';
+import { searchTargetsByRole, type SearchTarget } from '@/config/navigation';
+import { UserRole } from '@/app/constants';
 
 const roleLabels: Record<Role, string> = {
   candidate: 'Candidat',
   provider: 'Employeur',
-  advisor: 'Conseiller ANETI',
+  advisor: 'Conseiller',
   functionalAdmin: 'Admin fonctionnel',
   techAdmin: 'Admin technique',
 };
@@ -34,7 +38,7 @@ const fallbackProfiles: Record<Role, RoleProfile> = {
   },
   advisor: {
     role: 'advisor',
-    name: 'Conseiller ANETI',
+    name: 'Conseiller',
     email: 'advisor@aneti.tn',
     initials: 'CA',
   },
@@ -69,39 +73,39 @@ export function Topbar({ role }: TopbarProps) {
   const location = useLocation();
   const { session, logout } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   const profile = session
     ? {
-      role: session.user.role,
-      name: session.user.name,
-      email: session.user.email,
-      initials: session.user.name
-        .split(" ")
-        .map((chunk) => chunk[0])
-        .join("")
-        .slice(0, 2)
-        .toUpperCase(),
-    }
+        role: session.user.role,
+        name: session.user.name,
+        email: session.user.email,
+        initials: session.user.name
+          .split(' ')
+          .map((chunk) => chunk[0])
+          .join('')
+          .slice(0, 2)
+          .toUpperCase(),
+      }
     : fallbackProfiles[role];
 
   useEffect(() => {
-    const currentQuery = new URLSearchParams(location.search).get("q") ?? "";
+    const currentQuery = new URLSearchParams(location.search).get('q') ?? '';
     setQuery(currentQuery);
   }, [location.pathname, location.search]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault();
         inputRef.current?.focus();
         setIsSearchOpen(true);
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
   const trimmedQuery = query.trim();
@@ -113,7 +117,9 @@ export function Topbar({ role }: TopbarProps) {
     }
 
     const matches = targets.filter((target) => {
-      const searchable = [target.label, target.description, ...target.keywords].join(" ").toLowerCase();
+      const searchable = [target.label, target.description, ...target.keywords]
+        .join(' ')
+        .toLowerCase();
       return searchable.includes(normalizedQuery);
     });
 
@@ -122,7 +128,7 @@ export function Topbar({ role }: TopbarProps) {
 
   const handleLogout = () => {
     logout();
-    navigate("/login", { replace: true });
+    navigate('/login', { replace: true });
   };
 
   const navigateToSearch = (target: SearchTarget) => {
@@ -172,7 +178,9 @@ export function Topbar({ role }: TopbarProps) {
                 setIsSearchOpen(true);
               }}
               onFocus={() => setIsSearchOpen(true)}
-              onBlur={() => window.setTimeout(() => setIsSearchOpen(false), 120)}
+              onBlur={() =>
+                window.setTimeout(() => setIsSearchOpen(false), 120)
+              }
               placeholder={searchPlaceholders[role]}
               className="h-10 rounded-md border-border bg-surface-muted/75 pl-9 pr-16 shadow-xs focus-visible:ring-accent"
             />
@@ -199,7 +207,9 @@ export function Topbar({ role }: TopbarProps) {
                       <span className="block text-sm font-medium text-foreground">
                         Search "{trimmedQuery}" in {target.label}
                       </span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">{target.description}</span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {target.description}
+                      </span>
                     </span>
                   </button>
                 ))}
@@ -221,8 +231,12 @@ export function Topbar({ role }: TopbarProps) {
                   {profile.initials}
                 </span>
                 <span className="hidden min-w-0 flex-col items-start leading-tight md:flex">
-                  <span className="max-w-36 truncate text-xs font-semibold text-foreground">{profile.name}</span>
-                  <span className="max-w-40 truncate text-[10px] text-muted-foreground">{profile.email}</span>
+                  <span className="max-w-36 truncate text-xs font-semibold text-foreground">
+                    {profile.name}
+                  </span>
+                  <span className="max-w-40 truncate text-[10px] text-muted-foreground">
+                    {profile.email}
+                  </span>
                 </span>
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
               </button>
