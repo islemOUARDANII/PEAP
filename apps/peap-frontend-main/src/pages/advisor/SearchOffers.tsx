@@ -156,12 +156,12 @@ export default function AdvisorSearchOffers() {
         }}
       >
         <div className="relative min-w-[240px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Métier, compétence, entreprise, localisation..."
-            className="pl-9 input-search"
+            className="h-9 bg-primary pl-9 text-muted input-search"
           />
         </div>
 

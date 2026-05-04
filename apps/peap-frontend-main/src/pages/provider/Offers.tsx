@@ -100,12 +100,12 @@ export default function Offers() {
 
       <div className="panel flex flex-wrap items-center gap-2 p-3">
         <div className="relative min-w-[220px] flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search offers..."
-            className="h-9 bg-surface-muted pl-9"
+            className="h-9 bg-primary pl-9 text-muted input-search"
           />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
