@@ -973,38 +973,53 @@ export function useProviderOfferQuery(id?: string) {
     queryKey: queryKeys.provider.offer(id),
     queryFn: async (): Promise<ProviderOfferDetail> => {
       const offer = await gatewayApi.employer.getOffer(id as string);
+
       const skills = offer.requirements
-        .map((item) => item.nodeLabel ?? item.rawValue ?? "")
+        .map((item) => item.nodeLabel ?? item.rawValue ?? '')
         .filter(Boolean)
         .slice(0, 5);
 
-      const candidatesResponse = await gatewayApi.search
-        .candidates({
-          filters: {
-            query: [offer.title, ...skills].join(" ").trim(),
-            skills,
-            location: offer.governorateLabel ?? undefined,
-            size: 10,
-          },
-        })
-        .catch(() => ({
-          total: 0,
-          filtersApplied: {},
-          results: [] as SearchCandidateResult[],
-          raw: {},
-        }));
+      const [candidatesResponse, applications] = await Promise.all([
+        gatewayApi.search
+          .candidates({
+            filters: {
+              query: [offer.title, ...skills].join(' ').trim(),
+              skills,
+              location: offer.governorateLabel ?? undefined,
+              size: 10,
+            },
+          })
+          .catch(() => ({
+            total: 0,
+            filtersApplied: {},
+            results: [] as SearchCandidateResult[],
+            raw: {},
+          })),
+
+        gatewayApi.employer.listApplications().catch(() => []),
+      ]);
 
       const candidates = candidatesResponse.results.map((result, index) =>
         mapSearchCandidateToCandidate(result, {
           offerId: offer.id,
           offerTitle: offer.title,
-          company: offer.employerName ?? "Employer",
+          company: offer.employerName ?? offer.companyName ?? 'Employeur',
           rank: index + 1,
         }),
       );
 
+      const offerApplications = applications.filter(
+        (application) => application.offerId === offer.id,
+      );
+
+      const mappedOffer = mapEmployerOfferToJob(offer);
+
       return {
-        offer: mapEmployerOfferToJob(offer),
+        offer: {
+          ...mappedOffer,
+          matched: candidatesResponse.total || candidatesResponse.results.length,
+          applicants: offerApplications.length,
+        },
         candidates,
         raw: offer,
       };
