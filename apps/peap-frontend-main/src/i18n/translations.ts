@@ -23,7 +23,7 @@ const frExact: Record<string, string> = {
   'Search in this portal': 'Rechercher dans ce portail',
   'Log out': 'Se deconnecter',
   'Active offers': 'Offres actives',
-  'Matched candidates': 'Candidats correspondants',
+  'Matched candidates': 'Candidats identifiés',
   'New applications': 'Nouvelles candidatures',
   'Avg. match quality': 'Qualite moyenne du matching',
   'last 7 days': '7 derniers jours',

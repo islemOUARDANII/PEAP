@@ -49,8 +49,8 @@ export default function ProviderDashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Provider Dashboard"
-        description="Monitor your offers, applicant flow and match quality."
+        title="Tableau de bord Employeur"
+        description="Suivez vos offres, le flux de candidatures et la qualité des correspondances."
         actions={
           <Button
             asChild
