@@ -294,7 +294,7 @@ export default function AdvisorCandidateToOffersMatching() {
                                 <tr>
                                     <th className="px-4 py-3 text-left font-medium">Rang</th>
                                     <th className="px-4 py-3 text-left font-medium">Offre</th>
-                                    <th className="px-4 py-3 text-left font-medium">Score</th>
+
                                     <th className="px-4 py-3 text-left font-medium">Éligibilité</th>
                                     <th className="px-4 py-3 text-right font-medium">Action</th>
                                 </tr>
@@ -314,9 +314,7 @@ export default function AdvisorCandidateToOffersMatching() {
                                                 {result.explanationShort || '—'}
                                             </p>
                                         </td>
-                                        <td className="px-4 py-3">
-                                            <ScoreBadge value={result.scoreGlobal} />
-                                        </td>
+
                                         <td className="px-4 py-3">
                                             <StatusPill
                                                 label={result.eligibilityStatus}

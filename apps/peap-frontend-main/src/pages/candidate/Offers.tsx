@@ -86,11 +86,11 @@ const SEARCH_MODE_OPTIONS: Array<{
   value: CandidateOfferSearchMode;
   label: string;
 }> = [
-  { value: 'keyword', label: 'Mot cle' },
-  { value: 'skill', label: 'Competence' },
-  { value: 'company', label: 'Entreprise' },
-  { value: 'location', label: 'Localisation' },
-];
+    { value: 'keyword', label: 'Mot cle' },
+    { value: 'skill', label: 'Competence' },
+    { value: 'company', label: 'Entreprise' },
+    { value: 'location', label: 'Localisation' },
+  ];
 
 const isOfferTab = (value: string | null): value is OfferTab =>
   value != null && OFFER_TABS.includes(value as OfferTab);
@@ -103,8 +103,8 @@ const asRecord = (value: unknown): Record<string, unknown> =>
 const toStringList = (value: unknown): string[] =>
   Array.isArray(value)
     ? value
-        .map((item) => cleanText(item))
-        .filter((item): item is string => Boolean(item))
+      .map((item) => cleanText(item))
+      .filter((item): item is string => Boolean(item))
     : [];
 
 const formatSearchRelevance = (value: number | null): string | null => {
@@ -350,9 +350,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-            query: appliedSearch,
-            mode: searchMode,
-          })
+          query: appliedSearch,
+          mode: searchMode,
+        })
         : getAllPublishedOffers(),
     enabled: activeTab === 'all',
     staleTime: 5 * 60_000,
@@ -367,9 +367,9 @@ export default function CandidateOffers() {
     queryFn: () =>
       hasActiveSearch
         ? searchCandidateOffers({
-            query: appliedSearch,
-            mode: searchMode,
-          })
+          query: appliedSearch,
+          mode: searchMode,
+        })
         : getInterestingOffers(),
     enabled: activeTab === 'interesting' && hasCandidateProfile,
     staleTime: 5 * 60_000,
@@ -430,8 +430,8 @@ export default function CandidateOffers() {
     : false;
   const interestingKeywords =
     activeTab === 'interesting' &&
-    interestingOffersQuery.data &&
-    'keywords' in interestingOffersQuery.data
+      interestingOffersQuery.data &&
+      'keywords' in interestingOffersQuery.data
       ? interestingOffersQuery.data.keywords
       : [];
   const interestingKeywordsLabel = interestingKeywords
@@ -529,9 +529,8 @@ export default function CandidateOffers() {
   const tabCountBadge = (n: number, active: boolean) => (
     <Badge
       variant="secondary"
-      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${
-        active ? 'bg-accent text-accent-foreground' : ''
-      }`}
+      className={`ml-1.5 h-5 px-1.5 text-[10px] font-mono tabular-nums ${active ? 'bg-accent text-accent-foreground' : ''
+        }`}
     >
       {n}
     </Badge>
@@ -1132,7 +1131,7 @@ export default function CandidateOffers() {
                   </p>
                 </section>
 
-                <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
+                {/* <section className="space-y-2 rounded-xl border border-border card-border-left-blue border-color-primary p-4">
                   <h3 className="text-sm font-semibold text-foreground">
                     Compétences demandées
                   </h3>
@@ -1147,11 +1146,11 @@ export default function CandidateOffers() {
                       ))
                     ) : (
                       <p className="text-sm text-muted-foreground">
-                        Aucune compétence détaillée pour le moment.
+                        Java, Python.
                       </p>
                     )}
                   </div>
-                </section>
+                </section> */}
 
                 {selectedOffer.languages.length > 0 ? (
                   <section className="space-y-2 rounded-xl border border-border card-border-left-orange border-color-aneti-orange p-4">

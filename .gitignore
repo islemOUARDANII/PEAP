@@ -70,3 +70,5 @@ services/parsing-service/outputs/
 services/parsing-service/data/rtmc/bm25_indexes/
 services/search-service/sync_state.json
 *_mapped.json
+
+infra/db/data/

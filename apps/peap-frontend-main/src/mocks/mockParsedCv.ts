@@ -117,14 +117,10 @@ export const mockParsedCv: MockParsedCv = {
 };
 
 export const mockDataChart = [
-  { offerId: 'OFF-001', matches: 78, applications: 45 },
-  { offerId: 'OFF-002', matches: 52, applications: 30 },
-  { offerId: 'OFF-003', matches: 91, applications: 67 },
-  { offerId: 'OFF-004', matches: 34, applications: 12 },
-  { offerId: 'OFF-005', matches: 66, applications: 40 },
-  { offerId: 'OFF-006', matches: 85, applications: 73 },
-  { offerId: 'OFF-007', matches: 49, applications: 25 },
-  { offerId: 'OFF-008', matches: 72, applications: 58 },
+  { offerId: 'AA-JOB-0001', matches: 78, applications: 45 },
+  { offerId: 'AA-JOB-0002', matches: 52, applications: 30 },
+  { offerId: 'AA-JOB-0003', matches: 91, applications: 67 },
+  { offerId: 'AA-JOB-0004', matches: 10, applications: 30 },
 ];
 
 export const mockCandidates: Candidate[] = [

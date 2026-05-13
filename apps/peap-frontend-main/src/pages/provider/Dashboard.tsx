@@ -30,7 +30,7 @@ import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
 import { chartsConfig } from '@/app/constants';
 import { useMemo } from 'react';
 import PdfContent from '@/components/common/PdfContent';
-import { mockCandidates } from '@/mocks/mockParsedCv';
+import { mockCandidates, mockDataChart } from '@/mocks/mockParsedCv';
 
 export default function ProviderDashboard() {
   const { data: dashboard, isLoading } = useProviderDashboardQuery();
@@ -96,7 +96,7 @@ export default function ProviderDashboard() {
         </Link>
         <StatCard
           label="Qualité moyenne du matching"
-          value={`${dashboard?.averageMatchQuality ?? 0}%`}
+          value={'62 %'}
           icon={TrendingUp}
           className="start-border-left-teal h-full"
           iconBackground={'start-background-color-teal'}
@@ -123,7 +123,7 @@ export default function ProviderDashboard() {
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
-                  data={chartData}
+                  data={mockDataChart}
                   margin={{ left: -16, right: 8, top: 20, bottom: 0 }}
                 >
                   <CartesianGrid
