@@ -1,0 +1,982 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* MatchCore enterprise job-matching design system.
+   All colors HSL. No raw color classes in components. */
+
+@layer base {
+  :root {
+
+    /* Brand Navy (Le bleu principal du logo et de la navigation) */
+    --primary: 204 100% 28%;
+    /* #005a8f - Bleu ANETI standard */
+    --primary-foreground: 0 0% 100%;
+    --primary-muted: 204 100% 95%;
+
+    /* Accent Orange/Red (La couleur dynamique du logo pour le "Travail Indépendant") */
+    --accent: 28 92% 54%;
+    /* #e94e28 - Orange/Rouge du logo */
+    --accent-foreground: 0 0% 100%;
+    --accent-soft: 14 85% 95%;
+
+    /* Secondary (Gris bleuté très léger utilisé pour les fonds de section) */
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 204 100% 15%;
+
+    /* Muted (Utilisé pour le texte secondaire et les bordures discrètes) */
+    --muted: 210 20% 96%;
+    --muted-foreground: 210 15% 45%;
+
+    /* Backgrounds & Borders */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 204 100% 28%;
+
+
+    /* Surfaces */
+    /* --background: 216 45% 98%;
+    --foreground: 209 61% 16%; */
+    --surface: 0 0% 100%;
+    --surface-muted: 210 40% 96%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 209 61% 16%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 209 61% 16%;
+
+    /* Brand navy */
+    /* --primary: 209 92% 53%; */
+    /* --primary: 204 100% 28%;
+    --primary-foreground: 210 40% 98%;
+    --primary-muted: 212 33% 89%; */
+
+    /* Accent teal */
+    /* --accent: 184 72% 44%;
+    --accent-foreground: 0 0% 100%;
+    --accent-soft: 183 61% 92%; */
+
+    /* --secondary: 210 40% 96%;
+    --secondary-foreground: 209 61% 16%; */
+
+    /* --muted: 210 40% 96%;
+    --muted-foreground: 210 22% 49%; */
+
+    /* Status */
+    --success: 142 76% 36%;
+    --success-foreground: 0 0% 100%;
+    --success-soft: 142 76% 94%;
+
+    --warning: 32 95% 44%;
+    --warning-foreground: 0 0% 100%;
+    --warning-soft: 32 95% 94%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-soft: 0 80% 96%;
+
+    --info: 221 83% 53%;
+    --info-foreground: 0 0% 100%;
+    --info-soft: 221 83% 95%;
+
+    /* --border: 212 33% 89%; */
+    --border-strong: 209 23% 60%;
+    /* --input: 212 33% 89%;
+    --ring: 184 72% 44%; */
+
+    --radius: 0.625rem;
+
+    /* Sidebar */
+    --sidebar-background: 214 65% 17%;
+    --sidebar-foreground: 220 14% 80%;
+    --sidebar-primary: 184 72% 44%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 212 62% 24%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 212 62% 24%;
+    --sidebar-ring: 184 72% 44%;
+
+    /* Elevation */
+    --shadow-xs: 0 1px 2px 0 hsl(214 65% 17% / 0.05);
+    --shadow-sm: 0 1px 3px 0 hsl(214 65% 17% / 0.06), 0 1px 2px -1px hsl(214 65% 17% / 0.06);
+    --shadow-md: 0 4px 12px -2px hsl(214 65% 17% / 0.08), 0 2px 4px -2px hsl(214 65% 17% / 0.04);
+    --shadow-lg: 0 12px 32px -8px hsl(214 65% 17% / 0.12), 0 4px 12px -4px hsl(214 65% 17% / 0.06);
+  }
+
+  .dark {
+    --background: 222 32% 8%;
+    --foreground: 210 30% 96%;
+    --surface: 222 30% 11%;
+    --surface-muted: 222 28% 14%;
+    --card: 222 30% 11%;
+    --card-foreground: 210 30% 96%;
+    --popover: 222 30% 11%;
+    --popover-foreground: 210 30% 96%;
+    --primary: 210 30% 96%;
+    --primary-foreground: 214 65% 17%;
+    --primary-muted: 222 25% 20%;
+    --accent: 184 72% 52%;
+    --accent-foreground: 214 65% 17%;
+    --accent-soft: 184 40% 20%;
+    --secondary: 222 25% 18%;
+    --secondary-foreground: 210 30% 96%;
+    --muted: 222 25% 16%;
+    --muted-foreground: 220 14% 66%;
+    --border: 222 25% 20%;
+    --border-strong: 222 25% 26%;
+    --input: 222 25% 20%;
+    --ring: 184 72% 52%;
+    --sidebar-background: 214 65% 12%;
+    --sidebar-foreground: 220 14% 78%;
+    --sidebar-accent: 212 62% 18%;
+    --sidebar-border: 212 62% 18%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv11', 'ss01', 'ss03';
+  }
+
+  .font-mono {
+    font-family: 'JetBrains Mono', ui-monospace, monospace;
+  }
+
+  .font-display {
+    font-family: 'Inter', system-ui, sans-serif;
+    letter-spacing: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    letter-spacing: 0;
+  }
+}
+
+@layer components {
+  .matchcore-shell {
+    background:
+      linear-gradient(180deg, hsl(var(--background)) 0%, hsl(var(--surface-muted)) 100%);
+  }
+
+  .matchcore-sidebar {
+    background:
+      radial-gradient(circle at 18% 0%, hsl(var(--sidebar-primary) / 0.2), transparent 19rem),
+      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(var(--sidebar-accent)) 100%);
+  }
+
+  .matchcore-topbar {
+    background:
+      linear-gradient(90deg, hsl(var(--surface) / 0.98) 0%, hsl(var(--surface-muted) / 0.92) 100%);
+  }
+
+  .skeleton-shimmer {
+    @apply relative overflow-hidden;
+    background:
+      linear-gradient(90deg, hsl(var(--muted)) 0%, hsl(var(--border)) 48%, hsl(var(--muted)) 100%);
+  }
+
+  .skeleton-shimmer::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background:
+      linear-gradient(90deg, transparent 0%, hsl(var(--surface) / 0.66) 50%, transparent 100%);
+    animation: skeleton-shimmer 1.55s ease-in-out infinite;
+  }
+
+  .panel {
+    @apply rounded-lg border border-border bg-card;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .panel-elevated {
+    @apply rounded-lg border border-border bg-card;
+    box-shadow: var(--shadow-sm);
+  }
+
+  .stat-value {
+    @apply text-2xl font-semibold text-foreground;
+  }
+
+  .stat-label {
+    @apply text-xs font-medium uppercase tracking-wider text-muted-foreground;
+  }
+
+  .table-cell-mono {
+    @apply font-mono text-xs text-muted-foreground;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    @apply bg-border rounded-full;
+  }
+}
+
+@keyframes skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-shimmer::after {
+    animation: none;
+    transform: translateX(0);
+  }
+}
+
+
+.card-action {
+  position: absolute;
+  right: 0;
+  justify-content: center;
+  align-items: center;
+}
+
+.card-border-top {
+  border-top: 6px solid #00548d;
+  border-radius: 1rem;
+  /* border-color: #f6821f; */
+}
+
+.border-top-aneti-blue {
+  border-top: 8px solid #00548d;
+}
+
+.card-border-left-active {
+  border-left: 6px solid #00548d;
+  border-radius: 16px;
+}
+
+.card-border-left:hover {
+  border-left: 6px solid #00548d;
+  border-radius: 16px;
+}
+
+.border-color-aneti-orange {
+  /* border-color: #f6821f; */
+  border-color: hsl(var(--accent)) !important;
+}
+
+.hover-color:hover {
+  border-color: #00548d;
+  color: #00548d;
+}
+
+.rounded-2xl-right {
+  border-top-right-radius: 0.7rem;
+  border-bottom-right-radius: 1rem;
+}
+
+
+.bg-color-aneti-blue {
+  background-color: rgba(11, 75, 136, 0.05);
+}
+
+
+.start-border-left-dark-blue {
+  border-left: 6px solid #001A9C;
+  border-radius: 16px;
+  transition: border 0.08s ease-in-out
+}
+
+.start-border-left-dark-blue:hover {
+  border-left: 10px solid #001a9ce0;
+}
+
+.start-border-left-blue {
+  border-left: 6px solid #335CC4;
+  border-radius: 16px;
+  transition: border 0.08s ease-in-out
+}
+
+.start-border-left-blue:hover {
+  border-left: 10px solid #335cc4e0;
+}
+
+.start-border-left-orange {
+  border-left: 6px solid #F17144;
+  border-radius: 16px;
+  transition: border 0.08s ease-in-out
+}
+
+.start-border-left-orange:hover {
+  border-left: 10px solid #f17244e0;
+}
+
+
+.start-border-left-green {
+  border-left: 6px solid #5EBD81;
+  border-radius: 16px;
+  transition: border 0.08s ease-in-out
+}
+
+.start-border-left-green:hover {
+  border-left: 10px solid #5EBD81e0;
+}
+
+
+.start-border-left-teal {
+  border-left: 6px solid #50BBB7;
+  border-radius: 16px;
+  transition: border 0.08s ease-in-out
+}
+
+.start-border-left-teal:hover {
+  border-left: 10px solid #50BBB7e0;
+}
+
+
+/**/
+.start-background-color-dark-blue {
+  background-color: rgba(0, 26, 156, 0.2);
+  color: #001A9C;
+}
+
+.start-background-color-blue {
+  background-color: rgba(51, 92, 196, 0.2);
+  color: #335CC4;
+}
+
+.start-background-color-orange {
+  background-color: rgba(241, 113, 68, 0.2);
+  color: #F17144;
+}
+
+.start-background-color-green {
+  background-color: rgba(94, 189, 129, 0.2);
+  color: #5EBD81;
+}
+
+.start-background-color-teal {
+  background-color: rgba(80, 187, 183, 0.2);
+  color: #50BBB7;
+}
+
+/**/
+.card-border-top-blue-aneti {
+  border-top: 6px solid hsl(var(--primary));
+  border-radius: 1rem;
+}
+
+.card-border-top-dark-blue {
+  border-top: 6px solid #001A9C;
+  border-radius: 1rem;
+}
+
+.card-border-top-blue {
+  border-top: 6px solid #335CC4;
+  border-radius: 1rem;
+}
+
+.card-border-top-orange {
+  /* border-top: 6px solid #F17144; */
+  border-top: 6px solid hsl(var(--accent));
+  border-radius: 1rem;
+}
+
+.card-border-top-green {
+  border-top: 6px solid #5EBD81;
+  border-radius: 1rem;
+}
+
+.card-border-top-teal {
+  border-top: 6px solid #50BBB7;
+  border-radius: 1rem;
+}
+
+/**/
+
+/* --- ANETI CORE (Primary Blues & Reds) --- */
+.card-border-1 {
+  border-top: 6px solid #001A9C;
+  border-radius: 1rem;
+}
+
+/* Deep Blue */
+.card-border-2 {
+  border-top: 6px solid #1E40AF;
+  border-radius: 1rem;
+}
+
+/* Mid Blue */
+.card-border-3 {
+  border-top: 6px solid #3B82F6;
+  border-radius: 1rem;
+}
+
+/* Action Blue */
+.card-border-4 {
+  border-top: 6px solid #E34712;
+  border-radius: 1rem;
+}
+
+/* ANETI Red */
+.card-border-5 {
+  border-top: 6px solid #EF4444;
+  border-radius: 1rem;
+}
+
+/* Bright Red */
+
+/* --- WARM SUNSETS (Orange, Yellow, Pink) --- */
+.card-border-6 {
+  border-top: 6px solid #F97316;
+  border-radius: 1rem;
+}
+
+/* Orange */
+.card-border-7 {
+  border-top: 6px solid #FB923C;
+  border-radius: 1rem;
+}
+
+/* Light Orange */
+.card-border-8 {
+  border-top: 6px solid #F59E0B;
+  border-radius: 1rem;
+}
+
+/* Amber */
+.card-border-9 {
+  border-top: 6px solid #EAB308;
+  border-radius: 1rem;
+}
+
+/* Yellow */
+.card-border-10 {
+  border-top: 6px solid #EC4899;
+  border-radius: 1rem;
+}
+
+/* Pink */
+
+/* --- PROFESSIONAL GROWTH (Greens, Teals, Cyans) --- */
+.card-border-11 {
+  border-top: 6px solid #10B981;
+  border-radius: 1rem;
+}
+
+/* Emerald */
+.card-border-12 {
+  border-top: 6px solid #22C55E;
+  border-radius: 1rem;
+}
+
+/* Green */
+.card-border-13 {
+  border-top: 6px solid #84CC16;
+  border-radius: 1rem;
+}
+
+/* Lime */
+.card-border-14 {
+  border-top: 6px solid #0D9488;
+  border-radius: 1rem;
+}
+
+/* Teal */
+.card-border-15 {
+  border-top: 6px solid #06B6D4;
+  border-radius: 1rem;
+}
+
+/* Cyan */
+
+/* --- SOFT MODERN (Purples, Indigo, Neutrals) --- */
+.card-border-16 {
+  border-top: 6px solid #6366F1;
+  border-radius: 1rem;
+}
+
+/* Indigo */
+.card-border-17 {
+  border-top: 6px solid #8B5CF6;
+  border-radius: 1rem;
+}
+
+/* Violet */
+.card-border-18 {
+  border-top: 6px solid #A855F7;
+  border-radius: 1rem;
+}
+
+/* Purple */
+.card-border-19 {
+  border-top: 6px solid #64748B;
+  border-radius: 1rem;
+}
+
+/* Slate Blue */
+.card-border-20 {
+  border-top: 6px solid #475569;
+  border-radius: 1rem;
+}
+
+/* Steel */
+
+.card-border-destructive {
+  border-top: 6px solid hsl(var(--destructive));
+  border-radius: 1rem;
+}
+
+.border-left-aneti {
+  border-left: 6px solid hsl(var(--primary));
+}
+
+
+.light-link-border-left-1 {
+  color: #001A9C;
+}
+
+.light-link-border-left-1:hover {
+  border-left: 3px solid #001A9C;
+  color: #001A9C;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-2 {
+  color: #1E40AF;
+}
+
+.light-link-border-left-2:hover {
+  border-left: 3px solid #1E40AF;
+  color: #1E40AF;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-3 {
+  color: #3B82F6;
+}
+
+.light-link-border-left-3:hover {
+  border-left: 3px solid #3B82F6;
+  color: #3B82F6;
+  transition: border 0.1s ease-in-out
+}
+
+.light-link-border-left-4 {
+  color: #E34712;
+}
+
+.light-link-border-left-4:hover {
+  border-left: 3px solid #E34712;
+  color: #E34712;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-5 {
+  color: #EF4444;
+}
+
+.light-link-border-left-5:hover {
+  border-left: 3px solid #EF4444;
+  color: #EF4444;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-right-orange {
+  /* color: #f6821f; */
+}
+
+.light-link-border-right-orange:hover {
+  border-right: 3px solid #f6821f;
+  color: #f6821f;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-md-border-right-orange {
+  /* color: #f6821f; */
+  /* border-color: #f6821f; */
+}
+
+.light-link-md-border-right-orange:hover {
+  border-right: 4px solid #f6821f;
+  color: #f6821f;
+  transition: border 0.1s ease-in-out, color 0.1s ease-in-out;
+}
+
+
+.light-link-border-left-6 {
+  color: #F97316;
+}
+
+.light-link-border-left-6:hover {
+  border-left: 3px solid #F97316;
+  color: #F97316;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-7 {
+  color: #FB923C;
+}
+
+.light-link-border-left-7:hover {
+  border-left: 3px solid #FB923C;
+  color: #FB923C;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-8 {
+  color: #F59E0B;
+}
+
+.light-link-border-left-8:hover {
+  border-left: 3px solid #F59E0B;
+  color: #F59E0B;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-9 {
+  color: #EAB308;
+}
+
+.light-link-border-left-9:hover {
+  border-left: 3px solid #EAB308;
+  color: #EAB308;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-10 {
+  color: #EC4899;
+}
+
+.light-link-border-left-10:hover {
+  border-left: 3px solid #EC4899;
+  color: #EC4899;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-11 {
+  color: #10B981;
+}
+
+.light-link-border-left-11:hover {
+  border-left: 3px solid #10B981;
+  color: #10B981;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-12 {
+  color: #22C55E;
+}
+
+.light-link-border-left-12:hover {
+  border-left: 3px solid #22C55E;
+  color: #22C55E;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-13 {
+  color: #84CC16;
+}
+
+.light-link-border-left-13:hover {
+  border-left: 3px solid #84CC16;
+  color: #84CC16;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-14 {
+  color: #0D9488;
+}
+
+.light-link-border-left-14:hover {
+  border-left: 3px solid #0D9488;
+  color: #0D9488;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-15 {
+  color: #06B6D4;
+}
+
+.light-link-border-left-15:hover {
+  border-left: 3px solid #06B6D4;
+  color: #06B6D4;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-16 {
+  color: #6366F1;
+}
+
+.light-link-border-left-16:hover {
+  border-left: 3px solid #6366F1;
+  color: #6366F1;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-17 {
+  color: #8B5CF6;
+}
+
+.light-link-border-left-17:hover {
+  border-left: 3px solid #8B5CF6;
+  color: #8B5CF6;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-18 {
+  color: #A855F7;
+}
+
+
+.light-link-border-left-18:hover {
+  border-left: 3px solid #A855F7;
+  color: #A855F7;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-19 {
+  color: #64748B;
+}
+
+.light-link-border-left-19:hover {
+  border-left: 3px solid #64748B;
+  color: #64748B;
+  transition: border 0.1s ease-in-out;
+}
+
+.light-link-border-left-20 {
+  color: #475569;
+}
+
+.light-link-border-left-20:hover {
+  border-left: 3px solid #475569;
+  color: #475569;
+  transition: border 0.1s ease-in-out
+}
+
+.light-link-border-left-primary {
+  color: hsl(var(--primary));
+}
+
+.light-link-border-left-primary:hover {
+  border-left: 3px solid hsl(var(--primary));
+  color: hsl(var(--primary));
+  transition: border 0.1s ease-in-out
+}
+
+.row-border-left:hover {
+  border-left: 6px solid hsl(var(--accent)) !important;
+}
+
+.border-avatar-orange {
+  border: 3px solid;
+  border-color: hsl(var(--accent));
+}
+
+
+.card-border-left-orange {
+  border-left: 6px solid hsl(var(--accent));
+}
+
+.card-border-left-blue {
+  border-left: 6px solid hsl(var(--primary));
+}
+
+.button-download {
+  cursor: pointer;
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent));
+}
+
+
+.card-border-3 {
+  border-top: 6px solid #3B82F6;
+  border-radius: 1rem;
+}
+
+
+/* --- ANETI CORE (Primary Blues & Reds) --- */
+.icon-background-color-1 {
+  background-color: rgba(0, 26, 156, 0.2);
+  color: #001A9C;
+}
+
+.icon-background-color-2 {
+  background-color: rgba(30, 64, 175, 0.2);
+  color: #1E40AF;
+}
+
+.icon-background-color-3 {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #3B82F6;
+}
+
+.icon-background-color-4 {
+  background-color: rgba(227, 71, 18, 0.2);
+  color: #E34712;
+}
+
+.icon-background-color-5 {
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #EF4444;
+}
+
+/* --- WARM SUNSETS (Orange, Yellow, Pink) --- */
+.icon-background-color-6 {
+  background-color: rgba(249, 115, 22, 0.2);
+  color: #F97316;
+}
+
+.icon-background-color-7 {
+  background-color: rgba(251, 146, 60, 0.2);
+  color: #FB923C;
+}
+
+.icon-background-color-8 {
+  background-color: rgba(245, 158, 11, 0.2);
+  color: #F59E0B;
+}
+
+.icon-background-color-9 {
+  background-color: rgba(234, 179, 8, 0.2);
+  color: #EAB308;
+}
+
+.icon-background-color-10 {
+  background-color: rgba(236, 72, 153, 0.2);
+  color: #EC4899;
+}
+
+/* --- PROFESSIONAL GROWTH (Greens, Teals, Cyans) --- */
+.icon-background-color-11 {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #10B981;
+}
+
+.icon-background-color-12 {
+  background-color: rgba(34, 197, 94, 0.2);
+  color: #22C55E;
+}
+
+.icon-background-color-13 {
+  background-color: rgba(132, 204, 22, 0.2);
+  color: #84CC16;
+}
+
+.icon-background-color-14 {
+  background-color: rgba(13, 148, 136, 0.2);
+  color: #0D9488;
+}
+
+.icon-background-color-15 {
+  background-color: rgba(6, 182, 212, 0.2);
+  color: #06B6D4;
+}
+
+/* --- SOFT MODERN (Purples, Indigo, Neutrals) --- */
+.icon-background-color-16 {
+  background-color: rgba(99, 102, 241, 0.2);
+  color: #6366F1;
+}
+
+.icon-background-color-17 {
+  background-color: rgba(139, 92, 246, 0.2);
+  color: #8B5CF6;
+}
+
+.icon-background-color-18 {
+  background-color: rgba(168, 85, 247, 0.2);
+  color: #A855F7;
+}
+
+.icon-background-color-19 {
+  background-color: rgba(100, 116, 139, 0.2);
+  color: #64748B;
+}
+
+.icon-background-color-20 {
+  background-color: rgba(71, 85, 105, 0.2);
+  color: #475569;
+}
+
+.border-color-aneti-blue {
+  border-color: #00548d;
+}
+
+.border-color-primary {
+  border-color: hsl(var(--primary));
+}
+
+.profile-border-left-orange {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: hsl(var(--accent));
+  transition: border 0.08s ease-in-out
+}
+
+.profile-border-left-19 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #64748B;
+  transition: border 0.08s ease-in-out
+}
+
+.profile-background-color-19-opacity-70 {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
+.profile-border-left-20 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #475569;
+  transition: border 0.08s ease-in-out
+}
+
+.profile-border-left-3 {
+  border: 1px solid;
+  border-left: 6px solid;
+  border-radius: 16px;
+  border-color: #3B82F6;
+  transition: border 0.08s ease-in-out
+}
+
+
+.card-button-portal {
+  border: 2px solid;
+
+  border-color: hsl(var(--accent));
+  border-radius: 2rem;
+}
+
+.card-button-portal:hover {
+  border-left: 12px solid hsl(var(--accent));
+}
+
+.input-search::placeholder {
+  color: rgb(255, 255, 255) !important;
+  /* gray */
+  opacity: 0.6;
+  /* important for Firefox */
+}

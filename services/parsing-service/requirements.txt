@@ -1,0 +1,34 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+httpx
+requests
+python-multipart
+prometheus-fastapi-instrumentator
+
+sqlalchemy
+psycopg2-binary
+
+groq
+opencv-python-headless
+numpy
+Pillow
+pdfplumber
+pdf2image
+pytesseract
+python-docx
+
+spacy
+fr_core_news_sm @ https://github.com/explosion/spacy-models/releases/download/fr_core_news_sm-3.8.0/fr_core_news_sm-3.8.0-py3-none-any.whl
+en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl
+azure-storage-blob>=12.22,<13
+azure-identity>=1.19,<2
+
+kafka-python>=2.0,<3
+
+pydantic-settings
+rank-bm25
+
+sentence-transformers
+torch

@@ -1,0 +1,14 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+pydantic
+email-validator
+python-dotenv
+python-multipart
+httpx
+prometheus-fastapi-instrumentator
+kafka-python>=2.0,<3
+azure-storage-blob>=12.22,<13
+azure-identity>=1.19,<2

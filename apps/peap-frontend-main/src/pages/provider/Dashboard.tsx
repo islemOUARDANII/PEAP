@@ -1,0 +1,364 @@
+import { PageHeader } from '@/components/common/PageHeader';
+import { ProviderDashboardSkeleton } from '@/components/common/PageSkeletons';
+import { StatCard } from '@/components/common/StatCard';
+import { ScoreBadge } from '@/components/common/ScoreBadge';
+import { StatusPill, statusToTone } from '@/components/common/StatusPill';
+import { Button } from '@/components/ui/button';
+import { useProviderDashboardQuery } from '@/services/api/queries';
+import {
+  Briefcase,
+  Users,
+  FileText,
+  TrendingUp,
+  Plus,
+  ChevronRight,
+  Eye,
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  Cell,
+  LabelList,
+} from 'recharts';
+import { CustomTooltip, CustomValueLabel } from '@/components/common/ReCharts';
+import { chartsConfig } from '@/app/constants';
+import { useMemo } from 'react';
+import PdfContent from '@/components/common/PdfContent';
+import { mockCandidates } from '@/mocks/mockParsedCv';
+
+export default function ProviderDashboard() {
+  const { data: dashboard, isLoading } = useProviderDashboardQuery();
+  const active = dashboard?.activeOffers ?? [];
+  const top = dashboard?.topOffers ?? [];
+  const recent = dashboard?.recentCandidates ?? [];
+  const matchingActivity = dashboard?.matchingActivity ?? [];
+
+  const chartData = useMemo(() => {
+    return matchingActivity.length > 0 ? matchingActivity : [];
+  }, [matchingActivity]);
+
+  if (isLoading) {
+    return <ProviderDashboardSkeleton />;
+  }
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        title="Tableau de bord Employeur"
+        description="Suivez vos offres, le flux de candidatures et la qualité des correspondances."
+        actions={
+          <Button
+            asChild
+            size="sm"
+            className="bg-accent hover:bg-accent/90 text-accent-foreground"
+          >
+            <Link to="/provider/offers/new">
+              <Plus className="h-4 w-4 mr-1.5" /> New offer
+            </Link>
+          </Button>
+        }
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Link to="/provider/offers" className="block flex-1">
+          <StatCard
+            label="Active offers"
+            value={active.length}
+            icon={FileText}
+            className="start-border-left-blue h-full"
+            iconBackground={'start-background-color-blue'}
+          />
+        </Link>
+        <Link to="/provider/offers/search/offer" className="block">
+          <StatCard
+            label="Matched candidates"
+            value={dashboard?.matchedCandidates ?? 0}
+            icon={Users}
+            className="start-border-left-green h-full"
+            iconBackground={'start-background-color-green'}
+          />
+        </Link>
+        <Link to="/provider/applications" className="block">
+          <StatCard
+            label="New applications"
+            value={dashboard?.newApplications ?? 0}
+            icon={Briefcase}
+            hint="last 7 days"
+            className="start-border-left-orange h-full"
+            iconBackground={'start-background-color-orange'}
+          />
+        </Link>
+        <StatCard
+          label="Qualité moyenne du matching"
+          value={`${dashboard?.averageMatchQuality ?? 0}%`}
+          icon={TrendingUp}
+          className="start-border-left-teal h-full"
+          iconBackground={'start-background-color-teal'}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 ">
+        <div className="lg:col-span-2 panel p-5 card-border-top">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">
+                Performance des offres
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                Candidats correspondants vs candidatures réelles
+              </p>
+            </div>
+          </div>
+          <div className="h-64">
+            {chartData.length === 0 ? (
+              <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-border text-sm text-muted-foreground">
+                Aucune activité de matching disponible pour le moment.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={chartData}
+                  margin={{ left: -16, right: 8, top: 20, bottom: 0 }}
+                >
+                  <CartesianGrid
+                    strokeDasharray="4 4"
+                    stroke="hsl(var(--border))"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="offerId"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <YAxis
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={11}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  {/* <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                /> */}
+                  {/* <Bar
+                  dataKey="matches"
+                  fill="hsl(var(--accent))"
+                  radius={[4, 4, 0, 0]}
+                />
+                <Bar
+                  dataKey="applications"
+                  fill="hsl(var(--primary))"
+                  radius={[4, 4, 0, 0]}
+                /> */}
+
+                  {/* <Bar dataKey="matches" radius={[0, 4, 4, 0]}>
+                  <LabelList dataKey="matches" content={<CustomValueLabel />} />
+                  <Cell
+                    key={`cell-matches`}
+                    fill={chartsConfig.chartProvider.colors[0]}
+                  />
+                </Bar>
+                <Bar dataKey="applications" radius={[0, 4, 4, 0]}>
+                  <LabelList
+                    dataKey="applications"
+                    content={<CustomValueLabel />}
+                  />
+                  <Cell
+                    key={`cell-applications`}
+                    fill={chartsConfig.chartProvider.colors[1]}
+                  />
+                </Bar> */}
+                  {/* <Bar dataKey="matches" radius={[4, 4, 0, 0]}>
+                  <LabelList dataKey="matches" content={<CustomValueLabel />} />
+                  {mockDataChart.map((entry, index) => (
+                    <Cell
+                      key={`cell-matches-${index}`}
+                      fill={chartsConfig.chartProvider.colors[index]}
+                    />
+                  ))}
+                </Bar>
+
+                <Bar dataKey="applications" radius={[4, 4, 0, 0]}>
+                  <LabelList
+                    dataKey="applications"
+                    content={<CustomValueLabel />}
+                  />
+                  {mockDataChart.map((entry, index) => (
+                    <Cell
+                      key={`cell-app-${index}`}
+                      fill={chartsConfig.chartProvider.colors[index + 11]}
+                    />
+                  ))}
+                </Bar> */}
+                  {/* <Tooltip
+                  isAnimationActive={false}
+                  cursor={{ fill: 'transparent' }}
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--popover))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: 8,
+                    fontSize: 12,
+                  }}
+                /> */}
+                  <Tooltip
+                    content={<CustomTooltip />}
+                    wrapperStyle={{ pointerEvents: 'none' }}
+                    isAnimationActive={false}
+                  />
+                  <Bar
+                    dataKey="matches"
+                    fill="hsl(var(--primary))"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  >
+                    <LabelList
+                      dataKey="matches"
+                      content={<CustomValueLabel color="hsl(var(--primary))" />}
+                    />
+                  </Bar>
+
+                  <Bar
+                    dataKey="applications"
+                    fill="hsl(var(--accent))"
+                    radius={[4, 4, 0, 0]}
+                    barSize={30}
+                  >
+                    <LabelList
+                      dataKey="applications"
+                      content={<CustomValueLabel color="hsl(var(--accent))" />}
+                    />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="panel p-5 card-border-top">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-foreground">
+              Meilleures offres par visibilité
+            </h2>
+            <Link
+              to="/provider/offers"
+              className="text-xs text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-primary"
+            >
+              Tous <ChevronRight className="h-3 w-3" />
+            </Link>
+          </div>
+          <ul className="space-y-3">
+            {top.map((j) => (
+              <li
+                key={j.id}
+                className="flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0">
+                  <Link
+                    to={`/provider/offers/${j.id}`}
+                    className="text-sm font-medium text-foreground truncate hover:text-accent hover:underline block"
+                  >
+                    {j.title}
+                  </Link>
+                  <p className="text-xs text-muted-foreground font-mono">
+                    {j.anetiIdentifier} · {j.matched} matches
+                  </p>
+                </div>
+                <StatusPill label={j.status} tone={statusToTone(j.status)} />
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+
+      <div className="panel p-5 card-border-20">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">
+              Liste de candidats identifiés
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Sur l’ensemble de vos offres actives
+            </p>
+          </div>
+          <Link
+            to="/provider/candidates"
+            className="text-xs text-center text-accent inline-flex items-center gap-1 rounded-md border border-border px-4 py-1 light-link-border-left-20"
+          >
+            Voir tout <ChevronRight className="h-3 w-3" />
+          </Link>
+        </div>
+        <div className="overflow-x-auto -mx-5">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted-foreground border-b border-border">
+                <th className="text-left font-medium px-5 py-2.5">Candidat</th>
+                <th className="text-left font-medium px-2 py-2.5">Poste</th>
+                <th className="text-left font-medium px-2 py-2.5">
+                  Localisation
+                </th>
+                <th className="text-left font-medium px-2 py-2.5">Statut</th>
+                <th className="text-left font-medium px-2 py-2.5">Score</th>
+                <th className="text-right font-medium px-5 py-2.5"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {mockCandidates.map((c) => (
+                <tr key={c.id} className="hover:bg-surface-muted">
+                  <td className="px-5 py-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-semibold">
+                        {c.initials}
+                      </span>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">
+                          {c.name}
+                        </p>
+                        <p className="text-[10px] font-mono text-muted-foreground">
+                          {c.id}
+                        </p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-2 py-3 text-xs text-foreground">
+                    {c.occupation}
+                  </td>
+                  <td className="px-2 py-3 text-xs text-muted-foreground">
+                    {c.location}
+                  </td>
+                  <td className="px-2 py-3">
+                    <StatusPill
+                      label={c.status}
+                      tone={statusToTone(c.status)}
+                    />
+                  </td>
+                  <td className="px-2 py-3">
+                    <ScoreBadge score={c.score} size="sm" />
+                  </td>
+                  <td className="px-5 py-3 text-right">
+                    <Button asChild variant="ghost" size="sm">
+                      <Link to={`/provider/candidates/${c.id}`}>
+                        <Eye className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

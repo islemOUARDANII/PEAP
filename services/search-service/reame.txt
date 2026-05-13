@@ -1,0 +1,79 @@
+lux complet — Recherche d'offres
+1. L'utilisateur tape une requête
+
+"ingénieur apprentissage automatique"
+2. FastAPI reçoit la requête — offers.py:64
+
+POST /search/offers
+Body: { "query": "ingénieur apprentissage automatique", "size": 6 }
+Header: X-Api-Key: changeme
+3. Génération de l'embedding — embeddings.py
+Le texte de la requête est transformé en vecteur de 384 dimensions par le modèle paraphrase-multilingual-MiniLM-L12-v2 :
+
+
+"ingénieur apprentissage automatique"
+         ↓ SentenceTransformer
+[0.023, -0.187, 0.441, ..., 0.092]  ← 384 nombres
+Ce vecteur représente le sens de la phrase dans un espace mathématique. Des phrases similaires ont des vecteurs proches.
+
+4. Construction de la requête ES — queries/offers.py
+
+{
+  "size": 6,
+  "knn": {
+    "field": "embedding",
+    "query_vector": [0.023, -0.187, 0.441, ...],
+    "k": 6,
+    "num_candidates": 30,
+    "filter": { "exists": { "field": "skills" } }
+  }
+}
+filter: exists skills → exclut les offres sans skills (Procurement Manager, Business Development).
+
+5. Elasticsearch fait la recherche kNN
+Pour chaque offre dans l'index, ES calcule la similarité cosinus entre le vecteur de la requête et l'embedding de l'offre :
+
+
+cos(query_vec, offer_vec) = dot(A,B) / (|A| × |B|)
+
+query:          [0.023, -0.187, 0.441, ...]
+ML Engineer:    [0.031, -0.201, 0.438, ...]  → cos = 0.791  ✓ très proche
+Cloud Architect:[0.102,  0.334, 0.021, ...]  → cos = 0.612  ~ moyen
+DevOps:         [0.198,  0.287, 0.103, ...]  → cos = 0.543  ~ loin
+Les offres sont triées par score décroissant.
+
+6. Comment les embeddings des offres ont été générés — indexer.py
+Au moment de la sync PG → ES, chaque offre a été transformée en texte puis embedded :
+
+
+build_offer_text(title, description, skills)
+# → "Machine Learning Engineer\nDeploiement modeles ML...\nPython scikit-learn NumPy"
+
+embed_batch([texte1, texte2, ...])
+# → [[0.031, -0.201, 0.438, ...], ...]  stocké dans ES
+7. ES retourne les hits — FastAPI formate la réponse
+
+results = [
+    OfferHit(
+        offer_id = h["_source"]["offer_id"],
+        title    = h["_source"]["title"],
+        score    = h["_score"],   # ← la similarité cosinus
+        ...
+    )
+]
+Vue d'ensemble
+
+User query
+    │
+    ▼
+embed_text()          ← paraphrase-multilingual-MiniLM-L12-v2
+    │
+    ▼ vecteur 384-dim
+Elasticsearch kNN     ← compare avec embeddings stockés
+    │                    filtre: skills non vide
+    ▼ top-k résultats
+FastAPI format        ← retourne title, skills, score...
+    │
+    ▼
+Streamlit affiche
+PostgreSQL n'intervient pas pendant la recherche — uniquement quand tu cliques "View details" pour charger l'offre complète.
