@@ -14,6 +14,7 @@ from .schemas import (
     JobOfferDraftParseRequest,
     JobOfferDraftParseResponse,
     JobOfferDraftRequirementResponse,
+    JobOfferLanguageRequirementResponse,
     JobOfferListItemResponse,
     JobOfferRequirementResponse,
     JobOfferResponse,
@@ -42,14 +43,9 @@ def _raise_not_found(entity_name: str) -> None:
 
 def _derive_offer_title(raw_text: str) -> str:
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
-    if lines:
-        candidate = lines[0]
-    else:
-        candidate = raw_text.strip()
-
+    candidate = lines[0] if lines else raw_text.strip()
     sentence = candidate.split(".")[0].strip()
-    title = sentence or candidate or "Draft offer"
-    return title[:160]
+    return (sentence or candidate or "Draft offer")[:160]
 
 
 def _handle_integrity_error(exc: IntegrityError) -> None:
@@ -70,12 +66,37 @@ def _build_offer_response(
     action_reason: str | None = None,
 ) -> dict:
     requirements = repository.list_offer_requirements(db, offer["id"])
+    lang_reqs = repository.list_offer_language_requirements(db, offer["id"])
     return JobOfferResponse(
         **offer,
         requirements=[JobOfferRequirementResponse(**row) for row in requirements],
+        language_requirements=[JobOfferLanguageRequirementResponse(**row) for row in lang_reqs],
         warning=warning,
         action_reason=action_reason,
     ).model_dump(mode="json")
+
+
+def _write_requirements(db: Session, offer_id: str, requirements: list[dict]) -> None:
+    for req in requirements:
+        # Skip completely empty requirements
+        if not any([req.get("node_id"), req.get("raw_value"), req.get("ref_value_id")]):
+            continue
+        repository.create_offer_requirement(db, offer_id, req)
+
+
+def _write_language_requirements(db: Session, offer_id: str, lang_reqs: list[dict]) -> None:
+    for req in lang_reqs:
+        if not req.get("language_code"):
+            continue
+        repository.create_offer_language_requirement(db, offer_id, req)
+
+
+def _extract_offer_data(payload_dict: dict) -> tuple[dict, list[dict], list[dict]]:
+    """Split payload into offer data, requirements, and language requirements."""
+    data = _normalize_payload(payload_dict)
+    requirements = data.pop("requirements", [])
+    language_requirements = data.pop("language_requirements", [])
+    return data, requirements, language_requirements
 
 
 def parse_offer_draft(
@@ -97,35 +118,38 @@ def parse_offer_draft(
         }
     )
 
-    parsed_offer = (parsed.get("parsed_payload") or {}).get("offer") or {}
-    requirements = [
-        JobOfferDraftRequirementResponse(
-            criterion_type=row.get("criterion_type"),
-            node_id=row.get("node_id"),
-            raw_value=row.get("raw_value"),
-            min_level=row.get("min_level"),
-            min_years=row.get("min_years"),
-            is_must=bool(row.get("is_must")),
-            weight=row.get("weight"),
-        )
-        for row in (parsed.get("extracted_requirements") or [])
-    ]
+    return _build_parse_response(parsed, raw_text, title)
 
-    response = JobOfferDraftParseResponse(
-        parsing_status=parsed.get("parsing_status", "FAILED"),
-        title=parsed_offer.get("title") or title,
-        description=raw_text,
-        company_name=parsed_offer.get("company_name"),
-        location=parsed_offer.get("location"),
-        employment_type=parsed_offer.get("employment_type"),
-        seniority_level=parsed_offer.get("seniority_level"),
-        industry_code=parsed_offer.get("industry_code"),
-        requirements=requirements,
-        warnings=parsed.get("warnings") or [],
-        parser_version=parsed.get("parser_version") or "unknown",
-    )
 
-    return response.model_dump(mode="json")
+def _build_parse_response(parsed: dict, raw_text: str, title: str) -> dict:
+    parsed_payload = parsed.get("parsed_payload", {})
+    mapped_payload = parsed.get("mapped_payload", {})
+    extracted_requirements = parsed.get("extracted_requirements", [])
+
+    draft = {
+        "title": parsed_payload.get("title") or title,
+        "description": raw_text,
+        "number_of_positions": parsed_payload.get("number_of_positions") or 1,
+        "contract_type": parsed_payload.get("contract_type"),
+        "work_mode": parsed_payload.get("work_mode"),
+        "salary_min": parsed_payload.get("salary_min"),
+        "salary_max": parsed_payload.get("salary_max"),
+        "salary_currency_code": "TND",
+        "country": "TN",
+        "governorate_code": mapped_payload.get("governorate_code"),
+        "delegation_code": mapped_payload.get("delegation_code"),
+        "requirements": extracted_requirements,
+    }
+
+    return {
+        "parsing_status": parsed.get("parsing_status", "PARSED"),
+        "parsed_payload": parsed_payload,
+        "mapped_payload": mapped_payload,
+        "extracted_requirements": extracted_requirements,
+        "warnings": parsed.get("warnings", []),
+        "parser_version": parsed.get("parser_version"),
+        "draft": draft,
+    }
 
 
 def list_my_offers(db: Session, current_user: CurrentUserResponse) -> list[dict]:
@@ -148,16 +172,14 @@ def create_my_offer(
     payload: JobOfferCreateRequest,
 ) -> dict:
     employer = resolve_current_employer(db, current_user)
-    data = _normalize_payload(payload.model_dump(mode="json"))
-    requirements = data.pop("requirements", [])
+    data, requirements, language_requirements = _extract_offer_data(payload.model_dump(mode="json"))
     data["employer_id"] = employer["id"]
-    data["status"] = "DRAFT"
     data["created_by_user_id"] = current_user.id
 
     try:
         created = repository.create_offer(db, data)
-        for requirement in requirements:
-            repository.create_offer_requirement(db, created["id"], requirement)
+        _write_requirements(db, created["id"], requirements)
+        _write_language_requirements(db, created["id"], language_requirements)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -178,8 +200,7 @@ def update_my_offer(
     if not existing or existing["employer_id"] != employer["id"]:
         _raise_not_found("Offer")
 
-    data = _normalize_payload(payload.model_dump(mode="json"))
-    requirements = data.pop("requirements", [])
+    data, requirements, language_requirements = _extract_offer_data(payload.model_dump(mode="json"))
 
     try:
         updated = repository.update_offer(db, offer_id, data)
@@ -187,8 +208,9 @@ def update_my_offer(
             db.rollback()
             _raise_not_found("Offer")
         repository.delete_offer_requirements(db, offer_id)
-        for requirement in requirements:
-            repository.create_offer_requirement(db, offer_id, requirement)
+        repository.delete_offer_language_requirements(db, offer_id)
+        _write_requirements(db, offer_id, requirements)
+        _write_language_requirements(db, offer_id, language_requirements)
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -214,7 +236,7 @@ def archive_my_offer(db: Session, current_user: CurrentUserResponse, offer_id: s
     except IntegrityError:
         db.rollback()
         warning = "ARCHIVED is not accepted by the current DB constraint, so the offer stayed in DRAFT."
-        updated = repository.set_offer_status(db, offer_id, status_value="DRAFT")
+        repository.set_offer_status(db, offer_id, status_value="DRAFT")
         db.commit()
 
     offer = repository.get_offer_by_id(db, offer_id)
@@ -324,7 +346,7 @@ def reject_offer(
     return _build_offer_response(
         db,
         offer,
-        warning=warning or "Offer rejection reason is returned in the API response but is not persisted because no dedicated column exists.",
+        warning=warning or "Offer rejection reason is returned in the API response but is not persisted.",
         action_reason=payload.reason,
     )
 

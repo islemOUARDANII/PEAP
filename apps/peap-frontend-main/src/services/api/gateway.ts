@@ -1,4 +1,27 @@
 import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
+import type { GeoCountry, GeoAdminUnit } from "@/models/geo";
+import type {
+  RefGroup,
+  RefGroupCreatePayload,
+  RefGroupListResponse,
+  RefGroupUpdatePayload,
+  RefValue,
+  RefValueCreatePayload,
+  RefValueListResponse,
+  RefValueUpdatePayload,
+} from "@/models/references";
+import type {
+  CrosswalkRejectPayload,
+  CrosswalkValidatePayload,
+  TaxonomyAlias,
+  TaxonomyCrosswalkListResponse,
+  TaxonomyCrosswalkReviewItem,
+  TaxonomyModel,
+  TaxonomyNode,
+  TaxonomyNodeListResponse,
+  TaxonomyRelation,
+  TaxonomySummary,
+} from "@/models/taxonomy";
 
 const toStringValue = (value: unknown, fallback = ""): string =>
   typeof value === "string" ? value : value == null ? fallback : String(value);
@@ -363,6 +386,59 @@ export interface CandidateProfileBundle {
   cvRecords: CandidateCvRecord[];
 }
 
+// ─── Aggregate profile types ──────────────────────────────────────────────────
+
+/** Raw API shape returned by GET/PATCH /candidates/me/profile (snake_case). */
+export interface CandidateAggregateProfile {
+  profile_version: number;
+  candidate: {
+    id: string;
+    user_id: string | null;
+    aneti_identifier: string | null;
+    status: string;
+    registration_date: string | null;
+    primary_language: string | null;
+  };
+  identity: CandidateIdentityResponse | null;
+  contact: CandidateContactResponse | null;
+  preference: Record<string, unknown> | null;
+  education: CandidateEducationResponse[];
+  experience: CandidateExperienceResponse[];
+  skills: CandidateSkillResponse[];
+  languages: CandidateLanguageResponse[];
+  cv: CandidateCvResponse | null;
+  keywords: string[];
+  offer_threshold: number;
+}
+
+export type CandidateProfilePatchPayload = {
+  profile_version?: number;
+  candidate?: { primary_language?: string | null };
+  identity?: Record<string, unknown>;
+  contact?: Record<string, unknown>;
+  preference?: Record<string, unknown>;
+  education?: {
+    upsert?: Array<Record<string, unknown> & { id?: string }>;
+    delete_ids?: string[];
+  };
+  experience?: {
+    upsert?: Array<Record<string, unknown> & { id?: string }>;
+    delete_ids?: string[];
+  };
+  skills?: {
+    upsert?: Array<Record<string, unknown> & { id?: string }>;
+    delete_ids?: string[];
+  };
+  languages?: {
+    upsert?: Array<Record<string, unknown> & { id?: string }>;
+    delete_ids?: string[];
+  };
+  keywords?: string[];
+  offer_threshold?: number;
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 interface CandidateActiveOffersCountResponse {
   active_offers_count: number;
 }
@@ -568,11 +644,26 @@ interface EmployerOfferResponse {
   work_mode?: string | null;
   salary_min?: number | string | null;
   salary_max?: number | string | null;
+  salary_currency_code?: string | null;
   country: string;
   governorate_code?: string | null;
   governorate_label?: string | null;
   delegation_code?: string | null;
   delegation_label?: string | null;
+  // Canonical geo ids
+  country_id?: string | null;
+  governorate_unit_id?: string | null;
+  delegation_unit_id?: string | null;
+  // Occupation
+  occupation_node_id?: string | null;
+  occupation_node_label?: string | null;
+  // Experience & education
+  min_experience_months?: number | null;
+  diploma_ref_id?: string | null;
+  specialty_ref_id?: string | null;
+  // Accessibility
+  is_accessible_to_disabled?: boolean | null;
+  accessibility_notes?: string | null;
   published_at?: string | null;
   deadline_at?: string | null;
   created_by_user_id?: string | null;
@@ -580,8 +671,21 @@ interface EmployerOfferResponse {
   created_at: string;
   updated_at: string;
   requirements?: EmployerOfferRequirementResponse[];
+  language_requirements?: Array<{
+    id: string;
+    language_code?: string | null;
+    level_code?: string | null;
+    is_mandatory: boolean;
+  }>;
   warning?: string | null;
   action_reason?: string | null;
+}
+
+export interface EmployerOfferLanguageRequirement {
+  id: string;
+  languageCode?: string | null;
+  levelCode?: string | null;
+  isMandatory: boolean;
 }
 
 export interface EmployerOffer {
@@ -598,11 +702,22 @@ export interface EmployerOffer {
   workMode?: string | null;
   salaryMin?: number | null;
   salaryMax?: number | null;
+  salaryCurrencyCode: string;
   country: string;
   governorateCode?: string | null;
   governorateLabel?: string | null;
   delegationCode?: string | null;
   delegationLabel?: string | null;
+  countryId?: string | null;
+  governorateUnitId?: string | null;
+  delegationUnitId?: string | null;
+  occupationNodeId?: string | null;
+  occupationNodeLabel?: string | null;
+  minExperienceMonths?: number | null;
+  diplomaRefId?: string | null;
+  specialtyRefId?: string | null;
+  isAccessibleToDisabled: boolean;
+  accessibilityNotes?: string | null;
   locationLabel: string;
   publishedAt?: string | null;
   deadlineAt?: string | null;
@@ -611,6 +726,7 @@ export interface EmployerOffer {
   createdAt: string;
   updatedAt: string;
   requirements: EmployerOfferRequirement[];
+  languageRequirements: EmployerOfferLanguageRequirement[];
   warning?: string | null;
   actionReason?: string | null;
 }
@@ -1385,11 +1501,22 @@ const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
   workMode: item.work_mode ?? null,
   salaryMin: item.salary_min == null ? null : toNumberValue(item.salary_min),
   salaryMax: item.salary_max == null ? null : toNumberValue(item.salary_max),
+  salaryCurrencyCode: item.salary_currency_code ?? "TND",
   country: item.country,
   governorateCode: item.governorate_code ?? null,
   governorateLabel: item.governorate_label ?? null,
   delegationCode: item.delegation_code ?? null,
   delegationLabel: item.delegation_label ?? null,
+  countryId: item.country_id ?? null,
+  governorateUnitId: item.governorate_unit_id ?? null,
+  delegationUnitId: item.delegation_unit_id ?? null,
+  occupationNodeId: item.occupation_node_id ?? null,
+  occupationNodeLabel: item.occupation_node_label ?? null,
+  minExperienceMonths: item.min_experience_months ?? null,
+  diplomaRefId: item.diploma_ref_id ?? null,
+  specialtyRefId: item.specialty_ref_id ?? null,
+  isAccessibleToDisabled: item.is_accessible_to_disabled ?? false,
+  accessibilityNotes: item.accessibility_notes ?? null,
   locationLabel: joinLocation(item.delegation_label, item.governorate_label, item.country),
   publishedAt: item.published_at ?? null,
   deadlineAt: item.deadline_at ?? null,
@@ -1398,6 +1525,12 @@ const mapEmployerOffer = (item: EmployerOfferResponse): EmployerOffer => ({
   createdAt: item.created_at,
   updatedAt: item.updated_at,
   requirements: asArray(item.requirements).map(mapEmployerOfferRequirement),
+  languageRequirements: asArray(item.language_requirements).map((r) => ({
+    id: toStringValue(r.id),
+    languageCode: toNullableString(r.language_code),
+    levelCode: toNullableString(r.level_code),
+    isMandatory: toBooleanValue(r.is_mandatory),
+  })),
   warning: item.warning ?? null,
   actionReason: item.action_reason ?? null,
 });
@@ -1817,38 +1950,238 @@ export const gatewayApi = {
     segmentations: () => gatewayApi.referentials.list("/referentials/segmentations"),
   },
   taxonomy: {
-    async listNodes(params: {
-      type?: string;
+    listModels(): Promise<TaxonomyModel[]> {
+      return apiRequest<TaxonomyModel[]>("/taxonomy/models", { method: "GET" });
+    },
+
+    getSummary(): Promise<TaxonomySummary> {
+      return apiRequest<TaxonomySummary>("/taxonomy/summary", { method: "GET" });
+    },
+
+    listNodes(params: {
+      model_code?: string;
+      model_version?: string;
+      node_type?: string;
+      parent_id?: string;
       q?: string;
       active?: boolean;
-      source?: string;
       limit?: number;
       offset?: number;
-    } = {}): Promise<TaxonomyNodeRecord[]> {
-      const payload = await apiRequest<TaxonomyNodeResponse[]>(
+    } = {}): Promise<TaxonomyNodeListResponse> {
+      return apiRequest<TaxonomyNodeListResponse>(
         "/taxonomy/nodes",
         { method: "GET" },
         {
           query: {
-            type: params.type,
+            model_code: params.model_code,
+            model_version: params.model_version,
+            node_type: params.node_type,
+            parent_id: params.parent_id,
             q: params.q,
             active: params.active,
-            source: params.source,
             limit: params.limit ?? 20,
             offset: params.offset ?? 0,
           },
         },
       );
-      return payload.map(mapTaxonomyNode);
     },
-    async getNode(nodeId: string): Promise<TaxonomyNodeRecord> {
-      const payload = await apiRequest<TaxonomyNodeResponse>(
+
+    getNode(nodeId: string): Promise<TaxonomyNode> {
+      return apiRequest<TaxonomyNode>(
         `/taxonomy/nodes/${encodeURIComponent(nodeId)}`,
         { method: "GET" },
       );
-      return mapTaxonomyNode(payload);
+    },
+
+    getChildren(nodeId: string, params: { limit?: number; offset?: number } = {}): Promise<TaxonomyNode[]> {
+      return apiRequest<TaxonomyNode[]>(
+        `/taxonomy/nodes/${encodeURIComponent(nodeId)}/children`,
+        { method: "GET" },
+        { query: { limit: params.limit, offset: params.offset } },
+      );
+    },
+
+    getAliases(nodeId: string): Promise<TaxonomyAlias[]> {
+      return apiRequest<TaxonomyAlias[]>(
+        `/taxonomy/nodes/${encodeURIComponent(nodeId)}/aliases`,
+        { method: "GET" },
+      );
+    },
+
+    getRelations(nodeId: string): Promise<TaxonomyRelation[]> {
+      return apiRequest<TaxonomyRelation[]>(
+        `/taxonomy/nodes/${encodeURIComponent(nodeId)}/relations`,
+        { method: "GET" },
+      );
+    },
+
+    listCrosswalkReview(params: {
+      validated?: boolean;
+      active?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {}): Promise<TaxonomyCrosswalkListResponse> {
+      return apiRequest<TaxonomyCrosswalkListResponse>(
+        "/taxonomy/crosswalks/review",
+        { method: "GET" },
+        {
+          query: {
+            validated: params.validated,
+            active: params.active,
+            limit: params.limit ?? 20,
+            offset: params.offset ?? 0,
+          },
+        },
+      );
+    },
+
+    validateCrosswalk(id: string, payload: CrosswalkValidatePayload): Promise<TaxonomyCrosswalkReviewItem> {
+      return apiJsonRequest<TaxonomyCrosswalkReviewItem>(
+        `/taxonomy/crosswalks/${encodeURIComponent(id)}/validate`,
+        "PATCH",
+        payload,
+      );
+    },
+
+    rejectCrosswalk(id: string, payload: CrosswalkRejectPayload): Promise<TaxonomyCrosswalkReviewItem> {
+      return apiJsonRequest<TaxonomyCrosswalkReviewItem>(
+        `/taxonomy/crosswalks/${encodeURIComponent(id)}/reject`,
+        "PATCH",
+        payload,
+      );
     },
   },
+
+  geo: {
+    listCountries(activeOnly = true): Promise<GeoCountry[]> {
+      return apiRequest<GeoCountry[]>(
+        "/geo/countries",
+        { method: "GET" },
+        { query: { active_only: activeOnly } },
+      );
+    },
+
+    listAdminUnits(params: {
+      country_id?: string;
+      country_iso2?: string;
+      admin_level?: number;
+      parent_id?: string;
+      q?: string;
+      active_only?: boolean;
+      limit?: number;
+    } = {}): Promise<GeoAdminUnit[]> {
+      return apiRequest<GeoAdminUnit[]>(
+        "/geo/admin-units",
+        { method: "GET" },
+        {
+          query: {
+            country_id:   params.country_id,
+            country_iso2: params.country_iso2,
+            admin_level:  params.admin_level,
+            parent_id:    params.parent_id,
+            q:            params.q,
+            active_only:  params.active_only ?? true,
+            limit:        params.limit ?? 500,
+          },
+        },
+      );
+    },
+  },
+
+  references: {
+    // ── groups ──────────────────────────────────────────────────────────────
+    listGroups(params: {
+      q?: string;
+      active?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {}): Promise<RefGroupListResponse> {
+      return apiRequest<RefGroupListResponse>(
+        "/references/admin/groups",
+        { method: "GET" },
+        {
+          query: {
+            q: params.q,
+            active: params.active,
+            limit: params.limit ?? 100,
+            offset: params.offset ?? 0,
+          },
+        },
+      );
+    },
+
+    createGroup(payload: RefGroupCreatePayload): Promise<RefGroup> {
+      return apiJsonRequest<RefGroup>("/references/admin/groups", "POST", payload);
+    },
+
+    updateGroup(groupId: string, payload: RefGroupUpdatePayload): Promise<RefGroup> {
+      return apiJsonRequest<RefGroup>(
+        `/references/admin/groups/${encodeURIComponent(groupId)}`,
+        "PATCH",
+        payload,
+      );
+    },
+
+    deleteGroup(groupId: string): Promise<RefGroup> {
+      return apiRequest<RefGroup>(
+        `/references/admin/groups/${encodeURIComponent(groupId)}`,
+        { method: "DELETE" },
+      );
+    },
+
+    // ── values ───────────────────────────────────────────────────────────────
+    listValues(params: {
+      group_id?: string;
+      group_code?: string;
+      q?: string;
+      active?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {}): Promise<RefValueListResponse> {
+      return apiRequest<RefValueListResponse>(
+        "/references/admin/values",
+        { method: "GET" },
+        {
+          query: {
+            group_id: params.group_id,
+            group_code: params.group_code,
+            q: params.q,
+            active: params.active,
+            limit: params.limit ?? 200,
+            offset: params.offset ?? 0,
+          },
+        },
+      );
+    },
+
+    createValue(payload: RefValueCreatePayload): Promise<RefValue> {
+      return apiJsonRequest<RefValue>("/references/admin/values", "POST", payload);
+    },
+
+    updateValue(valueId: string, payload: RefValueUpdatePayload): Promise<RefValue> {
+      return apiJsonRequest<RefValue>(
+        `/references/admin/values/${encodeURIComponent(valueId)}`,
+        "PATCH",
+        payload,
+      );
+    },
+
+    deleteValue(valueId: string): Promise<RefValue> {
+      return apiRequest<RefValue>(
+        `/references/admin/values/${encodeURIComponent(valueId)}`,
+        { method: "DELETE" },
+      );
+    },
+
+    /** Public dropdown — uses GET /references/{group_code} */
+    listDropdownValues(groupCode: string): Promise<Array<{ id: string; code: string; label: string; label_fr: string | null; label_en: string | null; label_ar: string | null; sort_order: number }>> {
+      return apiRequest(
+        `/references/${encodeURIComponent(groupCode)}`,
+        { method: "GET" },
+      );
+    },
+  },
+
   candidate: {
     async hasProfile(): Promise<boolean> {
       await apiRequest<CandidateProfileResponse>("/candidates/me", {
@@ -2119,6 +2452,7 @@ export const gatewayApi = {
       minThreshold: number,
     ): Promise<CandidateOfferThresholdRecord | null> {
       const payloadVariants: unknown[] = [
+        { min_offer_score_threshold: minThreshold },
         { min_threshold: minThreshold },
         { threshold: minThreshold },
         minThreshold,
@@ -2188,6 +2522,23 @@ export const gatewayApi = {
         "POST",
         payload,
       ),
+
+    async getAggregateProfile(): Promise<CandidateAggregateProfile> {
+      return apiRequest<CandidateAggregateProfile>(
+        "/candidates/me/profile",
+        { method: "GET" },
+      );
+    },
+
+    async patchAggregateProfile(
+      changeset: CandidateProfilePatchPayload,
+    ): Promise<CandidateAggregateProfile> {
+      return apiJsonRequest<CandidateAggregateProfile>(
+        "/candidates/me/profile",
+        "PATCH",
+        changeset,
+      );
+    },
 
     async parseCv(cvRecordId: string): Promise<CandidateCvParseResult> {
       const payload = await apiRequest<CandidateCvParseResponse>(
@@ -3009,3 +3360,51 @@ export const inferLanguageLabel = (language: CandidateLanguageRecord): string =>
 
 export const humanizeContractType = (value: string | null | undefined): string =>
   titleCase(value) || "Not specified";
+
+/**
+ * Convert a CandidateAggregateProfile (from GET/PATCH /candidates/me/profile)
+ * into the CandidateProfileBundle shape used throughout the frontend.
+ *
+ * @param agg      The aggregate response from the backend.
+ * @param cvRecords Existing CV records to preserve (the aggregate doesn't include all past CVs).
+ */
+export function mapAggregateToBundle(
+  agg: CandidateAggregateProfile,
+  cvRecords: CandidateCvRecord[] = [],
+): CandidateProfileBundle {
+  const pref = agg.preference;
+  const mappedPreference: CandidatePreferenceRecord | null = pref
+    ? {
+        id: toStringValue(pref["id"]),
+        preferredContractType: toNullableString(pref["preferred_contract_type"]),
+        preferredGovernorate:  toNullableString(pref["preferred_governorate"]),
+        preferredGovernorateLabel: toNullableString(pref["preferred_governorate_label"]),
+        mobilityRadiusKm: pref["mobility_radius_km"] != null
+          ? toNumberValue(pref["mobility_radius_km"])
+          : null,
+        acceptsRelocation: toBooleanValue(pref["accepts_relocation"]),
+        desiredSalaryMin: pref["desired_salary_min"] != null
+          ? toNumberValue(pref["desired_salary_min"])
+          : null,
+        desiredSalaryMax: pref["desired_salary_max"] != null
+          ? toNumberValue(pref["desired_salary_max"])
+          : null,
+      }
+    : null;
+
+  return {
+    id:               agg.candidate.id,
+    status:           agg.candidate.status,
+    registrationDate: agg.candidate.registration_date,
+    primaryLanguage:  agg.candidate.primary_language,
+    identity:         agg.identity ?? null,
+    contact:          agg.contact  ?? null,
+    education:        agg.education.map(mapCandidateEducation),
+    experience:       agg.experience.map(mapCandidateExperience),
+    skills:           agg.skills.map(mapCandidateSkill),
+    languages:        agg.languages.map(mapCandidateLanguage),
+    preference:       mappedPreference,
+    currentCv:        agg.cv ? mapCvRecord(agg.cv) : null,
+    cvRecords,
+  };
+}

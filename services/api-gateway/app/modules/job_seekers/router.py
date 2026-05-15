@@ -8,7 +8,9 @@ from app.modules.auth.dependencies import require_roles
 from app.modules.auth.schemas import CurrentUserResponse
 
 from .schemas import (
+    CandidateAggregateProfileResponse,
     CandidateListItemResponse,
+    CandidateProfilePatchRequest,
     CandidateStatusUpdateRequest,
     CandidateStatusUpdateResponse,
     CandidateActiveOffersCountResponse,
@@ -47,6 +49,7 @@ from .service import (
     delete_experience,
     delete_language,
     delete_skill,
+    get_aggregate_profile,
     get_my_profile,
     get_preference,
     get_active_offers_count,
@@ -55,6 +58,7 @@ from .service import (
     list_experience,
     list_languages,
     list_skills,
+    patch_aggregate_profile,
     update_my_profile,
     update_education,
     update_experience,
@@ -72,6 +76,23 @@ from .service import (
 )
 
 router = APIRouter(tags=["Candidates"])
+
+
+@router.get("/candidates/me/profile", response_model=CandidateAggregateProfileResponse)
+def get_my_aggregate_profile_endpoint(
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return get_aggregate_profile(db, current_user)
+
+
+@router.patch("/candidates/me/profile", response_model=CandidateAggregateProfileResponse)
+def patch_my_aggregate_profile_endpoint(
+    payload: CandidateProfilePatchRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    return patch_aggregate_profile(db, current_user, payload)
 
 
 @router.get("/candidates/me", response_model=JobSeekerProfileResponse)

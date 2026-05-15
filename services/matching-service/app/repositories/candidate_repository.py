@@ -14,24 +14,57 @@ def load_candidate_payload(db: Session, candidate_id: UUID) -> dict[str, Any]:
                 js.id,
                 js.status,
                 js.aneti_identifier,
+
                 ji.first_name,
                 ji.last_name,
                 ji.birth_date,
-                ji.gender_code,
-                jc.governorate_code,
-                jc.delegation_code,
+
+                gender_ref.code AS gender_code,
+
+                gov.code AS governorate_code,
+                del.code AS delegation_code,
                 jc.country,
-                jp.preferred_contract_type,
-                jp.preferred_governorate,
+
+                contract_ref.code AS preferred_contract_type,
+                pref_gov.code AS preferred_governorate,
+
                 jp.mobility_radius_km,
                 jp.accepts_relocation
+
             FROM aneti.job_seeker js
+
             LEFT JOIN aneti.job_seeker_identity ji
                 ON ji.job_seeker_id = js.id
+
+            LEFT JOIN reference.ref_value gender_ref
+                ON gender_ref.id = ji.gender_ref_id
+
+            LEFT JOIN reference.ref_group gender_group
+                ON gender_group.id = gender_ref.group_id
+            AND gender_group.code = 'GENDER'
+
             LEFT JOIN aneti.job_seeker_contact jc
                 ON jc.job_seeker_id = js.id
+
+            LEFT JOIN geo.admin_unit gov
+                ON gov.id = jc.governorate_unit_id
+
+            LEFT JOIN geo.admin_unit del
+                ON del.id = jc.delegation_unit_id
+
             LEFT JOIN aneti.job_seeker_preference jp
                 ON jp.job_seeker_id = js.id
+
+            LEFT JOIN reference.ref_value contract_ref
+                ON contract_ref.id = jp.preferred_contract_type_ref_id
+
+            LEFT JOIN reference.ref_group contract_group
+                ON contract_group.id = contract_ref.group_id
+            AND contract_group.code = 'CONTRACT_TYPE'
+
+            LEFT JOIN geo.admin_unit pref_gov
+                ON pref_gov.id = jp.preferred_governorate_unit_id
+
             WHERE js.id = CAST(:candidate_id AS uuid)
         """),
         {"candidate_id": str(candidate_id)},

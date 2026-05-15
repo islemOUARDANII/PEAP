@@ -5,7 +5,8 @@ import type {
   AuditLogsQueryParams,
   PipelineItemsQueryParams,
   ProviderRegistrationRequestsQueryParams,
-  TaxonomyQueryParams,
+  TaxonomyNodesQueryParams,
+  TaxonomyCrosswalkReviewQueryParams,
   UnresolvedCodesQueryParams,
   UsersQueryParams,
 } from "./queryKeys";
@@ -16,15 +17,17 @@ import {
   inferCandidateLocation,
   inferLanguageLabel,
   inferSkillLabel,
+  mapAggregateToBundle,
+  type CandidateAggregateProfile,
   type CandidateCvRecord,
   type CandidateLanguageRecord,
   type CandidateProfileBundle,
+  type CandidateProfilePatchPayload,
   type CandidateSkillRecord,
   type EmployerOffer,
   type MatchingResultRecord,
   type SearchCandidateResult,
   type SearchOfferResult,
-  type TaxonomyNodeRecord,
 } from "./gateway";
 import type {
   AdminCreateProviderPayload,
@@ -50,11 +53,13 @@ import type {
   RoleOption,
   RoleProfile,
   TaxonomyNode,
-  TaxonomyNodeDetail,
-  TaxonomySummary,
   Training,
   UnresolvedCode,
 } from "@/models";
+import type {
+  CrosswalkRejectPayload,
+  CrosswalkValidatePayload,
+} from "@/models/taxonomy";
 import {
   getCandidateMatchingOffers,
   type CandidateMatchedOfferSummary,
@@ -511,83 +516,6 @@ const mapMatchingResultToJob = (result: MatchingResultRecord): Job => ({
   scoreBreakdown: [],
 });
 
-const mapTaxonomyType = (value: string): TaxonomyNode["type"] => {
-  const normalized = value.trim().toUpperCase();
-  if (normalized === "OCCUPATION") return "Occupation";
-  if (normalized === "SKILL") return "Skill";
-  if (normalized === "TECHNOLOGY") return "Technology";
-  if (normalized === "TOOL") return "Tool";
-  if (normalized === "KNOWLEDGE") return "Knowledge";
-  if (normalized === "ABILITY") return "Ability";
-  if (normalized === "WORK_ACTIVITY") return "Work Activity";
-  return "Task";
-};
-
-const mapTaxonomyNodeRecord = (node: TaxonomyNodeRecord): TaxonomyNode => {
-  const raw = safeJson(node.extraJson);
-  const aliases = toArray(raw.aliases as string[] | undefined);
-  const relations = toArray(raw.relations as string[] | undefined);
-  const source = toStringValue(node.source || raw.source || "Internal");
-  const sourceLabel =
-    source.toUpperCase().includes("ESCO")
-      ? "ESCO"
-      : source.toUpperCase().includes("O*NET") || source.toUpperCase().includes("ONET")
-        ? "O*NET"
-        : "Internal";
-
-  return {
-    id: node.id,
-    code: node.sourceCode ?? toStringValue(raw.code || node.id),
-    label: node.label,
-    type: mapTaxonomyType(node.nodeType),
-    aliases,
-    aliasCount: aliases.length,
-    relationCount: relations.length,
-    source: sourceLabel,
-    related: relations,
-    description:
-      toStringValue(raw.description || raw.summary || raw.definition) ||
-      "Taxonomy node loaded from /taxonomy/nodes.",
-    updated: toStringValue(raw.updated_at || raw.updated || raw.created_at),
-    domain: toNullableString(raw.domain) ?? undefined,
-    taxonomyName: toNullableString(raw.taxonomy_name) ?? undefined,
-    modelName: toNullableString(raw.model_name) ?? undefined,
-    modelVersion: toNullableString(raw.model_version) ?? undefined,
-    parentCode: toNullableString(raw.parent_code) ?? undefined,
-    labelFr: toNullableString(raw.label_fr) ?? undefined,
-    labelEn: toNullableString(raw.label_en) ?? undefined,
-    status: node.active ? "Active" : "Inactive",
-    isLeaf: Boolean(raw.is_leaf),
-    isDeprecated: node.active === false,
-    raw,
-  };
-};
-
-const buildTaxonomySummary = (nodes: TaxonomyNode[]): TaxonomySummary => {
-  const byType = new Map<string, number>();
-  const byModel = new Map<string, number>();
-
-  for (const node of nodes) {
-    byType.set(node.type, (byType.get(node.type) ?? 0) + 1);
-    byModel.set(node.modelName ?? node.source, (byModel.get(node.modelName ?? node.source) ?? 0) + 1);
-  }
-
-  return {
-    metrics: {
-      total_nodes: nodes.length,
-      total_labels: nodes.length,
-      total_aliases: nodes.reduce((total, node) => total + (node.aliasCount ?? 0), 0),
-      total_relations: nodes.reduce((total, node) => total + (node.relationCount ?? 0), 0),
-      unresolved_codes: 0,
-      taxonomy_models: byModel.size,
-    },
-    node_type_distribution: Array.from(byType.entries()).map(([name, value]) => ({ name, value })),
-    taxonomy_distribution: Array.from(byModel.entries()).map(([name, value]) => ({ name, value })),
-    occupation_breakdown: Array.from(byType.entries())
-      .filter(([name]) => name === "Occupation")
-      .map(([name, value]) => ({ name, value })),
-  };
-};
 
 const groupByDay = (values: string[]): Array<{ day: string; matches: number; applications: number }> => {
   const counts = new Map<string, number>();
@@ -1340,7 +1268,7 @@ export function useAdvisorDashboardQuery() {
   return useQuery({
     queryKey: queryKeys.advisor.dashboard(),
     queryFn: async () => {
-      const [dashboard, services, auditSummary, auditEvents, taxonomySample] = await Promise.all([
+      const [dashboard, services, auditSummary, auditEvents, taxonomySummary, taxonomyNodes] = await Promise.all([
         gatewayApi.techAdmin.dashboard(),
         gatewayApi.techAdmin.services().catch(() => ({} as Record<string, { status: string }>)),
         gatewayApi.audit.summary().catch(() => ({
@@ -1352,7 +1280,8 @@ export function useAdvisorDashboardQuery() {
           byEventType: [],
         })),
         gatewayApi.audit.listEvents({ limit: 100 }).catch(() => []),
-        gatewayApi.taxonomy.listNodes({ limit: 100 }).catch(() => []),
+        gatewayApi.taxonomy.getSummary().catch(() => null),
+        gatewayApi.taxonomy.listNodes({ limit: 100 }).catch(() => ({ total: 0, items: [] as TaxonomyNode[] })),
       ]);
 
       const serviceStatusCounts = new Map<string, number>();
@@ -1361,8 +1290,12 @@ export function useAdvisorDashboardQuery() {
         serviceStatusCounts.set(key, (serviceStatusCounts.get(key) ?? 0) + 1);
       });
 
-      const taxonomyNodes = taxonomySample.map(mapTaxonomyNodeRecord);
-      const summary = buildTaxonomySummary(taxonomyNodes);
+      const nodeTypeMap = new Map<string, number>();
+      for (const node of taxonomyNodes.items) {
+        const key = startCase(node.node_type);
+        nodeTypeMap.set(key, (nodeTypeMap.get(key) ?? 0) + 1);
+      }
+
       const recentWarnings = auditEvents
         .filter((event) => ["ERROR", "WARNING"].includes(event.severity.toUpperCase()))
         .slice(0, 6)
@@ -1376,12 +1309,12 @@ export function useAdvisorDashboardQuery() {
         stats: {
           candidateDocuments: auditEvents.filter((event) => event.entityType?.includes("candidate")).length,
           offerDocuments: auditEvents.filter((event) => event.entityType?.includes("offer")).length,
-          taxonomyNodes: summary.metrics.total_nodes,
+          taxonomyNodes: taxonomySummary?.total_nodes ?? taxonomyNodes.total,
           pipelineRuns: auditSummary.totalEvents,
           errorCount: auditSummary.errorEvents,
         },
         matchingActivity: groupByDay(auditEvents.map((event) => event.eventTime)),
-        taxonomyDistribution: summary.node_type_distribution,
+        taxonomyDistribution: Array.from(nodeTypeMap.entries()).map(([name, value]) => ({ name, value })),
         pipelineStatuses: Array.from(serviceStatusCounts.entries()).map(([name, value]) => ({
           name,
           value,
@@ -1402,23 +1335,28 @@ export function useAdvisorDashboardQuery() {
   });
 }
 
-export function useTaxonomyNodesQuery(params: TaxonomyQueryParams = {}) {
+export function useTaxonomyModelsQuery() {
   return useQuery({
-    queryKey: queryKeys.advisor.taxonomy(params),
-    queryFn: async () => {
-      const nodes = await gatewayApi.taxonomy.listNodes({
-        q: params.search,
-        type: params.type,
+    queryKey: queryKeys.advisor.taxonomyModels(),
+    queryFn: () => gatewayApi.taxonomy.listModels(),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useTaxonomyNodesQuery(params: TaxonomyNodesQueryParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.advisor.taxonomyNodes(params),
+    queryFn: () =>
+      gatewayApi.taxonomy.listNodes({
+        model_code: params.model_code,
+        model_version: params.model_version,
+        node_type: params.node_type,
+        parent_id: params.parent_id,
+        q: params.q,
+        active: params.active,
         limit: params.limit ?? 40,
         offset: params.offset ?? 0,
-      });
-
-      return {
-        items: nodes.map(mapTaxonomyNodeRecord),
-        total: (params.offset ?? 0) + nodes.length + (nodes.length === (params.limit ?? 40) ? 1 : 0),
-        count: nodes.length,
-      };
-    },
+      }),
     placeholderData: (previous) => previous,
   });
 }
@@ -1426,10 +1364,7 @@ export function useTaxonomyNodesQuery(params: TaxonomyQueryParams = {}) {
 export function useTaxonomySummaryQuery() {
   return useQuery({
     queryKey: queryKeys.advisor.taxonomySummary(),
-    queryFn: async () => {
-      const nodes = await gatewayApi.taxonomy.listNodes({ limit: 120, offset: 0 });
-      return buildTaxonomySummary(nodes.map(mapTaxonomyNodeRecord));
-    },
+    queryFn: () => gatewayApi.taxonomy.getSummary(),
     staleTime: 5 * 60_000,
   });
 }
@@ -1437,32 +1372,7 @@ export function useTaxonomySummaryQuery() {
 export function useTaxonomyNodeDetailQuery(nodeId?: string) {
   return useQuery({
     queryKey: queryKeys.advisor.taxonomyDetail(nodeId),
-    queryFn: async (): Promise<TaxonomyNodeDetail> => {
-      const node = mapTaxonomyNodeRecord(await gatewayApi.taxonomy.getNode(nodeId as string));
-      return {
-        node,
-        labels: [
-          {
-            id: `${node.id}-label`,
-            lang: "und",
-            label: node.label,
-            description: node.description,
-            label_type: "preferred",
-            is_preferred: true,
-            source: node.source,
-          },
-        ],
-        aliases: toArray(node.aliases).map((alias, index) => ({
-          id: `${node.id}-alias-${index}`,
-          lang: "und",
-          alias,
-          alias_type: "alias",
-          source: node.source,
-          is_preferred: false,
-        })),
-        relations: [],
-      };
-    },
+    queryFn: () => gatewayApi.taxonomy.getNode(nodeId as string),
     enabled: Boolean(nodeId),
   });
 }
@@ -1713,7 +1623,7 @@ export function useDataExplorerQuery() {
           results: [] as SearchOfferResult[],
           raw: {},
         })),
-        gatewayApi.taxonomy.listNodes({ limit: 8 }).catch(() => []),
+        gatewayApi.taxonomy.listNodes({ limit: 8 }).catch(() => ({ total: 0, items: [] as TaxonomyNode[] })),
         gatewayApi.techAdmin.services().catch(() => ({} as Record<string, { status: string }>)),
       ]);
 
@@ -1739,11 +1649,11 @@ export function useDataExplorerQuery() {
           score: value.status,
         })),
         matches: [] as { id: string; label: string; sub: string; score: string }[],
-        taxonomy: taxonomy.map((item) => ({
+        taxonomy: taxonomy.items.map((item) => ({
           id: item.id,
-          label: item.label,
-          sub: startCase(item.nodeType),
-          score: item.sourceCode ?? "-",
+          label: item.preferred_label,
+          sub: startCase(item.node_type),
+          score: item.external_code ?? "-",
         })),
       };
     },
@@ -1765,6 +1675,236 @@ export function useCreateProviderAccountMutation() {
         return gatewayApi.techAdmin.assignRole(user.id, employerRole.id);
       }
       return user;
+    },
+  });
+}
+
+export function useTaxonomyCrosswalkReviewQuery(params: TaxonomyCrosswalkReviewQueryParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.advisor.taxonomyCrosswalkReview(params),
+    queryFn: () =>
+      gatewayApi.taxonomy.listCrosswalkReview({
+        validated: params.validated,
+        active: params.active,
+        limit: params.limit ?? 20,
+        offset: params.offset ?? 0,
+      }),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useValidateCrosswalkMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: CrosswalkValidatePayload }) =>
+      gatewayApi.taxonomy.validateCrosswalk(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["advisor", "taxonomy", "crosswalks"] });
+    },
+  });
+}
+
+export function useRejectCrosswalkMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: CrosswalkRejectPayload }) =>
+      gatewayApi.taxonomy.rejectCrosswalk(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["advisor", "taxonomy", "crosswalks"] });
+    },
+  });
+}
+
+// ─── References: groups ───────────────────────────────────────────────────────
+
+export function useRefGroupsQuery(params: import("./queryKeys").RefGroupQueryParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.references.groups(params),
+    queryFn: () => gatewayApi.references.listGroups(params),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useCreateRefGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: import("@/models/references").RefGroupCreatePayload) =>
+      gatewayApi.references.createGroup(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "groups"] });
+    },
+  });
+}
+
+export function useUpdateRefGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: import("@/models/references").RefGroupUpdatePayload;
+    }) => gatewayApi.references.updateGroup(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "groups"] });
+    },
+  });
+}
+
+export function useDeleteRefGroupMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => gatewayApi.references.deleteGroup(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "groups"] });
+    },
+  });
+}
+
+// ─── References: values ───────────────────────────────────────────────────────
+
+export function useRefValuesQuery(params: import("./queryKeys").RefValueQueryParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.references.values(params),
+    queryFn: () => gatewayApi.references.listValues(params),
+    enabled: Boolean(params.group_id || params.group_code),
+    placeholderData: (prev) => prev,
+  });
+}
+
+export function useCreateRefValueMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: import("@/models/references").RefValueCreatePayload) =>
+      gatewayApi.references.createValue(payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "values"] });
+    },
+  });
+}
+
+export function useUpdateRefValueMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      payload,
+    }: {
+      id: string;
+      payload: import("@/models/references").RefValueUpdatePayload;
+    }) => gatewayApi.references.updateValue(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "values"] });
+    },
+  });
+}
+
+export function useDeleteRefValueMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => gatewayApi.references.deleteValue(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["references", "values"] });
+    },
+  });
+}
+
+// ─── Geo ──────────────────────────────────────────────────────────────────────
+
+export function useGeoCountriesQuery() {
+  return useQuery({
+    queryKey: queryKeys.geo.countries(),
+    queryFn: () => gatewayApi.geo.listCountries(),
+    staleTime: 60 * 60_000, // countries rarely change
+    retry: false,
+  });
+}
+
+export function useGeoAdminUnitsQuery(
+  countryId?: string,
+  adminLevel?: number,
+  parentId?: string,
+) {
+  return useQuery({
+    queryKey: queryKeys.geo.adminUnits(countryId, adminLevel, parentId),
+    queryFn: () =>
+      gatewayApi.geo.listAdminUnits({
+        country_id:  countryId,
+        admin_level: adminLevel,
+        parent_id:   parentId,
+      }),
+    enabled: Boolean(countryId),
+    staleTime: 30 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+// ─── Reference dropdowns ──────────────────────────────────────────────────────
+
+export function useRefDropdownQuery(groupCode: string, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.references.dropdown(groupCode),
+    queryFn: () => gatewayApi.references.listDropdownValues(groupCode),
+    enabled,
+    staleTime: 30 * 60_000,
+    retry: false,
+  });
+}
+
+// ─── Taxonomy node autocomplete ───────────────────────────────────────────────
+
+export function useTaxonomyAutocompleteQuery(
+  q: string,
+  nodeType: string,
+  modelCode = "RTMC",
+) {
+  return useQuery({
+    queryKey: ["taxonomy", "autocomplete", nodeType, modelCode, q],
+    queryFn: () =>
+      gatewayApi.taxonomy.listNodes({
+        q,
+        node_type: nodeType,
+        model_code: modelCode,
+        limit: 20,
+        offset: 0,
+      }),
+    enabled: q.trim().length >= 2,
+    staleTime: 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
+// ─── Aggregate candidate profile ──────────────────────────────────────────────
+
+export function useCandidateAggregateProfileQuery() {
+  return useQuery({
+    queryKey: queryKeys.candidate.aggregateProfile(),
+    queryFn: () => gatewayApi.candidate.getAggregateProfile(),
+    staleTime: 30_000,
+    retry: false,
+  });
+}
+
+export function usePatchCandidateProfileMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (changeset: CandidateProfilePatchPayload) =>
+      gatewayApi.candidate.patchAggregateProfile(changeset),
+    onSuccess: (data: CandidateAggregateProfile) => {
+      // Store the returned aggregate — no need for a fan-out refetch.
+      queryClient.setQueryData(queryKeys.candidate.aggregateProfile(), data);
+      // Keep the legacy bundle cache in sync for other hooks that depend on it.
+      const existingBundle = queryClient.getQueryData<{ cvRecords?: unknown[] }>(
+        queryKeys.candidate.bundle(),
+      );
+      const cvRecords = Array.isArray(existingBundle?.cvRecords)
+        ? (existingBundle!.cvRecords as import("./gateway").CandidateCvRecord[])
+        : [];
+      queryClient.setQueryData(
+        queryKeys.candidate.bundle(),
+        mapAggregateToBundle(data, cvRecords),
+      );
     },
   });
 }

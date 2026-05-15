@@ -12,6 +12,8 @@ from app.modules.matching_config.router import router as matching_config_router
 from app.modules.matching_runs.router import router as matching_runs_router
 from app.modules.offers.router import router as offers_router
 from app.modules.referentials.router import router as referentials_router
+from app.modules.references.router import router as references_router
+from app.modules.geo.router import router as geo_router
 from app.modules.search.router import router as search_router
 from app.modules.segments.router import router as segments_router
 from app.modules.taxonomy.router import router as taxonomy_router
@@ -38,6 +40,8 @@ app.include_router(advisors_router)
 app.include_router(functional_admin_router)
 app.include_router(tech_admin_router)
 app.include_router(referentials_router)
+app.include_router(references_router)
+app.include_router(geo_router)
 app.include_router(taxonomy_router)
 app.include_router(search_router)
 app.include_router(cv_router)

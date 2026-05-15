@@ -1,8 +1,7 @@
 from datetime import datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
-from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -11,10 +10,16 @@ class OfferBaseModel(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
 
+# ─── Requirement ──────────────────────────────────────────────────────────────
+
 class JobOfferRequirementWriteRequest(OfferBaseModel):
     criterion_type: Literal[
         "SKILL",
+        "SOFT_SKILL",
+        "OCCUPATION",
+        "APPELLATION",
         "LANGUAGE",
+        "EDUCATION",
         "DIPLOMA",
         "SPECIALTY",
         "EXPERIENCE_YEARS",
@@ -26,12 +31,12 @@ class JobOfferRequirementWriteRequest(OfferBaseModel):
         "WORK_REGIME",
         "WORK_TIME_ORGANIZATION",
         "PERMIT_TYPE",
-        "SOFT_SKILL",
         "ACTIVITY",
-        "OCCUPATION",
-        "APPELLATION",
+        "AVAILABILITY",
+        "OTHER",
     ]
-    node_id: UUID | None = None
+    node_id: UUID | None = None          # taxonomy_node.id
+    ref_value_id: UUID | None = None     # reference.ref_value.id
     raw_value: str | None = None
     min_level: str | None = None
     min_years: Decimal | None = Field(default=None, ge=0)
@@ -45,6 +50,7 @@ class JobOfferRequirementResponse(BaseModel):
     node_id: str | None = None
     node_label: str | None = None
     node_type: str | None = None
+    ref_value_id: str | None = None
     raw_value: str | None = None
     min_level: str | None = None
     min_years: Decimal | None = None
@@ -54,21 +60,70 @@ class JobOfferRequirementResponse(BaseModel):
     updated_at: datetime
 
 
+# ─── Language requirement ─────────────────────────────────────────────────────
+
+class JobOfferLanguageRequirementWriteRequest(OfferBaseModel):
+    language_code: str = Field(min_length=1)
+    level_code: str | None = None
+    is_mandatory: bool = False
+
+
+class JobOfferLanguageRequirementResponse(BaseModel):
+    id: str
+    language_code: str | None = None
+    level_code: str | None = None
+    is_mandatory: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+# ─── Offer write request ──────────────────────────────────────────────────────
+
 class JobOfferWriteRequest(OfferBaseModel):
     title: str = Field(min_length=1)
     company_name: str | None = None
     description: str | None = None
-    rtmc_occupation_id: UUID | None = None
-    number_of_positions: int = Field(default=1, ge=1)
-    contract_type: str | None = None
-    work_mode: str | None = None
-    salary_min: Decimal | None = None
-    salary_max: Decimal | None = None
-    country: str = Field(min_length=1, default="TN")
+
+    # Occupation (canonical)
+    occupation_node_id: UUID | None = None
+
+    # Geo (canonical)
+    country_id: UUID | None = None
+    location_unit_id: UUID | None = None
+    governorate_unit_id: UUID | None = None
+    delegation_unit_id: UUID | None = None
+
+    # Geo (legacy fallback — kept for backward compat)
+    country: str = Field(default="TN")
     governorate_code: str | None = None
     delegation_code: str | None = None
+
+    # Contract / work mode
+    contract_type: str | None = None
+    work_mode: str | None = None
+
+    # Salary
+    salary_min: Decimal | None = None
+    salary_max: Decimal | None = None
+    salary_currency_code: str = "TND"
+
+    # Experience & education
+    min_experience_months: int | None = Field(default=None, ge=0)
+    diploma_ref_id: UUID | None = None
+    specialty_ref_id: UUID | None = None
+
+    # Accessibility
+    is_accessible_to_disabled: bool = False
+    accessibility_notes: str | None = None
+
+    number_of_positions: int = Field(default=1, ge=1)
     deadline_at: datetime | None = None
+
+    # Structured requirements (SKILL / SOFT_SKILL / OCCUPATION / etc.)
     requirements: list[JobOfferRequirementWriteRequest] = Field(default_factory=list)
+
+    # Structured language requirements
+    language_requirements: list[JobOfferLanguageRequirementWriteRequest] = Field(default_factory=list)
 
 
 class JobOfferCreateRequest(JobOfferWriteRequest):
@@ -78,6 +133,8 @@ class JobOfferCreateRequest(JobOfferWriteRequest):
 class JobOfferUpdateRequest(JobOfferWriteRequest):
     pass
 
+
+# ─── Parse request/response ───────────────────────────────────────────────────
 
 class JobOfferDraftParseRequest(OfferBaseModel):
     raw_text: str = Field(min_length=1)
@@ -94,6 +151,8 @@ class JobOfferDraftRequirementResponse(BaseModel):
     weight: int | None = None
 
 
+# ─── Offer list / detail responses ───────────────────────────────────────────
+
 class JobOfferListItemResponse(BaseModel):
     id: str
     aneti_identifier: str | None = None
@@ -107,11 +166,24 @@ class JobOfferListItemResponse(BaseModel):
     work_mode: str | None = None
     salary_min: Decimal | None = None
     salary_max: Decimal | None = None
-    country: str
+    salary_currency_code: str = "TND"
+    country: str = "TN"
     governorate_code: str | None = None
     governorate_label: str | None = None
     delegation_code: str | None = None
     delegation_label: str | None = None
+    # Canonical geo ids surfaced for front display
+    country_id: str | None = None
+    governorate_unit_id: str | None = None
+    delegation_unit_id: str | None = None
+    occupation_node_id: str | None = None
+    occupation_node_label: str | None = None
+    # New fields
+    min_experience_months: int | None = None
+    diploma_ref_id: str | None = None
+    specialty_ref_id: str | None = None
+    is_accessible_to_disabled: bool = False
+    accessibility_notes: str | None = None
     published_at: datetime | None = None
     deadline_at: datetime | None = None
     created_by_user_id: str | None = None
@@ -123,13 +195,18 @@ class JobOfferListItemResponse(BaseModel):
 class JobOfferResponse(JobOfferListItemResponse):
     employer_name: str | None = None
     requirements: list[JobOfferRequirementResponse] = Field(default_factory=list)
+    language_requirements: list[JobOfferLanguageRequirementResponse] = Field(default_factory=list)
     warning: str | None = None
     action_reason: str | None = None
 
 
+# ─── Advisor actions ──────────────────────────────────────────────────────────
+
 class OfferActionRequest(OfferBaseModel):
     reason: str | None = None
 
+
+# ─── Draft parse response ─────────────────────────────────────────────────────
 
 class JobOfferDraftParseResponse(BaseModel):
     parsing_status: str

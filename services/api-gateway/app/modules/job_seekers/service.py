@@ -8,7 +8,10 @@ from app.modules.matching_runs import repository as matching_run_repository
 
 from . import repository
 from .schemas import (
+    CandidateAggregateProfileResponse,
+    CandidateBaseInfoResponse,
     CandidateListItemResponse,
+    CandidateProfilePatchRequest,
     CandidateStatusUpdateRequest,
     CandidateStatusUpdateResponse,
     CvMetadataResponse,
@@ -697,3 +700,158 @@ def list_my_applications(
 ) -> list[dict]:
     job_seeker = resolve_current_job_seeker(db, current_user)
     return repository.list_job_applications(db, job_seeker["id"])
+
+
+# ─── Aggregate profile ────────────────────────────────────────────────────────
+
+def _build_aggregate_profile(
+    db: Session,
+    job_seeker: dict,
+    profile_version: int,
+) -> dict:
+    js_id = job_seeker["id"]
+    identity   = repository.get_identity(db, js_id)
+    contact    = repository.get_contact(db, js_id)
+    education  = repository.list_education(db, js_id)
+    experience = repository.list_experience(db, js_id)
+    skills     = repository.list_skills(db, js_id)
+    languages  = repository.list_languages(db, js_id)
+    preference = repository.get_preference(db, js_id)
+    current_cv = repository.get_current_cv(db, js_id)
+    keywords   = repository.list_job_seeker_keywords(db, js_id)
+    offer_threshold = repository.get_offer_score_threshold(db, js_id)
+
+    return CandidateAggregateProfileResponse(
+        profile_version=profile_version,
+        candidate=CandidateBaseInfoResponse(
+            id=job_seeker["id"],
+            user_id=job_seeker.get("user_id"),
+            aneti_identifier=job_seeker.get("aneti_identifier"),
+            status=job_seeker["status"],
+            registration_date=job_seeker.get("registration_date"),
+            primary_language=job_seeker.get("primary_language"),
+        ),
+        identity=JobSeekerIdentityResponse(**identity) if identity else None,
+        contact=JobSeekerContactResponse(**contact) if contact else None,
+        education=[JobSeekerEducationResponse(**row) for row in education],
+        experience=[JobSeekerExperienceResponse(**row) for row in experience],
+        skills=[JobSeekerSkillResponse(**row) for row in skills],
+        languages=[JobSeekerLanguageResponse(**row) for row in languages],
+        preference=JobSeekerPreferenceResponse(**preference) if preference else None,
+        cv=CvMetadataResponse(**current_cv) if current_cv else None,
+        keywords=[kw["keyword"] for kw in keywords],
+        offer_threshold=offer_threshold,
+    ).model_dump(mode="json")
+
+
+def get_aggregate_profile(db: Session, current_user: CurrentUserResponse) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+    profile_version = repository.get_profile_version(db, job_seeker["id"])
+    return _build_aggregate_profile(db, job_seeker, profile_version)
+
+
+def patch_aggregate_profile(
+    db: Session,
+    current_user: CurrentUserResponse,
+    payload: CandidateProfilePatchRequest,
+) -> dict:
+    job_seeker = resolve_current_job_seeker(db, current_user)
+    js_id = job_seeker["id"]
+
+    # Optimistic locking: reject if client version is stale.
+    if payload.profile_version is not None:
+        current_version = repository.get_profile_version(db, js_id)
+        if payload.profile_version != current_version:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"Profile version conflict: client has v{payload.profile_version}, "
+                    f"server has v{current_version}."
+                ),
+            )
+
+    try:
+        if payload.candidate is not None:
+            data = _normalize_payload(payload.candidate.model_dump())
+            repository.update_job_seeker(db, js_id, data)
+
+        if payload.identity is not None:
+            data = _normalize_payload(payload.identity.model_dump(mode="json"))
+            repository.upsert_identity(db, js_id, data)
+
+        if payload.contact is not None:
+            data = _normalize_payload(payload.contact.model_dump())
+            repository.upsert_contact(db, js_id, data)
+
+        if payload.preference is not None:
+            data = _normalize_payload(payload.preference.model_dump(mode="json"))
+            repository.upsert_preference(db, js_id, data)
+
+        if payload.education is not None:
+            for edu_id in payload.education.delete_ids:
+                repository.delete_education(db, js_id, edu_id)
+            for item in payload.education.upsert:
+                data = _normalize_payload(item.model_dump(mode="json", exclude={"id"}))
+                if item.id:
+                    repository.update_education(db, js_id, item.id, data)
+                else:
+                    repository.create_education(db, js_id, data)
+
+        if payload.experience is not None:
+            for exp_id in payload.experience.delete_ids:
+                repository.delete_experience(db, js_id, exp_id)
+            for item in payload.experience.upsert:
+                data = _normalize_payload(item.model_dump(mode="json", exclude={"id"}))
+                if item.id:
+                    repository.update_experience(db, js_id, item.id, data)
+                else:
+                    repository.create_experience(db, js_id, data)
+
+        if payload.skills is not None:
+            for skill_id in payload.skills.delete_ids:
+                repository.delete_skill(db, js_id, skill_id)
+            for item in payload.skills.upsert:
+                data = _normalize_payload(item.model_dump(mode="json", exclude={"id"}))
+                if item.id:
+                    repository.update_skill(db, js_id, item.id, data)
+                else:
+                    repository.create_skill(db, js_id, data)
+
+        if payload.languages is not None:
+            for lang_id in payload.languages.delete_ids:
+                repository.delete_language(db, js_id, lang_id)
+            for item in payload.languages.upsert:
+                data = _normalize_payload(item.model_dump(mode="json", exclude={"id"}))
+                if item.id:
+                    repository.update_language(db, js_id, item.id, data)
+                else:
+                    repository.create_language(db, js_id, data)
+
+        if payload.keywords is not None:
+            repository.replace_job_seeker_keywords(
+                db, job_seeker_id=js_id, keywords=payload.keywords,
+            )
+
+        if payload.offer_threshold is not None:
+            if not (0 <= payload.offer_threshold <= 100):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="offer_threshold must be between 0 and 100.",
+                )
+            repository.update_offer_score_threshold(
+                db,
+                job_seeker_id=js_id,
+                min_offer_score_threshold=payload.offer_threshold,
+            )
+
+        new_version = repository.increment_profile_version(db, js_id)
+        db.commit()
+
+    except IntegrityError as exc:
+        db.rollback()
+        _handle_integrity_error(exc)
+
+    # TODO: publish candidate.profile.updated.v1 event asynchronously
+
+    updated_js = repository.get_job_seeker_by_id(db, js_id)
+    return _build_aggregate_profile(db, updated_js, new_version)

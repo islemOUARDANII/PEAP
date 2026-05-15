@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+from html import parser
 import json
 import os
 import re
@@ -312,6 +313,8 @@ def upsert_records(
     dry_run: bool,
     commit_every: int = 1000,
     progress_every: int = 500,
+    resume_skip_existing: bool = False,
+    max_new_rows: int = 0,
 ) -> int:
     known_records = [r for r in records if r.country_iso2 in country_ids]
     unknown_country_count = len(records) - len(known_records)
@@ -348,16 +351,27 @@ def upsert_records(
 
     # cache local des IDs après insertion : (country_iso2, code) -> id
     id_cache: Dict[Tuple[str, str], str] = {}
-
+    
+    existing_geonames_keys: set[Tuple[str, str]] = set()
     print("Loading existing geo.admin_unit IDs into local cache...")
+    
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute("""
-            SELECT c.iso2, au.code, au.id::text AS id
+            SELECT
+                c.iso2,
+                au.code,
+                au.id::text AS id,
+                au.source
             FROM geo.admin_unit au
             JOIN geo.country c ON c.id = au.country_id
         """)
+
         for row in cur.fetchall():
-            id_cache[(row["iso2"].upper(), row["code"])] = row["id"]
+            key = (row["iso2"].upper(), row["code"])
+            id_cache[key] = row["id"]
+
+            if row.get("source") == "GEONAMES":
+                existing_geonames_keys.add(key)
 
     print(f"Existing ID cache loaded: {len(id_cache)} entries")
 
@@ -426,6 +440,19 @@ def upsert_records(
             for idx, r in enumerate(records_by_level, start=1):
                 last_record = r
 
+                key = (r.country_iso2, r.code)
+                if resume_skip_existing and key in existing_geonames_keys:
+                    if idx % progress_every == 0:
+                        print(
+                            f"[SKIP] {idx}/{len(records_by_level)} already imported "
+                            f"| ADM{r.admin_level} "
+                            f"| country={r.country_iso2} "
+                            f"| code={r.code} "
+                            f"| geoname_id={r.geoname_id} "
+                            f"| label={r.label}"
+                        )
+                    continue
+
                 if current_level != r.admin_level:
                     current_level = r.admin_level
                     print()
@@ -489,6 +516,16 @@ def upsert_records(
                 id_cache[(r.country_iso2, r.code)] = new_id
                 inserted_or_updated += 1
                 batch_counter += 1
+
+                existing_geonames_keys.add((r.country_iso2, r.code))
+
+                if max_new_rows > 0 and inserted_or_updated >= max_new_rows:
+                    conn.commit()
+                    print(
+                        f"[STOP] max_new_rows reached: {inserted_or_updated}. "
+                        f"Committed and exiting cleanly."
+                    )
+                    return inserted_or_updated
 
                 if inserted_or_updated % progress_every == 0:
                     elapsed = time.time() - started_at
@@ -562,6 +599,17 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Parse and count only, do not write to DB")
     parser.add_argument("--commit-every", type=int, default=1000, help="Commit every N upserted rows")
     parser.add_argument("--progress-every", type=int, default=500, help="Print progress every N upserted rows")
+    parser.add_argument(
+        "--resume-skip-existing",
+        action="store_true",
+        help="Skip rows already imported from GEONAMES using country/code. Useful after connection cuts."
+    )
+    parser.add_argument(
+        "--max-new-rows",
+        type=int,
+        default=0,
+        help="Stop after N new/upserted rows. 0 = no limit. Useful to import in safe chunks."
+    )
     args = parser.parse_args()
 
     if not args.database_url:
@@ -598,6 +646,8 @@ def main() -> None:
             dry_run=args.dry_run,
             commit_every=args.commit_every,
             progress_every=args.progress_every,
+            resume_skip_existing=args.resume_skip_existing,
+            max_new_rows=args.max_new_rows,
         )
 
     print(f"Done. Imported/upserted records: {count}")

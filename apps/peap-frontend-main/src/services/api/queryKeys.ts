@@ -7,6 +7,24 @@ export interface TaxonomyQueryParams {
   type?: string;
 }
 
+export interface TaxonomyNodesQueryParams {
+  model_code?: string;
+  model_version?: string;
+  node_type?: string;
+  parent_id?: string;
+  q?: string;
+  active?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface TaxonomyCrosswalkReviewQueryParams {
+  validated?: boolean;
+  active?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export interface UnresolvedCodesQueryParams {
   limit?: number;
   offset?: number;
@@ -46,6 +64,22 @@ export interface PipelineItemsQueryParams {
   status?: string;
 }
 
+export interface RefGroupQueryParams {
+  q?: string;
+  active?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
+export interface RefValueQueryParams {
+  group_id?: string;
+  group_code?: string;
+  q?: string;
+  active?: boolean;
+  limit?: number;
+  offset?: number;
+}
+
 export const queryKeys = {
   roles: () => ["roles"] as const,
   roleProfile: (role: Role) => ["roles", role, "profile"] as const,
@@ -57,6 +91,7 @@ export const queryKeys = {
     keywords: () => ["candidate", "profile", "keywords"] as const,
     offerThreshold: () => ["candidate", "profile", "offer-threshold"] as const,
     bundle: () => ["candidate", "bundle"] as const,
+    aggregateProfile: () => ["candidate", "aggregate-profile"] as const,
     matches: () => ["candidate", "matches"] as const,
     match: (id?: string) => ["candidate", "matches", id ?? "default"] as const,
     jobOffers: () => ["candidate", "job-offers"] as const,
@@ -78,9 +113,13 @@ export const queryKeys = {
   },
   advisor: {
     dashboard: () => ["advisor", "dashboard"] as const,
+    taxonomyModels: () => ["advisor", "taxonomy", "models"] as const,
     taxonomySummary: () => ["advisor", "taxonomy", "summary"] as const,
+    taxonomyNodes: (params: TaxonomyNodesQueryParams = {}) => ["advisor", "taxonomy", "nodes", params] as const,
     taxonomy: (params: TaxonomyQueryParams = {}) => ["advisor", "taxonomy", params] as const,
     taxonomyDetail: (nodeId?: string) => ["advisor", "taxonomy", "detail", nodeId ?? "none"] as const,
+    taxonomyCrosswalkReview: (params: TaxonomyCrosswalkReviewQueryParams = {}) =>
+      ["advisor", "taxonomy", "crosswalks", "review", params] as const,
     unresolvedCodes: (params: UnresolvedCodesQueryParams = {}) =>
       ["advisor", "taxonomy", "unresolved-codes", params] as const,
     users: (params: UsersQueryParams = {}) => ["advisor", "users", params] as const,
@@ -97,5 +136,15 @@ export const queryKeys = {
   referentials: {
     handicapTypes: () => ["referentials", "handicap-types"] as const,
     handicapDegrees: () => ["referentials", "handicap-degrees"] as const,
+  },
+  references: {
+    groups: (params: RefGroupQueryParams = {}) => ["references", "groups", params] as const,
+    values: (params: RefValueQueryParams = {}) => ["references", "values", params] as const,
+    dropdown: (groupCode: string) => ["references", "dropdown", groupCode] as const,
+  },
+  geo: {
+    countries: () => ["geo", "countries"] as const,
+    adminUnits: (countryId?: string, adminLevel?: number, parentId?: string) =>
+      ["geo", "admin-units", countryId ?? "", adminLevel ?? 0, parentId ?? ""] as const,
   },
 };

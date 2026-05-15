@@ -18,9 +18,8 @@ from .schemas import (
     JobOfferResponse,
     JobOfferUpdateRequest,
     OfferActionRequest,
-    JobOfferDraftParseRequest,
-    JobOfferDraftParseResponse,
 )
+from .service import _build_parse_response  # noqa: PLC2701
 from .service import (
     archive_my_offer,
     create_my_offer,
@@ -88,38 +87,10 @@ def parse_my_offer_draft_endpoint(
             }
         )
     except ParsingServiceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=str(exc),
-        )
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
-    parsed_payload = result.get("parsed_payload", {})
-    mapped_payload = result.get("mapped_payload", {})
-    extracted_requirements = result.get("extracted_requirements", [])
-
-    draft = {
-        "title": parsed_payload.get("title") or payload.title or "",
-        "description": payload.raw_text,
-        "number_of_positions": parsed_payload.get("number_of_positions") or 1,
-        "contract_type": parsed_payload.get("contract_type"),
-        "work_mode": parsed_payload.get("work_mode"),
-        "salary_min": parsed_payload.get("salary_min"),
-        "salary_max": parsed_payload.get("salary_max"),
-        "country": "TN",
-        "governorate_code": mapped_payload.get("governorate_code"),
-        "delegation_code": mapped_payload.get("delegation_code"),
-        "requirements": extracted_requirements,
-    }
-
-    return {
-        "parsing_status": result.get("parsing_status", "PARSED"),
-        "parsed_payload": parsed_payload,
-        "mapped_payload": mapped_payload,
-        "extracted_requirements": extracted_requirements,
-        "warnings": result.get("warnings", []),
-        "parser_version": result.get("parser_version"),
-        "draft": draft,
-    }
+    title = (result.get("parsed_payload") or {}).get("title") or payload.title or "Offre sans titre"
+    return _build_parse_response(result, payload.raw_text, title)
 
 @router.get("/employers/me/offers/{offer_id}", response_model=JobOfferResponse)
 def get_my_offer_endpoint(
@@ -193,33 +164,8 @@ def parse_offer_draft_for_advisor_endpoint(
     except ParsingServiceError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
 
-    parsed_payload = result.get("parsed_payload", {})
-    mapped_payload = result.get("mapped_payload", {})
-    extracted_requirements = result.get("extracted_requirements", [])
-
-    draft = {
-        "title": parsed_payload.get("title") or payload.title or "",
-        "description": payload.raw_text,
-        "number_of_positions": parsed_payload.get("number_of_positions") or 1,
-        "contract_type": parsed_payload.get("contract_type"),
-        "work_mode": parsed_payload.get("work_mode"),
-        "salary_min": parsed_payload.get("salary_min"),
-        "salary_max": parsed_payload.get("salary_max"),
-        "country": "TN",
-        "governorate_code": mapped_payload.get("governorate_code"),
-        "delegation_code": mapped_payload.get("delegation_code"),
-        "requirements": extracted_requirements,
-    }
-
-    return {
-        "parsing_status": result.get("parsing_status", "PARSED"),
-        "parsed_payload": parsed_payload,
-        "mapped_payload": mapped_payload,
-        "extracted_requirements": extracted_requirements,
-        "warnings": result.get("warnings", []),
-        "parser_version": result.get("parser_version"),
-        "draft": draft,
-    }
+    title = (result.get("parsed_payload") or {}).get("title") or payload.title or "Offre sans titre"
+    return _build_parse_response(result, payload.raw_text, title)
 
 
 @router.get("/advisor/offers", response_model=list[JobOfferListItemResponse])

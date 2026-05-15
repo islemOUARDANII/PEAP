@@ -48,14 +48,23 @@ import {
   gatewayApi,
   inferCandidateDisplayName,
   inferCandidateLocation,
+  mapAggregateToBundle,
   type CandidateEducationRecord,
   type CandidateExperienceRecord,
   type CandidateLanguageRecord,
   type CandidateProfileBundle,
+  type CandidateProfilePatchPayload,
   type CandidateSkillRecord,
   type ReferentialOption,
   type CandidateCvParseResult,
 } from '@/services/api/gateway';
+import {
+  useGeoCountriesQuery,
+  useGeoAdminUnitsQuery,
+  usePatchCandidateProfileMutation,
+  useRefDropdownQuery,
+  useTaxonomyAutocompleteQuery,
+} from '@/services/api/queries';
 import { appEnv } from '@/config/env';
 import { ApiServiceError } from '@/services/api/client';
 import { readStoredSession } from '@/services/auth/sessionStorage';
@@ -100,13 +109,20 @@ import {
   shouldRetryCandidateProfileQuery,
   uploadAndParseCandidateCv,
 } from '@/services/candidate/candidateProfileOnboarding';
+import { SkillPicker } from './profile/SkillPicker';
+import { OccupationAutocomplete } from './profile/OccupationAutocomplete';
+import { GeoAddressFields } from './profile/GeoAddressFields';
+import { TaxonomyKeywordsEditor } from './profile/TaxonomyKeywordsEditor';
 
 interface EducationDraft {
   id?: string;
   levelCode: string;
-  degree: string;
+  levelRefId: string;       // FK to EDUCATION_LEVEL ref_value
+  degree: string;           // diploma code (backward compat)
   diplomaLabel: string;
+  diplomaRefId: string;     // FK to DIPLOMA ref_value
   specialty: string;
+  specialtyRefId: string;   // FK to SPECIALTY ref_value
   institution: string;
   startDate: string;
   endDate: string;
@@ -119,9 +135,16 @@ interface EducationDraft {
 interface ExperienceDraft {
   id?: string;
   jobTitleRaw: string;
+  occupationNodeId: string; // FK to taxonomy RTMC OCCUPATION
   companyName: string;
   sector: string;
-  location: string;
+  sectorRefId: string;      // FK to ACTIVITY_SECTOR ref_value
+  location: string;         // free-text fallback
+  locationCountry: string;  // ISO2 country code for structured geo
+  locationGovCode: string;  // admin level-1 code
+  locationGovLabel: string; // admin level-1 label (for compose)
+  locationDelegCode: string;  // admin level-2 code
+  locationDelegLabel: string; // admin level-2 label (for compose)
   startDate: string;
   endDate: string;
   isCurrent: boolean;
@@ -136,7 +159,9 @@ interface ExperienceDraft {
 
 interface SkillDraft {
   id?: string;
+  skillNodeId: string;    // FK to taxonomy RTMC SKILL or SOFT_SKILL node
   skillLabelRaw: string;
+  skillNodeType: string;  // 'SKILL' | 'SOFT_SKILL'
   level: string;
   years: string;
   evidence: string;
@@ -157,6 +182,7 @@ interface ProfileDraft {
   birthDate: string;
   genderCode: string;
   nationality: string;
+  nationalityCountryId: string; // FK to geo.country
   codeHandicap: string;
   codeDegreHandicap: string;
   email: string;
@@ -212,9 +238,12 @@ type ExtractedProfilePatch = {
 
 const emptyEducation = (): EducationDraft => ({
   levelCode: '',
+  levelRefId: '',
   degree: '',
   diplomaLabel: '',
+  diplomaRefId: '',
   specialty: '',
+  specialtyRefId: '',
   institution: '',
   startDate: '',
   endDate: '',
@@ -226,9 +255,16 @@ const emptyEducation = (): EducationDraft => ({
 
 const emptyExperience = (): ExperienceDraft => ({
   jobTitleRaw: '',
+  occupationNodeId: '',
   companyName: '',
   sector: '',
+  sectorRefId: '',
   location: '',
+  locationCountry: '',
+  locationGovCode: '',
+  locationGovLabel: '',
+  locationDelegCode: '',
+  locationDelegLabel: '',
   startDate: '',
   endDate: '',
   isCurrent: false,
@@ -241,8 +277,10 @@ const emptyExperience = (): ExperienceDraft => ({
   entryType: '',
 });
 
-const emptySkill = (): SkillDraft => ({
+const emptySkill = (nodeType = 'SKILL'): SkillDraft => ({
+  skillNodeId: '',
   skillLabelRaw: '',
+  skillNodeType: nodeType,
   level: '',
   years: '',
   evidence: '',
@@ -262,6 +300,7 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
   birthDate: bundle.identity?.birth_date ?? '',
   genderCode: bundle.identity?.gender_code ?? '',
   nationality: bundle.identity?.nationality ?? '',
+  nationalityCountryId: (bundle.identity as Record<string, unknown>)?.nationality_country_id as string ?? '',
   codeHandicap: bundle.identity?.code_handicap ?? '0',
   codeDegreHandicap: bundle.identity?.code_degre_handicap ?? '',
   email: bundle.contact?.email ?? '',
@@ -286,46 +325,65 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
     bundle.preference?.desiredSalaryMax == null
       ? ''
       : String(bundle.preference.desiredSalaryMax),
-  education: bundle.education.map((item) => ({
-    id: item.id,
-    levelCode: item.levelCode ?? '',
-    degree: item.degree ?? item.diplomaLabel ?? '',
-    diplomaLabel: item.diplomaLabel ?? '',
-    specialty: item.specialty ?? '',
-    institution: item.institution ?? '',
-    startDate: item.startDate ?? '',
-    endDate: item.endDate ?? '',
-    graduationYear:
-      item.graduationYear == null ? '' : String(item.graduationYear),
-    location: item.location ?? '',
-    honors: item.honors ?? '',
-    gpa: item.gpa ?? '',
-  })),
-  experience: bundle.experience.map((item) => ({
-    id: item.id,
-    jobTitleRaw: item.jobTitleRaw ?? '',
-    companyName: item.companyName ?? '',
-    sector: item.sector ?? '',
-    location: item.location ?? '',
-    startDate: item.startDate ?? '',
-    endDate: item.endDate ?? '',
-    isCurrent: item.isCurrent ?? false,
-    durationMonths:
-      item.durationMonths == null ? '' : String(item.durationMonths),
-    durationYears: item.durationYears == null ? '' : String(item.durationYears),
-    description: item.description ?? '',
-    responsibilities: item.responsibilities ?? [],
-    technologies: item.technologies ?? [],
-    projects: item.projects ?? [],
-    entryType: item.entryType ?? '',
-  })),
-  skills: bundle.skills.map((item) => ({
-    id: item.id,
-    skillLabelRaw: item.skillLabelRaw ?? item.skillNodeLabel ?? '',
-    level: item.level ?? '',
-    years: item.years == null ? '' : String(item.years),
-    evidence: item.evidence ?? '',
-  })),
+  education: bundle.education.map((item) => {
+    const raw = item as unknown as Record<string, unknown>;
+    return {
+      id: item.id,
+      levelCode: item.levelCode ?? '',
+      levelRefId: raw.level_ref_id as string ?? '',
+      degree: item.degree ?? item.diplomaLabel ?? raw.diploma_code as string ?? '',
+      diplomaLabel: item.diplomaLabel ?? '',
+      diplomaRefId: raw.diploma_ref_id as string ?? '',
+      specialty: item.specialty ?? raw.specialty_code as string ?? '',
+      specialtyRefId: raw.specialty_ref_id as string ?? '',
+      institution: item.institution ?? '',
+      startDate: item.startDate ?? '',
+      endDate: item.endDate ?? '',
+      graduationYear: item.graduationYear == null ? '' : String(item.graduationYear),
+      location: item.location ?? '',
+      honors: item.honors ?? '',
+      gpa: item.gpa ?? '',
+    };
+  }),
+  experience: bundle.experience.map((item) => {
+    const raw = item as unknown as Record<string, unknown>;
+    return {
+      id: item.id,
+      jobTitleRaw: item.jobTitleRaw ?? '',
+      occupationNodeId: raw.occupation_node_id as string ?? '',
+      companyName: item.companyName ?? '',
+      sector: item.sector ?? '',
+      sectorRefId: raw.sector_ref_id as string ?? '',
+      location: item.location ?? '',
+      locationCountry: '',
+      locationGovCode: '',
+      locationGovLabel: '',
+      locationDelegCode: '',
+      locationDelegLabel: '',
+      startDate: item.startDate ?? '',
+      endDate: item.endDate ?? '',
+      isCurrent: (raw.is_current as boolean) ?? item.isCurrent ?? false,
+      durationMonths: item.durationMonths == null ? '' : String(item.durationMonths),
+      durationYears: item.durationYears == null ? '' : String(item.durationYears),
+      description: item.description ?? '',
+      responsibilities: item.responsibilities ?? [],
+      technologies: item.technologies ?? [],
+      projects: item.projects ?? [],
+      entryType: item.entryType ?? '',
+    };
+  }),
+  skills: bundle.skills.map((item) => {
+    const raw = item as unknown as Record<string, unknown>;
+    return {
+      id: item.id,
+      skillNodeId: raw.skill_node_id as string ?? item.skillId ?? '',
+      skillLabelRaw: item.skillLabelRaw ?? item.skillNodeLabel ?? '',
+      skillNodeType: item.skillNodeType ?? 'SKILL',
+      level: item.level ?? '',
+      years: item.years == null ? '' : String(item.years),
+      evidence: item.evidence ?? '',
+    };
+  }),
   languages: bundle.languages.map((item) => ({
     id: item.id,
     languageCode: item.languageCode,
@@ -740,11 +798,11 @@ const extractCandidateLocationCodes = (
 ): { governorateCode: string; delegationCode: string } => {
   const geo = mappedPayload.geo_normalization as
     | {
-        candidate_location?: {
-          governorate?: { code?: string | null };
-          delegation?: { code?: string | null };
-        };
-      }
+      candidate_location?: {
+        governorate?: { code?: string | null };
+        delegation?: { code?: string | null };
+      };
+    }
     | undefined;
 
   return {
@@ -774,9 +832,9 @@ function applyParsedCvToDraft(
 
   const fullName = splitFullName(
     identity.full_name ??
-      identity.name ??
-      personalInfo?.full_name ??
-      personalInfo?.name,
+    identity.name ??
+    personalInfo?.full_name ??
+    personalInfo?.name,
   );
 
   const parsedGeo = parsedPayload.geo_normalization as
@@ -799,13 +857,13 @@ function applyParsedCvToDraft(
       : undefined;
   const parsedPrimaryLanguage = toStringOrEmpty(
     identity.primary_language ??
-      personalInfo?.primary_language ??
-      (firstParsedLanguage &&
+    personalInfo?.primary_language ??
+    (firstParsedLanguage &&
       typeof firstParsedLanguage === 'object' &&
       !Array.isArray(firstParsedLanguage)
-        ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
-          (firstParsedLanguage as Record<string, unknown>).code)
-        : undefined),
+      ? ((firstParsedLanguage as Record<string, unknown>).language_code ??
+        (firstParsedLanguage as Record<string, unknown>).code)
+      : undefined),
   );
 
   return {
@@ -844,9 +902,9 @@ function applyParsedCvToDraft(
       degree: toStringOrEmpty(item.degree ?? item.raw_degree),
       diplomaLabel: toStringOrEmpty(
         item.diploma_label ??
-          item.diplomaLabel ??
-          item.degree ??
-          item.raw_degree,
+        item.diplomaLabel ??
+        item.degree ??
+        item.raw_degree,
       ),
       specialty: toStringOrEmpty(
         item.specialty ?? item.specialty_label ?? item.field,
@@ -888,15 +946,15 @@ function applyParsedCvToDraft(
       description: toStringOrEmpty(item.description),
       responsibilities: Array.isArray(item.responsibilities)
         ? item.responsibilities
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       technologies: Array.isArray(item.technologies)
         ? item.technologies
-            .filter((value): value is string => typeof value === 'string')
-            .map((value) => value.trim())
-            .filter(Boolean)
+          .filter((value): value is string => typeof value === 'string')
+          .map((value) => value.trim())
+          .filter(Boolean)
         : [],
       projects: Array.isArray(item.projects) ? item.projects : [],
       entryType: toStringOrEmpty(item.entry_type ?? item.entryType),
@@ -1086,7 +1144,7 @@ export default function Profile() {
   const [interestKeywordsDraft, setInterestKeywordsDraft] = useState<string[]>(
     [],
   );
-  const [interestKeywordInput, setInterestKeywordInput] = useState('');
+
   const [minimumOfferScoreDraft, setMinimumOfferScoreDraft] = useState(
     getStoredCandidateMinimumOfferScore(),
   );
@@ -1123,6 +1181,15 @@ export default function Profile() {
     queryFn: () => gatewayApi.referentials.diplomas(),
     staleTime: 5 * 60_000,
   });
+
+  // ── New canonical reference dropdowns ─────────────────────────────────────
+  const geoCountriesQuery = useGeoCountriesQuery();
+  const educationLevelsQuery = useRefDropdownQuery('EDUCATION_LEVEL');
+  const canonicalDiplomasQuery = useRefDropdownQuery('DIPLOMA');
+  const specialtiesQuery = useRefDropdownQuery('SPECIALTY');
+  const activitySectorsQuery = useRefDropdownQuery('ACTIVITY_SECTOR');
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   const languagesQuery = useQuery({
     queryKey: ['referentials', 'languages'],
@@ -1187,7 +1254,7 @@ export default function Profile() {
     () =>
       normalizeCandidateMinimumOfferScore(
         offerThresholdQuery.data?.minThreshold ??
-          getStoredCandidateMinimumOfferScore(),
+        getStoredCandidateMinimumOfferScore(),
       ),
     [offerThresholdQuery.data?.minThreshold],
   );
@@ -1204,7 +1271,7 @@ export default function Profile() {
     if (!isEditing) {
       setInterestKeywordsDraft(savedInterestKeywords);
       setMinimumOfferScoreDraft(savedMinimumOfferScore);
-      setInterestKeywordInput('');
+  
     }
   }, [isEditing, savedInterestKeywords, savedMinimumOfferScore]);
 
@@ -1431,25 +1498,40 @@ export default function Profile() {
       };
     });
   };
+  // ── Skill segment helpers (technical vs. soft skills) ────────────────────
+  const technicalSkillDrafts = useMemo(
+    () => currentDraft?.skills.filter((s) => s.skillNodeType !== 'SOFT_SKILL') ?? [],
+    [currentDraft?.skills],
+  );
+  const softSkillDrafts = useMemo(
+    () => currentDraft?.skills.filter((s) => s.skillNodeType === 'SOFT_SKILL') ?? [],
+    [currentDraft?.skills],
+  );
+  const replaceSkillDrafts = (
+    segment: 'technical' | 'soft',
+    nextItems: SetStateAction<SkillDraft[]>,
+  ) => {
+    setDraft((current) => {
+      if (!current) return current;
+      const isTech = (s: SkillDraft) => s.skillNodeType !== 'SOFT_SKILL';
+      const currentSeg = current.skills.filter((s) => (segment === 'technical' ? isTech(s) : !isTech(s)));
+      const otherSeg = current.skills.filter((s) => (segment === 'technical' ? !isTech(s) : isTech(s)));
+      const resolved = typeof nextItems === 'function' ? nextItems(currentSeg) : nextItems;
+      return {
+        ...current,
+        skills: segment === 'technical' ? [...resolved, ...otherSeg] : [...otherSeg, ...resolved],
+      };
+    });
+  };
+
   const startEditing = () => {
     if (bundle) {
       setDraft(toDraft(bundle));
     }
     setInterestKeywordsDraft(savedInterestKeywords);
     setMinimumOfferScoreDraft(savedMinimumOfferScore);
-    setInterestKeywordInput('');
-    setIsEditing(true);
-  };
-  const addInterestKeyword = () => {
-    const normalizedKeyword = normalizeKeyword(interestKeywordInput);
-    if (!normalizedKeyword) {
-      return;
-    }
 
-    setInterestKeywordsDraft((current) =>
-      normalizeKeywordList([...current, normalizedKeyword]),
-    );
-    setInterestKeywordInput('');
+    setIsEditing(true);
   };
   const removeInterestKeyword = (keyword: string) => {
     setInterestKeywordsDraft((current) =>
@@ -1466,7 +1548,7 @@ export default function Profile() {
     }
     setInterestKeywordsDraft(savedInterestKeywords);
     setMinimumOfferScoreDraft(savedMinimumOfferScore);
-    setInterestKeywordInput('');
+
     setLatestParseResult(null);
     setIsEditing(false);
   };
@@ -1554,7 +1636,7 @@ export default function Profile() {
           parsedKeywords.length > 0 ? parsedKeywords : savedInterestKeywords,
         );
         setMinimumOfferScoreDraft(savedMinimumOfferScore);
-        setInterestKeywordInput('');
+    
         setIsEditing(true);
         toast.success('CV analysé. Vérifiez les champs puis cliquez sur Enregistrer.');
       } else if (asyncParseStatus === 'PARSED') {
@@ -1586,11 +1668,15 @@ export default function Profile() {
     );
 
     return {
-      level_code: diplomaOption ? null : item.levelCode || null,
+      level_code: item.levelCode || null,
+      level_ref_id: item.levelRefId || null,
       degree: diplomaOption?.code ?? item.degree ?? null,
-      diploma_label:
-        diplomaOption?.label ?? item.diplomaLabel ?? item.degree ?? null,
+      diploma_label: diplomaOption?.label ?? item.diplomaLabel ?? item.degree ?? null,
+      diploma_code: item.diplomaRefId ? null : ((diplomaOption?.code ?? item.degree) || null),
+      diploma_ref_id: item.diplomaRefId || null,
       specialty: item.specialty || null,
+      specialty_code: item.specialtyRefId ? null : (item.specialty || null),
+      specialty_ref_id: item.specialtyRefId || null,
       institution: item.institution || null,
       start_date: item.startDate || null,
       end_date: item.endDate || null,
@@ -1601,7 +1687,16 @@ export default function Profile() {
     };
   };
 
-  const buildExperiencePayload = (item: ExperienceDraft) => ({
+  const buildExperiencePayload = (item: ExperienceDraft) => {
+    // Compose structured geo parts + free text into a single location string
+    const geoParts = [item.locationDelegLabel, item.locationGovLabel]
+      .filter(Boolean);
+    if (item.locationCountry && item.locationCountry !== 'TN' && geoParts.length === 0) {
+      geoParts.push(item.locationCountry);
+    }
+    const composedLocation = [...geoParts, item.location].filter(Boolean).join(', ') || null;
+    return ({
+    occupation_node_id: item.occupationNodeId || null,
     job_title_raw:
       item.entryType === 'internship'
         ? item.jobTitleRaw
@@ -1612,9 +1707,10 @@ export default function Profile() {
         : item.jobTitleRaw || null,
     company_name: item.companyName || null,
     sector: item.sector || null,
-    location: item.location || null,
+    sector_ref_id: item.sectorRefId || null,
+    location: composedLocation,
     start_date: item.startDate || null,
-    end_date: item.endDate || null,
+    end_date: item.isCurrent ? null : (item.endDate || null),
     is_current: item.isCurrent,
     duration_months: toNullableNumber(item.durationMonths),
     duration_years: toNullableNumber(item.durationYears),
@@ -1627,6 +1723,32 @@ export default function Profile() {
       item.entryType ||
       (isInternshipExperience(item) ? 'internship' : 'experience'),
   });
+  };
+
+  // ── aggregate PATCH helper ──────────────────────────────────────────────────
+  const patchProfileMutation = usePatchCandidateProfileMutation();
+
+  /** Convert draft+saved into a {upsert, delete_ids} changeset section. */
+  function buildCollectionChangeset<
+    TSaved extends { id: string },
+    TDraft extends { id?: string },
+  >(
+    saved: TSaved[],
+    draft: TDraft[],
+    hasValue: (item: TDraft) => boolean,
+    buildPayload: (item: TDraft) => Record<string, unknown>,
+  ): { upsert: Array<Record<string, unknown> & { id?: string }>; delete_ids: string[] } {
+    const keptIds = new Set(
+      draft.map((item) => item.id).filter((id): id is string => Boolean(id)),
+    );
+    const delete_ids = saved
+      .filter((item) => !keptIds.has(item.id))
+      .map((item) => item.id);
+    const upsert = draft
+      .filter(hasValue)
+      .map((item) => ({ ...buildPayload(item), ...(item.id ? { id: item.id } : {}) }));
+    return { upsert, delete_ids };
+  }
 
   const handleSave = async () => {
     if (!bundle || !currentDraft) {
@@ -1634,7 +1756,105 @@ export default function Profile() {
     }
 
     setIsSaving(true);
+
+    const normalizedKeywords = normalizeKeywordList(interestKeywordsDraft);
+    const requestedThreshold = normalizeCandidateMinimumOfferScore(minimumOfferScoreDraft);
+
     try {
+      // ── Fast path: single aggregate PATCH ────────────────────────────────
+      const changeset: CandidateProfilePatchPayload = {
+        candidate: { primary_language: currentDraft.primaryLanguage || null },
+        identity: {
+          cin: currentDraft.cin || null,
+          passport_number: currentDraft.passportNumber || null,
+          first_name: currentDraft.firstName || 'Unknown',
+          last_name: currentDraft.lastName || 'Candidate',
+          birth_date: currentDraft.birthDate || null,
+          gender_code: currentDraft.genderCode || null,
+          nationality: currentDraft.nationality || null,
+          nationality_country_id: currentDraft.nationalityCountryId || null,
+          code_handicap: currentDraft.codeHandicap || null,
+          code_degre_handicap: currentDraft.codeHandicap && currentDraft.codeHandicap !== '0'
+            ? currentDraft.codeDegreHandicap || null
+            : null,
+        },
+        contact: {
+          email: currentDraft.email || null,
+          phone: currentDraft.phone || null,
+          address: currentDraft.address || null,
+          country: currentDraft.country || 'TN',
+          governorate_code: currentDraft.governorateCode || null,
+          delegation_code: currentDraft.delegationCode || null,
+        },
+        preference: {
+          preferred_contract_type: currentDraft.preferredContractType || null,
+          preferred_governorate: currentDraft.preferredGovernorate || null,
+          mobility_radius_km: toNullableNumber(currentDraft.mobilityRadiusKm),
+          accepts_relocation: currentDraft.acceptsRelocation,
+          desired_salary_min: toNullableNumber(currentDraft.desiredSalaryMin),
+          desired_salary_max: toNullableNumber(currentDraft.desiredSalaryMax),
+        },
+        education: buildCollectionChangeset(
+          bundle.education, currentDraft.education,
+          hasEducationValue, buildEducationPayload,
+        ),
+        experience: buildCollectionChangeset(
+          bundle.experience, currentDraft.experience,
+          hasExperienceValue, buildExperiencePayload,
+        ),
+        skills: buildCollectionChangeset(
+          bundle.skills, currentDraft.skills,
+          hasSkillValue,
+          (item) => ({
+            skill_node_id: item.skillNodeId || null,
+            skill_id: item.skillNodeId || null, // backward compat
+            skill_label_raw: item.skillLabelRaw || null,
+            skill_node_type: item.skillNodeType || 'SKILL',
+            level: item.level || null,
+            years: toNullableNumber(item.years),
+            evidence: item.evidence || null,
+            source: 'MANUAL',
+          }),
+        ),
+        languages: buildCollectionChangeset(
+          bundle.languages, currentDraft.languages,
+          hasLanguageValue,
+          (item) => ({
+            language_code: item.languageCode || 'fr',
+            level: item.level || null,
+            evidence: item.evidence || null,
+          }),
+        ),
+        keywords: normalizedKeywords,
+        offer_threshold: requestedThreshold,
+      };
+
+      try {
+        const result = await patchProfileMutation.mutateAsync(changeset);
+        // Use the returned aggregate to refresh state — no fan-out refetch.
+        const updatedBundle = mapAggregateToBundle(result, bundle.cvRecords);
+        setDraft(toDraft(updatedBundle));
+        const persistedThreshold = normalizeCandidateMinimumOfferScore(result.offer_threshold);
+        setStoredCandidateInterestKeywords(result.keywords);
+        setStoredCandidateMinimumOfferScore(persistedThreshold);
+        queryClient.setQueryData(queryKeys.candidate.keywords(), toKeywordRecords(result.keywords));
+        queryClient.setQueryData(queryKeys.candidate.offerThreshold(), { minThreshold: persistedThreshold });
+        setInterestKeywordsDraft(result.keywords);
+        setMinimumOfferScoreDraft(persistedThreshold);
+        setLatestParseResult(null);
+    
+        setIsEditing(false);
+        toast.success('Votre profil a été enregistré.');
+        return;
+      } catch (aggregateError) {
+        // Fall through to legacy sequential approach only when the aggregate
+        // endpoint is not yet deployed (404/405).
+        if (!isEndpointUnavailableError(aggregateError)) {
+          throw aggregateError;
+        }
+      }
+
+      // ── Legacy fallback: sequential individual calls ───────────────────
       await gatewayApi.candidate.updateProfile({
         primary_language: currentDraft.primaryLanguage || null,
       });
@@ -1647,10 +1867,10 @@ export default function Profile() {
         birth_date: currentDraft.birthDate || null,
         gender_code: currentDraft.genderCode || null,
         nationality: currentDraft.nationality || null,
-        code_handicap: draft.codeHandicap || null,
+        code_handicap: currentDraft.codeHandicap || null,
         code_degre_handicap:
-          draft.codeHandicap && draft.codeHandicap !== '0'
-            ? draft.codeDegreHandicap || null
+          currentDraft.codeHandicap && currentDraft.codeHandicap !== '0'
+            ? currentDraft.codeDegreHandicap || null
             : null,
       });
 
@@ -1706,7 +1926,9 @@ export default function Profile() {
         hasSkillValue,
         (item) =>
           gatewayApi.candidate.createSkill({
+            skill_node_id: item.skillNodeId || null,
             skill_label_raw: item.skillLabelRaw || null,
+            skill_node_type: item.skillNodeType || 'SKILL',
             level: item.level || null,
             years: toNullableNumber(item.years),
             evidence: item.evidence || null,
@@ -1714,7 +1936,9 @@ export default function Profile() {
           }),
         (item) =>
           gatewayApi.candidate.updateSkill(item.id!, {
+            skill_node_id: item.skillNodeId || null,
             skill_label_raw: item.skillLabelRaw || null,
+            skill_node_type: item.skillNodeType || 'SKILL',
             level: item.level || null,
             years: toNullableNumber(item.years),
             evidence: item.evidence || null,
@@ -1742,8 +1966,7 @@ export default function Profile() {
         (id) => gatewayApi.candidate.deleteLanguage(id),
       );
 
-      const normalizedKeywords = normalizeKeywordList(interestKeywordsDraft);
-      const persistedKeywords = toKeywordRecords(normalizedKeywords);
+      let persistedKeywords = toKeywordRecords(normalizedKeywords);
 
       try {
         persistedKeywords =
@@ -1762,17 +1985,14 @@ export default function Profile() {
         persistedKeywords,
       );
 
-      const requestedMinimumOfferScore = normalizeCandidateMinimumOfferScore(
-        minimumOfferScoreDraft,
-      );
-      let persistedMinimumOfferScore = requestedMinimumOfferScore;
+      let persistedMinimumOfferScore = requestedThreshold;
 
       try {
         const thresholdRecord = await gatewayApi.candidate.updateOfferThreshold(
-          requestedMinimumOfferScore,
+          requestedThreshold,
         );
         persistedMinimumOfferScore = normalizeCandidateMinimumOfferScore(
-          thresholdRecord?.minThreshold ?? requestedMinimumOfferScore,
+          thresholdRecord?.minThreshold ?? requestedThreshold,
         );
       } catch (error) {
         if (!isEndpointUnavailableError(error)) {
@@ -1791,7 +2011,7 @@ export default function Profile() {
       setLatestParseResult(null);
       setInterestKeywordsDraft(persistedKeywords.map((item) => item.keyword));
       setMinimumOfferScoreDraft(persistedMinimumOfferScore);
-      setInterestKeywordInput('');
+  
       setIsEditing(false);
       toast.success('Votre profil a été enregistré.');
     } catch (error) {
@@ -1961,15 +2181,15 @@ export default function Profile() {
                     value: bundle.identity?.handicap_label ?? 'Aucun',
                   },
                   ...(bundle.identity?.code_handicap &&
-                  bundle.identity.code_handicap !== '0'
+                    bundle.identity.code_handicap !== '0'
                     ? [
-                        {
-                          label: 'Degré de handicap',
-                          value:
-                            bundle.identity?.degre_handicap_label ??
-                            'Non renseigné',
-                        },
-                      ]
+                      {
+                        label: 'Degré de handicap',
+                        value:
+                          bundle.identity?.degre_handicap_label ??
+                          'Non renseigné',
+                      },
+                    ]
                     : []),
                 ]}
               />
@@ -2072,155 +2292,202 @@ export default function Profile() {
             </>
           ) : (
             <>
-              <section className="space-y-4 px-6 py-6 sm:px-8">
+              <section className="space-y-6 px-6 py-6 sm:px-8">
                 <SectionTitle
                   title="Informations personnelles"
                   description="Mettez à jour vos informations personnelles et vos coordonnées."
                   icon={UserRound}
                   iconClassName="icon-background-color-3"
                 />
-                <div className="grid gap-4 md:grid-cols-2">
-                  <Field
-                    label="Prénom"
-                    value={currentDraft.firstName}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, firstName: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Nom"
-                    value={currentDraft.lastName}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, lastName: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="E-mail"
-                    value={currentDraft.email}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, email: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Téléphone"
-                    value={currentDraft.phone}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, phone: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Adresse"
-                    value={currentDraft.address}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, address: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Nationalité"
-                    value={currentDraft.nationality}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, nationality: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Date de naissance"
-                    type="date"
-                    value={currentDraft.birthDate}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, birthDate: value } : current,
-                      )
-                    }
-                  />
-                  <SelectField
-                    label="Langue principale"
-                    value={currentDraft.primaryLanguage}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, primaryLanguage: value }
-                          : current,
-                      )
-                    }
-                    options={languagesQuery.data ?? []}
-                    placeholder="Choisir une langue"
-                  />
-                  <OptionSelect
-                    label="Genre"
-                    value={currentDraft.genderCode}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, genderCode: value } : current,
-                      )
-                    }
-                    options={gendersQuery.data ?? []}
-                    placeholder="Sélectionner"
-                  />
-                  <OptionSelect
-                    label="Gouvernorat"
-                    value={currentDraft.governorateCode}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? {
+
+                {/* ── Identité ────────────────────────────────────────── */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Identité
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Prénom"
+                      value={currentDraft.firstName}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, firstName: value } : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Nom"
+                      value={currentDraft.lastName}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, lastName: value } : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Date de naissance"
+                      type="date"
+                      value={currentDraft.birthDate}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, birthDate: value } : current,
+                        )
+                      }
+                    />
+                    <OptionSelect
+                      label="Genre"
+                      value={currentDraft.genderCode}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, genderCode: value } : current,
+                        )
+                      }
+                      options={gendersQuery.data ?? []}
+                      placeholder="Sélectionner"
+                    />
+                    <OptionSelect
+                      label="Nationalité"
+                      value={currentDraft.nationalityCountryId || currentDraft.nationality}
+                      onChange={(value) => {
+                        const country = (geoCountriesQuery.data ?? []).find(
+                          (c) => c.id === value || c.iso2 === value,
+                        );
+                        setDraft((current) =>
+                          current
+                            ? {
                               ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
+                              nationalityCountryId: country?.id ?? value,
+                              nationality: country?.iso2 ?? value,
                             }
-                          : current,
-                      )
-                    }
-                    options={governoratesQuery.data ?? []}
-                    placeholder="Sélectionner"
-                  />
-                  <OptionSelect
-                    label="Délégation"
-                    value={currentDraft.delegationCode}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, delegationCode: value }
-                          : current,
-                      )
-                    }
-                    options={delegationsQuery.data ?? []}
-                    placeholder="Sélectionner"
-                    disabled={!currentDraft.governorateCode}
-                  />
-                  <Field
-                    label="CIN"
-                    value={currentDraft.cin}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current ? { ...current, cin: value } : current,
-                      )
-                    }
-                  />
-                  <Field
-                    label="Passeport"
-                    value={currentDraft.passportNumber}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current
-                          ? { ...current, passportNumber: value }
-                          : current,
-                      )
-                    }
-                  />
+                            : current,
+                        );
+                      }}
+                      options={(geoCountriesQuery.data ?? []).map((c) => ({
+                        code: c.id,
+                        label: c.name_fr ?? c.iso2,
+                      }))}
+                      placeholder="Sélectionner un pays"
+                    />
+                  </div>
+                </div>
+
+                {/* ── Contact ─────────────────────────────────────────── */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Contact
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="E-mail"
+                      value={currentDraft.email}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, email: value } : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Téléphone"
+                      value={currentDraft.phone}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, phone: value } : current,
+                        )
+                      }
+                    />
+                    <SelectField
+                      label="Langue principale"
+                      value={currentDraft.primaryLanguage}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, primaryLanguage: value }
+                            : current,
+                        )
+                      }
+                      options={languagesQuery.data ?? []}
+                      placeholder="Choisir une langue"
+                    />
+                  </div>
+                </div>
+
+                {/* ── Adresse de résidence ─────────────────────────────── */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Adresse de résidence
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <GeoAddressFields
+                      value={{
+                        countryIso2: currentDraft.country,
+                        adminUnit1Code: currentDraft.governorateCode,
+                        adminUnit1Label: selectedGovernorateLabel,
+                        adminUnit2Code: currentDraft.delegationCode,
+                        adminUnit2Label: selectedDelegationLabel,
+                      }}
+                      onChange={(geo) =>
+                        setDraft((current) =>
+                          current
+                            ? {
+                              ...current,
+                              country: geo.countryIso2 || 'TN',
+                              governorateCode: geo.adminUnit1Code,
+                              delegationCode: geo.adminUnit2Code,
+                              preferredGovernorate:
+                                current.preferredGovernorate || geo.adminUnit1Code,
+                            }
+                            : current,
+                        )
+                      }
+                    />
+                    <div className="md:col-span-2">
+                      <Field
+                        label="Adresse (complément libre)"
+                        value={currentDraft.address}
+                        onChange={(value) =>
+                          setDraft((current) =>
+                            current ? { ...current, address: value } : current,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ── Documents d'identité ─────────────────────────────── */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Documents d'identité
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="CIN"
+                      value={currentDraft.cin}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current ? { ...current, cin: value } : current,
+                        )
+                      }
+                    />
+                    <Field
+                      label="Passeport"
+                      value={currentDraft.passportNumber}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current
+                            ? { ...current, passportNumber: value }
+                            : current,
+                        )
+                      }
+                    />
+                  </div>
+                </div>
+
+                {/* ── Situation particulière ───────────────────────────── */}
+                <div>
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Situation particulière
+                  </p>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
                       <Label htmlFor="codeHandicap">Type de handicap</Label>
@@ -2247,16 +2514,11 @@ export default function Profile() {
                         </SelectContent>
                       </Select>
                     </div>
-
                     <div className="space-y-2">
-                      <Label htmlFor="codeDegreHandicap">
-                        Degré de handicap
-                      </Label>
+                      <Label htmlFor="codeDegreHandicap">Degré de handicap</Label>
                       <Select
                         value={draft.codeDegreHandicap || 'none'}
-                        disabled={
-                          !draft.codeHandicap || draft.codeHandicap === '0'
-                        }
+                        disabled={!draft.codeHandicap || draft.codeHandicap === '0'}
                         onValueChange={(value) =>
                           setDraft((current) => ({
                             ...current,
@@ -2292,12 +2554,12 @@ export default function Profile() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            education:
-                              typeof updater === 'function'
-                                ? updater(current.education)
-                                : updater,
-                          }
+                          ...current,
+                          education:
+                            typeof updater === 'function'
+                              ? updater(current.education)
+                              : updater,
+                        }
                         : current,
                     )
                   }
@@ -2305,42 +2567,63 @@ export default function Profile() {
                   isEditing
                   emptyStateMessage="Aucune formation renseignée."
                   renderItem={(item, update) => {
-                    const currentDiplomaOptions = buildOptionsWithCurrentValue(
-                      diplomaOptions,
-                      item.degree,
-                      item.diplomaLabel,
+                    // Canonical reference dropdowns ────────────────────────
+                    const diplomaOpts = (canonicalDiplomasQuery.data ?? []).map(
+                      (v) => ({ code: v.id, label: v.label_fr ?? v.label }),
                     );
+                    const specialtyOpts = (specialtiesQuery.data ?? []).map(
+                      (v) => ({ code: v.id, label: v.label_fr ?? v.label }),
+                    );
+                    // Fallback to old referentials if canonical is empty ────
+                    const finalDiplomaOpts =
+                      diplomaOpts.length > 0
+                        ? diplomaOpts
+                        : buildOptionsWithCurrentValue(
+                          diplomaOptions,
+                          item.degree,
+                          item.diplomaLabel,
+                        );
 
                     return (
                       <div className="grid gap-3 md:grid-cols-2">
+                        {/* level_ref_id kept internally — derived from diploma; not shown */}
                         <OptionSelect
                           label="Diplôme"
-                          value={resolveOptionValue(
-                            diplomaOptions,
-                            item.degree,
-                            item.diplomaLabel,
-                          )}
+                          value={item.diplomaRefId || item.degree}
                           onChange={(value) => {
-                            const selectedOption = currentDiplomaOptions.find(
-                              (option) => option.code === value,
-                            );
-
+                            const opt = finalDiplomaOpts.find((o) => o.code === value);
                             update({
                               ...item,
-                              degree: value,
-                              diplomaLabel: selectedOption?.label ?? '',
+                              diplomaRefId: value,
+                              degree: opt?.code ?? value,
+                              diplomaLabel: opt?.label ?? '',
                             });
                           }}
-                          options={currentDiplomaOptions}
+                          options={finalDiplomaOpts}
                           placeholder="Choisir un diplôme"
                         />
-                        <Field
-                          label="Spécialité"
-                          value={item.specialty}
-                          onChange={(value) =>
-                            update({ ...item, specialty: value })
-                          }
-                        />
+                        {specialtyOpts.length > 0 ? (
+                          <OptionSelect
+                            label="Spécialité"
+                            value={item.specialtyRefId || item.specialty}
+                            onChange={(value) => {
+                              const opt = specialtyOpts.find((o) => o.code === value);
+                              update({
+                                ...item,
+                                specialtyRefId: value,
+                                specialty: opt?.label ?? value,
+                              });
+                            }}
+                            options={specialtyOpts}
+                            placeholder="Choisir une spécialité"
+                          />
+                        ) : (
+                          <Field
+                            label="Spécialité"
+                            value={item.specialty}
+                            onChange={(value) => update({ ...item, specialty: value })}
+                          />
+                        )}
                         <Field
                           label="Établissement"
                           value={item.institution}
@@ -2393,6 +2676,9 @@ export default function Profile() {
                       item={item}
                       update={update}
                       type="experience"
+                      sectorOptions={(activitySectorsQuery.data ?? []).map(
+                        (v) => ({ code: v.id, label: v.label_fr ?? v.label }),
+                      )}
                     />
                   )}
                   viewItem={() => null}
@@ -2420,6 +2706,9 @@ export default function Profile() {
                       item={item}
                       update={update}
                       type="internship"
+                      sectorOptions={(activitySectorsQuery.data ?? []).map(
+                        (v) => ({ code: v.id, label: v.label_fr ?? v.label }),
+                      )}
                     />
                   )}
                   viewItem={() => null}
@@ -2428,51 +2717,35 @@ export default function Profile() {
                 <Separator className="bg-accent/70" />
 
                 <CollectionSection<SkillDraft>
-                  title="Compétences"
-                  description="Les compétences que vous souhaitez mettre en avant."
+                  title="Compétences techniques"
+                  description="Compétences métier et techniques (RTMC SKILL)."
                   icon={Globe2}
                   iconClassName="icon-background-color-7"
-                  items={currentDraft.skills}
-                  setItems={(updater) =>
-                    setDraft((current) =>
-                      current
-                        ? {
-                            ...current,
-                            skills:
-                              typeof updater === 'function'
-                                ? updater(current.skills)
-                                : updater,
-                          }
-                        : current,
-                    )
-                  }
-                  emptyItem={emptySkill}
+                  items={technicalSkillDrafts}
+                  setItems={(updater) => replaceSkillDrafts('technical', updater)}
+                  emptyItem={() => emptySkill('SKILL')}
                   isEditing
-                  emptyStateMessage="Aucune compétence renseignée."
+                  emptyStateMessage="Aucune compétence technique renseignée."
                   renderItem={(item, update) => (
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <Field
-                        label="Compétence"
-                        value={item.skillLabelRaw}
-                        onChange={(value) =>
-                          update({ ...item, skillLabelRaw: value })
-                        }
-                      />
-                      <OptionSelect
-                        label="Niveau"
-                        value={resolveOptionValue(
-                          skillLevelOptions,
-                          item.level,
-                        )}
-                        onChange={(value) => update({ ...item, level: value })}
-                        options={buildOptionsWithCurrentValue(
-                          skillLevelOptions,
-                          item.level,
-                          formatCandidateLevelLabel(item.level),
-                        )}
-                        placeholder="Choisir un niveau"
-                      />
-                    </div>
+                    <SkillPicker item={item} update={update} nodeType="SKILL" />
+                  )}
+                  viewItem={() => null}
+                />
+
+                <Separator className="bg-accent/70" />
+
+                <CollectionSection<SkillDraft>
+                  title="Compétences transversales"
+                  description="Soft skills et compétences comportementales (RTMC SOFT_SKILL)."
+                  icon={Globe2}
+                  iconClassName="icon-background-color-7"
+                  items={softSkillDrafts}
+                  setItems={(updater) => replaceSkillDrafts('soft', updater)}
+                  emptyItem={() => emptySkill('SOFT_SKILL')}
+                  isEditing
+                  emptyStateMessage="Aucune compétence transversale renseignée."
+                  renderItem={(item, update) => (
+                    <SkillPicker item={item} update={update} nodeType="SOFT_SKILL" />
                   )}
                   viewItem={() => null}
                 />
@@ -2489,12 +2762,12 @@ export default function Profile() {
                     setDraft((current) =>
                       current
                         ? {
-                            ...current,
-                            languages:
-                              typeof updater === 'function'
-                                ? updater(current.languages)
-                                : updater,
-                          }
+                          ...current,
+                          languages:
+                            typeof updater === 'function'
+                              ? updater(current.languages)
+                              : updater,
+                        }
                         : current,
                     )
                   }
@@ -2548,11 +2821,16 @@ export default function Profile() {
                     icon={Globe2}
                     iconClassName="icon-background-color-19"
                   />
-                  <InterestKeywordsEditor
+                  <TaxonomyKeywordsEditor
                     keywords={interestKeywordsDraft}
-                    inputValue={interestKeywordInput}
-                    onInputChange={setInterestKeywordInput}
-                    onAdd={addInterestKeyword}
+                    onAdd={(keyword) => {
+                      const normalized = normalizeKeyword(keyword);
+                      if (normalized) {
+                        setInterestKeywordsDraft((current) =>
+                          normalizeKeywordList([...current, normalized]),
+                        );
+                      }
+                    }}
                     onRemove={removeInterestKeyword}
                   />
                 </section>
@@ -2637,9 +2915,9 @@ export default function Profile() {
                         setDraft((current) =>
                           current
                             ? {
-                                ...current,
-                                acceptsRelocation: event.target.checked,
-                              }
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
                             : current,
                         )
                       }
@@ -2799,12 +3077,12 @@ export default function Profile() {
                       setDraft((current) =>
                         current
                           ? {
-                              ...current,
-                              governorateCode: value,
-                              delegationCode: '',
-                              preferredGovernorate:
-                                current.preferredGovernorate || value,
-                            }
+                            ...current,
+                            governorateCode: value,
+                            delegationCode: '',
+                            preferredGovernorate:
+                              current.preferredGovernorate || value,
+                          }
                           : current,
                       )
                     }
@@ -3003,9 +3281,9 @@ export default function Profile() {
                         setDraft((current) =>
                           current
                             ? {
-                                ...current,
-                                acceptsRelocation: event.target.checked,
-                              }
+                              ...current,
+                              acceptsRelocation: event.target.checked,
+                            }
                             : current,
                         )
                       }
@@ -3027,12 +3305,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          education:
-                            typeof updater === 'function'
-                              ? updater(current.education)
-                              : updater,
-                        }
+                        ...current,
+                        education:
+                          typeof updater === 'function'
+                            ? updater(current.education)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3113,7 +3391,7 @@ export default function Profile() {
                                 'Formation'}
                             </h3>
                             {item.diplomaLabel &&
-                            item.diplomaLabel !== item.degree ? (
+                              item.diplomaLabel !== item.degree ? (
                               <p className="mt-1 text-sm text-foreground">
                                 {item.diplomaLabel}
                               </p>
@@ -3172,12 +3450,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          experience:
-                            typeof updater === 'function'
-                              ? updater(current.experience)
-                              : updater,
-                        }
+                        ...current,
+                        experience:
+                          typeof updater === 'function'
+                            ? updater(current.experience)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3410,12 +3688,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          skills:
-                            typeof updater === 'function'
-                              ? updater(current.skills)
-                              : updater,
-                        }
+                        ...current,
+                        skills:
+                          typeof updater === 'function'
+                            ? updater(current.skills)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3505,12 +3783,12 @@ export default function Profile() {
                   setDraft((current) =>
                     current
                       ? {
-                          ...current,
-                          languages:
-                            typeof updater === 'function'
-                              ? updater(current.languages)
-                              : updater,
-                        }
+                        ...current,
+                        languages:
+                          typeof updater === 'function'
+                            ? updater(current.languages)
+                            : updater,
+                      }
                       : current,
                   )
                 }
@@ -3589,13 +3867,13 @@ export default function Profile() {
                   const label = `${formatLanguageLabel(
                     item.languageCode,
                     bundleLanguage?.languageLabelFr ??
-                      bundleLanguage?.languageLabelEn ??
-                      languageOption?.label,
+                    bundleLanguage?.languageLabelEn ??
+                    languageOption?.label,
                   )} - ${formatLanguageLevelLabel(
                     item.level,
                     bundleLanguage?.levelLabelFr ??
-                      bundleLanguage?.levelLabelEn ??
-                      levelOption?.label,
+                    bundleLanguage?.levelLabelEn ??
+                    levelOption?.label,
                   )}`;
 
                   return (
@@ -3903,8 +4181,8 @@ function CollectionSection<T extends { id?: string }>({
   icon: ComponentType<{ className?: string }>;
   items: T[];
   setItems:
-    | Dispatch<SetStateAction<T[]>>
-    | ((next: SetStateAction<T[]>) => void);
+  | Dispatch<SetStateAction<T[]>>
+  | ((next: SetStateAction<T[]>) => void);
   emptyItem: () => T;
   isEditing: boolean;
   renderItem: (item: T, update: (next: T) => void) => ReactNode;
@@ -3956,29 +4234,29 @@ function CollectionSection<T extends { id?: string }>({
         {!isEditing && renderListView
           ? renderListView(items)
           : items?.map((item, index) => (
-              <article
-                key={item.id ?? `${title}-${index}`}
-                className="rounded-2xl border border-border bg-background p-5 border-color-aneti-blue border-left-aneti"
-              >
-                {isEditing ? (
-                  <div className="space-y-4 relative">
-                    <div className="absolute right-[-10px] top-[-30px]">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeItem(index)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                    {renderItem(item, (next) => updateItem(index, next))}
+            <article
+              key={item.id ?? `${title}-${index}`}
+              className="rounded-2xl border border-border bg-background p-5 border-color-aneti-blue border-left-aneti"
+            >
+              {isEditing ? (
+                <div className="space-y-4 relative">
+                  <div className="absolute right-[-10px] top-[-30px]">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(index)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
-                ) : (
-                  viewItem(item)
-                )}
-              </article>
-            ))}
+                  {renderItem(item, (next) => updateItem(index, next))}
+                </div>
+              ) : (
+                viewItem(item)
+              )}
+            </article>
+          ))}
       </div>
     </section>
   );
@@ -4004,9 +4282,8 @@ function ReadOnlyDataGrid({ items }: { items: ReadOnlyGridItem[] }) {
       {items.map((item) => (
         <article
           key={item.label}
-          className={`rounded-2xl border border-border bg-background p-4 ${
-            item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
-          }`}
+          className={`rounded-2xl border border-border bg-background p-4 ${item.fullWidth ? 'md:col-span-2 xl:col-span-3' : ''
+            }`}
         >
           <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {item.label}
@@ -4045,9 +4322,9 @@ function ProfileOverviewSection({
     normalizeKeyword(email) ? { icon: Mail, label: email } : null,
     primaryLanguageLabel
       ? {
-          icon: Globe2,
-          label: `Langue principale : ${primaryLanguageLabel}`,
-        }
+        icon: Globe2,
+        label: `Langue principale : ${primaryLanguageLabel}`,
+      }
       : null,
     {
       icon: Languages,
@@ -4537,26 +4814,56 @@ function RecommendationPreferencesReadOnly({
   );
 }
 
+function computeDurationMonths(
+  startDate: string,
+  endDate: string,
+  isCurrent: boolean,
+): number | null {
+  if (!startDate) return null;
+  const start = new Date(startDate);
+  const end = isCurrent || !endDate ? new Date() : new Date(endDate);
+  if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+  return Math.max(
+    0,
+    (end.getFullYear() - start.getFullYear()) * 12 +
+    (end.getMonth() - start.getMonth()),
+  );
+}
+
 function ExperienceDraftFields({
   item,
   update,
   type,
+  sectorOptions = [],
 }: {
   item: ExperienceDraft;
   update: (next: ExperienceDraft) => void;
   type: 'experience' | 'internship';
+  sectorOptions?: Array<{ code: string; label: string }>;
 }) {
+  const computedMonths = computeDurationMonths(
+    item.startDate,
+    item.endDate,
+    item.isCurrent,
+  );
+  const computedYears =
+    computedMonths != null
+      ? `${Math.floor(computedMonths / 12)} ans ${computedMonths % 12} mois`
+      : '';
+
   return (
     <div className="grid gap-3 md:grid-cols-2">
-      <Field
-        label={
-          type === 'internship' ? 'Intitulé du stage' : 'Intitulé du poste'
-        }
-        value={item.jobTitleRaw}
-        onChange={(value) =>
-          update({ ...item, jobTitleRaw: value, entryType: type })
-        }
-      />
+      {/* Occupation autocomplete (RTMC OCCUPATION) */}
+      <div className="md:col-span-2">
+        <OccupationAutocomplete
+          jobTitleRaw={item.jobTitleRaw}
+          occupationNodeId={item.occupationNodeId}
+          label={type === 'internship' ? 'Intitulé du stage' : 'Intitulé du poste'}
+          onChange={(nodeId, raw) =>
+            update({ ...item, occupationNodeId: nodeId, jobTitleRaw: raw, entryType: type })
+          }
+        />
+      </div>
       <Field
         label="Entreprise"
         value={item.companyName}
@@ -4564,66 +4871,113 @@ function ExperienceDraftFields({
           update({ ...item, companyName: value, entryType: type })
         }
       />
+      {sectorOptions.length > 0 ? (
+        <OptionSelect
+          label="Secteur d'activité"
+          value={item.sectorRefId || item.sector}
+          onChange={(value) => {
+            const opt = sectorOptions.find((o) => o.code === value);
+            update({
+              ...item,
+              sectorRefId: value,
+              sector: opt?.label ?? value,
+              entryType: type,
+            });
+          }}
+          options={sectorOptions}
+          placeholder="Choisir un secteur"
+        />
+      ) : (
+        <Field
+          label="Secteur d'activité"
+          value={item.sector}
+          onChange={(value) =>
+            update({ ...item, sector: value, entryType: type })
+          }
+        />
+      )}
+      {/* Geo location: country + admin units + optional free text */}
+      <GeoAddressFields
+        value={{
+          countryIso2: item.locationCountry,
+          adminUnit1Code: item.locationGovCode,
+          adminUnit1Label: item.locationGovLabel,
+          adminUnit2Code: item.locationDelegCode,
+          adminUnit2Label: item.locationDelegLabel,
+        }}
+        onChange={(geo) =>
+          update({
+            ...item,
+            locationCountry: geo.countryIso2,
+            locationGovCode: geo.adminUnit1Code,
+            locationGovLabel: geo.adminUnit1Label,
+            locationDelegCode: geo.adminUnit2Code,
+            locationDelegLabel: geo.adminUnit2Label,
+            entryType: type,
+          })
+        }
+      />
       <Field
-        label="Lieu"
+        label="Lieu (précision libre)"
         value={item.location}
         onChange={(value) =>
           update({ ...item, location: value, entryType: type })
-        }
-      />
-      <Field
-        label="Secteur"
-        value={item.sector}
-        onChange={(value) =>
-          update({ ...item, sector: value, entryType: type })
-        }
-      />
-      <Field
-        label="Date de début"
-        type="date"
-        value={item.startDate}
-        onChange={(value) =>
-          update({ ...item, startDate: value, entryType: type })
-        }
-      />
-      <Field
-        label="Date de fin"
-        type="date"
-        value={item.endDate}
-        onChange={(value) =>
-          update({ ...item, endDate: value, entryType: type })
-        }
-      />
-      <Field
-        label="Durée (mois)"
-        type="number"
-        value={item.durationMonths}
-        onChange={(value) =>
-          update({ ...item, durationMonths: value, entryType: type })
-        }
-      />
-      <Field
-        label="Durée (années)"
-        type="number"
-        value={item.durationYears}
-        onChange={(value) =>
-          update({ ...item, durationYears: value, entryType: type })
         }
       />
       <label className="md:col-span-2 flex items-center gap-2 text-sm text-foreground">
         <input
           type="checkbox"
           checked={item.isCurrent}
-          onChange={(event) =>
+          onChange={(event) => {
+            const checked = event.target.checked;
+            const months = computeDurationMonths(item.startDate, '', checked);
             update({
               ...item,
-              isCurrent: event.target.checked,
+              isCurrent: checked,
+              endDate: checked ? '' : item.endDate,
+              durationMonths: months != null ? String(months) : '',
               entryType: type,
-            })
-          }
+            });
+          }}
         />
         En cours actuellement
       </label>
+      <Field
+        label="Date de début"
+        type="date"
+        value={item.startDate}
+        onChange={(value) => {
+          const months = computeDurationMonths(value, item.endDate, item.isCurrent);
+          update({
+            ...item,
+            startDate: value,
+            durationMonths: months != null ? String(months) : '',
+            entryType: type,
+          });
+        }}
+      />
+      <Field
+        label="Date de fin"
+        type="date"
+        value={item.endDate}
+        onChange={(value) => {
+          const months = computeDurationMonths(item.startDate, value, false);
+          update({
+            ...item,
+            endDate: value,
+            isCurrent: false,
+            durationMonths: months != null ? String(months) : '',
+            entryType: type,
+          });
+        }}
+        disabled={item.isCurrent}
+      />
+      {/* Computed duration — read-only */}
+      {computedYears && (
+        <div className="md:col-span-2 text-xs text-muted-foreground">
+          Durée : {computedYears}
+        </div>
+      )}
       <div className="md:col-span-2">
         <Label className="text-xs text-muted-foreground">Description</Label>
         <Textarea

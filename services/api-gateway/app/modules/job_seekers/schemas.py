@@ -23,6 +23,7 @@ class JobSeekerIdentityUpsertRequest(JobSeekerBaseModel):
     birth_date: date | None = None
     gender_code: str | None = None
     nationality: str | None = None
+    nationality_country_id: UUID | None = None  # FK → geo.country.id
     code_handicap: str | None = None
     code_degre_handicap: str | None = None
 
@@ -38,8 +39,13 @@ class JobSeekerContactUpsertRequest(JobSeekerBaseModel):
 
 class JobSeekerEducationWriteRequest(JobSeekerBaseModel):
     level_code: str | None = None
+    level_ref_id: UUID | None = None        # FK → reference.ref_value (EDUCATION_LEVEL)
     diploma_label: str | None = None
+    diploma_code: str | None = None         # code in DIPLOMA group
+    diploma_ref_id: UUID | None = None      # FK → reference.ref_value (DIPLOMA)
     specialty: str | None = None
+    specialty_code: str | None = None       # code in SPECIALTY group
+    specialty_ref_id: UUID | None = None    # FK → reference.ref_value (SPECIALTY)
     institution: str | None = None
     graduation_year: int | None = Field(default=None, ge=1950, le=2100)
     rtmc_education_node_id: UUID | None = None
@@ -55,11 +61,14 @@ class JobSeekerEducationUpdateRequest(JobSeekerEducationWriteRequest):
 
 class JobSeekerExperienceWriteRequest(JobSeekerBaseModel):
     occupation_id: UUID | None = None
+    occupation_node_id: UUID | None = None  # FK → taxonomy.taxonomy_node (RTMC OCCUPATION)
     job_title_raw: str | None = None
     company_name: str | None = None
     sector: str | None = None
+    sector_ref_id: UUID | None = None       # FK → reference.ref_value (ACTIVITY_SECTOR)
     start_date: date | None = None
     end_date: date | None = None
+    is_current: bool = False
     duration_months: int | None = Field(default=None, ge=0)
     description: str | None = None
 
@@ -74,6 +83,7 @@ class JobSeekerExperienceUpdateRequest(JobSeekerExperienceWriteRequest):
 
 class JobSeekerSkillWriteRequest(JobSeekerBaseModel):
     skill_id: UUID | None = None
+    skill_node_id: UUID | None = None  # FK → taxonomy.taxonomy_node (RTMC SKILL)
     skill_label_raw: str | None = None
     level: str | None = None
     years: Decimal | None = Field(default=None, ge=0)
@@ -142,6 +152,8 @@ class JobSeekerIdentityResponse(BaseModel):
     gender_code: str | None = None
     gender_label: str | None = None
     nationality: str | None = None
+    nationality_country_id: str | None = None
+    nationality_country_label: str | None = None
     code_handicap: str | None = None
     handicap_label: str | None = None
     code_degre_handicap: str | None = None
@@ -163,9 +175,14 @@ class JobSeekerContactResponse(BaseModel):
 class JobSeekerEducationResponse(BaseModel):
     id: str
     level_code: str | None = None
+    level_ref_id: str | None = None
     level_label: str | None = None
     diploma_label: str | None = None
+    diploma_code: str | None = None
+    diploma_ref_id: str | None = None
     specialty: str | None = None
+    specialty_code: str | None = None
+    specialty_ref_id: str | None = None
     institution: str | None = None
     graduation_year: int | None = None
     rtmc_education_node_id: str | None = None
@@ -176,11 +193,16 @@ class JobSeekerEducationResponse(BaseModel):
 class JobSeekerExperienceResponse(BaseModel):
     id: str
     occupation_id: str | None = None
+    occupation_node_id: str | None = None
+    occupation_label: str | None = None
     job_title_raw: str | None = None
     company_name: str | None = None
     sector: str | None = None
+    sector_ref_id: str | None = None
+    sector_label: str | None = None
     start_date: date | None = None
     end_date: date | None = None
+    is_current: bool = False
     duration_months: int | None = None
     description: str | None = None
     created_at: datetime
@@ -190,6 +212,7 @@ class JobSeekerExperienceResponse(BaseModel):
 class JobSeekerSkillResponse(BaseModel):
     id: str
     skill_id: str | None = None
+    skill_node_id: str | None = None
     skill_label_raw: str | None = None
     skill_node_label: str | None = None
     skill_node_type: str | None = None
@@ -352,3 +375,83 @@ class JobSeekerOfferThresholdRequest(BaseModel):
 
 class JobSeekerOfferThresholdResponse(BaseModel):
     min_offer_score_threshold: float
+
+
+# ─── Aggregate profile ────────────────────────────────────────────────────────
+
+class CandidateBaseInfoResponse(BaseModel):
+    id: str
+    user_id: str | None = None
+    aneti_identifier: str | None = None
+    status: str
+    registration_date: date | None = None
+    primary_language: str | None = None
+
+
+class CandidateAggregateProfileResponse(BaseModel):
+    profile_version: int = 1
+    candidate: CandidateBaseInfoResponse
+    identity: JobSeekerIdentityResponse | None = None
+    contact: JobSeekerContactResponse | None = None
+    preference: JobSeekerPreferenceResponse | None = None
+    education: list[JobSeekerEducationResponse] = Field(default_factory=list)
+    experience: list[JobSeekerExperienceResponse] = Field(default_factory=list)
+    skills: list[JobSeekerSkillResponse] = Field(default_factory=list)
+    languages: list[JobSeekerLanguageResponse] = Field(default_factory=list)
+    cv: CvMetadataResponse | None = None
+    keywords: list[str] = Field(default_factory=list)
+    offer_threshold: float = 50.0
+
+
+# ─── Aggregate profile PATCH request ─────────────────────────────────────────
+
+class CandidateEducationUpsertItem(JobSeekerEducationWriteRequest):
+    id: str | None = None
+
+
+class CandidateExperienceUpsertItem(JobSeekerExperienceWriteRequest):
+    id: str | None = None
+
+
+class CandidateSkillUpsertItem(JobSeekerSkillWriteRequest):
+    id: str | None = None
+
+
+class CandidateLanguageUpsertItem(JobSeekerLanguageWriteRequest):
+    id: str | None = None
+
+
+class EducationChangeset(BaseModel):
+    upsert: list[CandidateEducationUpsertItem] = Field(default_factory=list)
+    delete_ids: list[str] = Field(default_factory=list)
+
+
+class ExperienceChangeset(BaseModel):
+    upsert: list[CandidateExperienceUpsertItem] = Field(default_factory=list)
+    delete_ids: list[str] = Field(default_factory=list)
+
+
+class SkillChangeset(BaseModel):
+    upsert: list[CandidateSkillUpsertItem] = Field(default_factory=list)
+    delete_ids: list[str] = Field(default_factory=list)
+
+
+class LanguageChangeset(BaseModel):
+    upsert: list[CandidateLanguageUpsertItem] = Field(default_factory=list)
+    delete_ids: list[str] = Field(default_factory=list)
+
+
+class CandidateProfilePatchRequest(BaseModel):
+    """Single-roundtrip profile update.  Only include sections that changed."""
+
+    profile_version: int | None = None  # optimistic lock — omit to skip check
+    candidate: JobSeekerUpdateRequest | None = None
+    identity: JobSeekerIdentityUpsertRequest | None = None
+    contact: JobSeekerContactUpsertRequest | None = None
+    preference: JobSeekerPreferenceUpsertRequest | None = None
+    education: EducationChangeset | None = None
+    experience: ExperienceChangeset | None = None
+    skills: SkillChangeset | None = None
+    languages: LanguageChangeset | None = None
+    keywords: list[str] | None = None
+    offer_threshold: float | None = None
