@@ -1840,12 +1840,44 @@ export function useGeoAdminUnitsQuery(
   });
 }
 
+export function useGeoPostalCodesQuery(
+  adminUnitId?: string,
+  countryIso2?: string,
+) {
+  return useQuery({
+    queryKey: queryKeys.geo.postalCodes(adminUnitId, countryIso2),
+    queryFn: () =>
+      gatewayApi.geo.listPostalCodes({
+        admin_unit_id: adminUnitId,
+        country_iso2:  countryIso2,
+        limit:         200,
+      }),
+    enabled: Boolean(adminUnitId || countryIso2),
+    staleTime: 30 * 60_000,
+    placeholderData: (prev) => prev,
+  });
+}
+
 // ─── Reference dropdowns ──────────────────────────────────────────────────────
 
+/**
+ * Charge les valeurs d'un groupe référentiel via GET /references/{group_code}.
+ *
+ * Le backend retourne un tableau brut ; le `select` normalise en { total, items }
+ * pour que les composants ReferenceSelect / ReferenceMultiSelect fonctionnent
+ * indépendamment du format de réponse.
+ */
 export function useRefDropdownQuery(groupCode: string, enabled = true) {
   return useQuery({
     queryKey: queryKeys.references.dropdown(groupCode),
     queryFn: () => gatewayApi.references.listDropdownValues(groupCode),
+    select: (raw): import("@/models/references").RefValueListResponse => {
+      // Tableau brut → normalisation
+      const arr = Array.isArray(raw)
+        ? (raw as import("@/models/references").RefValue[])
+        : ((raw as unknown as import("@/models/references").RefValueListResponse).items ?? []);
+      return { total: arr.length, items: arr };
+    },
     enabled,
     staleTime: 30 * 60_000,
     retry: false,

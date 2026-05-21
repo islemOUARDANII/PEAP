@@ -23,6 +23,8 @@ from .schemas import (
     JobSeekerExperienceResponse,
     JobSeekerExperienceUpdateRequest,
     JobSeekerIdentityUpsertRequest,
+    JobSeekerInterestBulkRequest,
+    JobSeekerInterestResponse,
     JobSeekerLanguageCreateRequest,
     JobSeekerLanguageResponse,
     JobSeekerLanguageUpdateRequest,
@@ -33,8 +35,6 @@ from .schemas import (
     JobSeekerSkillResponse,
     JobSeekerSkillUpdateRequest,
     JobSeekerUpdateRequest,
-    JobSeekerKeywordResponse,
-    JobSeekerKeywordUpsertRequest,
     JobApplicationCreateRequest,
     JobApplicationResponse,
     JobSeekerOfferThresholdRequest,
@@ -54,6 +54,8 @@ from .service import (
     get_preference,
     get_active_offers_count,
     get_my_matched_offers,
+    get_my_interests,
+    replace_my_interests,
     list_education,
     list_experience,
     list_languages,
@@ -67,8 +69,6 @@ from .service import (
     upsert_contact,
     upsert_identity,
     upsert_preference,
-    get_my_keywords,
-    replace_my_keywords,
     get_my_offer_score_threshold,
     update_my_offer_score_threshold,
     apply_to_offer,
@@ -346,29 +346,39 @@ def get_my_matched_offers_endpoint(
     )
 
 @router.get(
-    "/candidates/me/keywords",
-    response_model=list[JobSeekerKeywordResponse],
+    "/candidates/me/interests",
+    response_model=list[JobSeekerInterestResponse],
 )
-def get_my_keywords_endpoint(
+@router.get(
+    "/candidates/me/keywords",
+    response_model=list[JobSeekerInterestResponse],
+    include_in_schema=False,
+)
+def get_my_interests_endpoint(
     db: Session = Depends(get_db),
     current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
 ):
-    return get_my_keywords(db, current_user)
+    return get_my_interests(db, current_user)
 
 
 @router.put(
-    "/candidates/me/keywords",
-    response_model=list[JobSeekerKeywordResponse],
+    "/candidates/me/interests",
+    response_model=list[JobSeekerInterestResponse],
 )
-def replace_my_keywords_endpoint(
-    payload: JobSeekerKeywordUpsertRequest,
+@router.put(
+    "/candidates/me/keywords",
+    response_model=list[JobSeekerInterestResponse],
+    include_in_schema=False,
+)
+def replace_my_interests_endpoint(
+    payload: JobSeekerInterestBulkRequest,
     db: Session = Depends(get_db),
     current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
 ):
-    return replace_my_keywords(
+    return replace_my_interests(
         db,
         current_user,
-        keywords=payload.keywords,
+        interests=[i.model_dump(mode="json") for i in payload.interests],
     )
 
 

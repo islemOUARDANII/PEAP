@@ -95,7 +95,7 @@ def insert_result(
                 run_id,
                 candidate_id,
                 offer_id,
-                occupation_id,
+                occupation_node_id,
                 score_global,
                 score_rule_based,
                 score_semantic,

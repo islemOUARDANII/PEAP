@@ -61,8 +61,38 @@ def get_service_health(service_name: str) -> dict:
         "matching": matching_health,
         "search": search_health,
     }
-    result = mapping[service_name]()
-    return ServiceHealthResponse(**result).model_dump(mode="json")
+
+    health_fn = mapping.get(service_name)
+    if health_fn is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown service: {service_name}",
+        )
+
+    try:
+        raw_result = health_fn()
+    except Exception as exc:
+        return ServiceHealthResponse(
+            service=service_name,
+            url=None,
+            status="DOWN",
+            detail=str(exc),
+        ).model_dump(mode="json")
+
+    if not isinstance(raw_result, dict):
+        return ServiceHealthResponse(
+            service=service_name,
+            url=None,
+            status="UNKNOWN",
+            detail=raw_result,
+        ).model_dump(mode="json")
+
+    return ServiceHealthResponse(
+        service=str(raw_result.get("service") or service_name),
+        url=raw_result.get("url"),
+        status=str(raw_result.get("status") or "UNKNOWN"),
+        detail=raw_result.get("detail"),
+    ).model_dump(mode="json")
 
 
 def _build_user_response(db: Session, user: dict) -> dict:

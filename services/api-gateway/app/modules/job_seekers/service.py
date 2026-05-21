@@ -25,6 +25,8 @@ from .schemas import (
     JobSeekerExperienceUpdateRequest,
     JobSeekerIdentityResponse,
     JobSeekerIdentityUpsertRequest,
+    JobSeekerInterestBulkRequest,
+    JobSeekerInterestResponse,
     JobSeekerLanguageCreateRequest,
     JobSeekerLanguageResponse,
     JobSeekerLanguageUpdateRequest,
@@ -37,6 +39,20 @@ from .schemas import (
     JobSeekerUpdateRequest,
 )
 
+
+LOCKED_IDENTITY_FIELDS = {
+    "cin": "CIN",
+    "first_name": "Prénom",
+    "last_name": "Nom",
+    "birth_date": "Date de naissance",
+    "gender_code": "Civilité",
+    "birth_country_id": "Pays de naissance",
+    "birth_governorate_unit_id": "Gouvernorat de naissance",
+    "birth_delegation_unit_id": "Délégation de naissance",
+    "birth_imada_unit_id": "Imada de naissance",
+    "birth_location_unit_id": "Lieu de naissance",
+    "father_first_name": "Prénom du père",
+}
 
 def _normalize_optional_string(value: str | None) -> str | None:
     if value is None:
@@ -101,7 +117,6 @@ def _build_profile_response(db: Session, job_seeker: dict) -> dict:
         aneti_identifier=job_seeker["aneti_identifier"],
         status=job_seeker["status"],
         registration_date=job_seeker["registration_date"],
-        primary_language=job_seeker["primary_language"],
         identity=JobSeekerIdentityResponse(**identity) if identity else None,
         contact=JobSeekerContactResponse(**contact) if contact else None,
         education=[JobSeekerEducationResponse(**row) for row in education],
@@ -130,10 +145,9 @@ def update_my_profile(
     payload: JobSeekerUpdateRequest,
 ) -> dict:
     job_seeker = resolve_current_job_seeker(db, current_user)
-    data = _normalize_payload(payload.model_dump())
 
     try:
-        repository.update_job_seeker(db, job_seeker["id"], data)
+        repository.update_job_seeker(db, job_seeker["id"], {})
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -149,6 +163,34 @@ def upsert_identity(
 ) -> dict:
     job_seeker = resolve_current_job_seeker(db, current_user)
     data = _normalize_payload(payload.model_dump(mode="json"))
+
+    existing_identity = repository.get_identity(db, job_seeker["id"]) or {}
+
+    locked_changed_fields = []
+
+    for field, label in LOCKED_IDENTITY_FIELDS.items():
+        if field not in data:
+            continue
+
+        new_value = data.get(field)
+        old_value = existing_identity.get(field)
+
+        # Normalisation simple pour comparer dates / UUID / strings.
+        new_normalized = str(new_value).strip() if new_value is not None else None
+        old_normalized = str(old_value).strip() if old_value is not None else None
+
+        if new_normalized not in (None, "") and old_normalized not in (None, ""):
+            if new_normalized != old_normalized:
+                locked_changed_fields.append(label)
+
+    if locked_changed_fields:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Ces informations ne sont pas modifiables depuis l’espace candidat : "
+                + ", ".join(locked_changed_fields)
+            ),
+        )
 
     try:
         repository.upsert_identity(db, job_seeker["id"], data)
@@ -497,15 +539,13 @@ def get_my_matched_offers(
     force_refresh: bool = False,
 ) -> dict:
     job_seeker = resolve_current_job_seeker(db, current_user)
-    
+
     saved_threshold = repository.get_offer_score_threshold(
         db,
         job_seeker["id"],
     )
 
     effective_min_score = float(min_score) if min_score is not None else float(saved_threshold)
-
-    # Les scores sont stockés en pourcentage : 36.4, 58.66, etc.
     normalized_min_score = effective_min_score
 
     model_version = repository.get_default_candidate_to_offer_model_version(db)
@@ -608,30 +648,33 @@ def get_my_matched_offers(
     }
 
 
-def get_my_keywords(
+def get_my_interests(
     db: Session,
     current_user: CurrentUserResponse,
 ) -> list[dict]:
     job_seeker = resolve_current_job_seeker(db, current_user)
-    return repository.list_job_seeker_keywords(db, job_seeker["id"])
+    return [
+        JobSeekerInterestResponse(**row).model_dump(mode="json")
+        for row in repository.list_job_seeker_interests(db, job_seeker["id"])
+    ]
 
 
-def replace_my_keywords(
+def replace_my_interests(
     db: Session,
     current_user: CurrentUserResponse,
     *,
-    keywords: list[str],
+    interests: list[dict],
 ) -> list[dict]:
     job_seeker = resolve_current_job_seeker(db, current_user)
 
-    rows = repository.replace_job_seeker_keywords(
+    rows = repository.replace_job_seeker_interests(
         db,
         job_seeker_id=job_seeker["id"],
-        keywords=keywords,
+        interests=interests,
     )
 
     db.commit()
-    return rows
+    return [JobSeekerInterestResponse(**row).model_dump(mode="json") for row in rows]
 
 
 def get_my_offer_score_threshold(
@@ -718,8 +761,11 @@ def _build_aggregate_profile(
     languages  = repository.list_languages(db, js_id)
     preference = repository.get_preference(db, js_id)
     current_cv = repository.get_current_cv(db, js_id)
-    keywords   = repository.list_job_seeker_keywords(db, js_id)
+    interests  = repository.list_job_seeker_interests(db, js_id)
     offer_threshold = repository.get_offer_score_threshold(db, js_id)
+
+    interest_responses = [JobSeekerInterestResponse(**row) for row in interests]
+    keywords = [r.taxonomy_node_label for r in interest_responses if r.taxonomy_node_label]
 
     return CandidateAggregateProfileResponse(
         profile_version=profile_version,
@@ -729,7 +775,6 @@ def _build_aggregate_profile(
             aneti_identifier=job_seeker.get("aneti_identifier"),
             status=job_seeker["status"],
             registration_date=job_seeker.get("registration_date"),
-            primary_language=job_seeker.get("primary_language"),
         ),
         identity=JobSeekerIdentityResponse(**identity) if identity else None,
         contact=JobSeekerContactResponse(**contact) if contact else None,
@@ -739,7 +784,8 @@ def _build_aggregate_profile(
         languages=[JobSeekerLanguageResponse(**row) for row in languages],
         preference=JobSeekerPreferenceResponse(**preference) if preference else None,
         cv=CvMetadataResponse(**current_cv) if current_cv else None,
-        keywords=[kw["keyword"] for kw in keywords],
+        interests=interest_responses,
+        keywords=keywords,
         offer_threshold=offer_threshold,
     ).model_dump(mode="json")
 
@@ -758,7 +804,6 @@ def patch_aggregate_profile(
     job_seeker = resolve_current_job_seeker(db, current_user)
     js_id = job_seeker["id"]
 
-    # Optimistic locking: reject if client version is stale.
     if payload.profile_version is not None:
         current_version = repository.get_profile_version(db, js_id)
         if payload.profile_version != current_version:
@@ -772,8 +817,7 @@ def patch_aggregate_profile(
 
     try:
         if payload.candidate is not None:
-            data = _normalize_payload(payload.candidate.model_dump())
-            repository.update_job_seeker(db, js_id, data)
+            repository.update_job_seeker(db, js_id, {})
 
         if payload.identity is not None:
             data = _normalize_payload(payload.identity.model_dump(mode="json"))
@@ -827,9 +871,10 @@ def patch_aggregate_profile(
                 else:
                     repository.create_language(db, js_id, data)
 
-        if payload.keywords is not None:
-            repository.replace_job_seeker_keywords(
-                db, job_seeker_id=js_id, keywords=payload.keywords,
+        if payload.interests is not None:
+            interest_dicts = [i.model_dump(mode="json") for i in payload.interests]
+            repository.replace_job_seeker_interests(
+                db, job_seeker_id=js_id, interests=interest_dicts,
             )
 
         if payload.offer_threshold is not None:
@@ -850,8 +895,6 @@ def patch_aggregate_profile(
     except IntegrityError as exc:
         db.rollback()
         _handle_integrity_error(exc)
-
-    # TODO: publish candidate.profile.updated.v1 event asynchronously
 
     updated_js = repository.get_job_seeker_by_id(db, js_id)
     return _build_aggregate_profile(db, updated_js, new_version)

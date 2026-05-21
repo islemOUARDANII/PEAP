@@ -1,0 +1,335 @@
+diff --git a/api-gateway/app/modules/cv/repository.py b/api-gateway/app/modules/cv/repository.py
+index 2f8b684..3535edc 100644
+--- a/api-gateway/app/modules/cv/repository.py
++++ b/api-gateway/app/modules/cv/repository.py
+@@ -1,4 +1,5 @@
+ from collections.abc import Mapping
++import re
+ from typing import Any
+ 
+ from sqlalchemy import text
+@@ -447,6 +448,217 @@ def _first_present(*values: Any) -> Any:
+     return None
+ 
+ 
++
++_COUNTRY_ALIASES: dict[str, str] = {
++    "tn": "TN",
++    "tunisia": "TN",
++    "tunisie": "TN",
++    "us": "US",
++    "usa": "US",
++    "u s": "US",
++    "u s a": "US",
++    "united states": "US",
++    "united states of america": "US",
++    "america": "US",
++    "etats unis": "US",
++    "états unis": "US",
++    "fr": "FR",
++    "france": "FR",
++    "ca": "CA",
++    "canada": "CA",
++    "de": "DE",
++    "germany": "DE",
++    "allemagne": "DE",
++    "it": "IT",
++    "italy": "IT",
++    "italie": "IT",
++    "es": "ES",
++    "spain": "ES",
++    "espagne": "ES",
++    "gb": "GB",
++    "uk": "GB",
++    "united kingdom": "GB",
++    "royaume uni": "GB",
++    "ma": "MA",
++    "morocco": "MA",
++    "maroc": "MA",
++    "dz": "DZ",
++    "algeria": "DZ",
++    "algerie": "DZ",
++    "algérie": "DZ",
++}
++
++_US_STATE_CODES = {
++    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA", "HI", "ID",
++    "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD", "MA", "MI", "MN", "MS",
++    "MO", "MT", "NE", "NV", "NH", "NJ", "NM", "NY", "NC", "ND", "OH", "OK",
++    "OR", "PA", "RI", "SC", "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV",
++    "WI", "WY", "DC",
++}
++
++_NOISE_SKILL_PATTERNS = (
++    re.compile(r"^\d"),
++    re.compile(r"\b(hours?|days?|months?|years?|streaming|totaling|nearly|countries|platforms?)\b", re.I),
++)
++
++
++def _normalize_token(value: Any) -> str:
++    if value is None:
++        return ""
++    return re.sub(r"\s+", " ", str(value).strip().lower())
++
++
++def _split_full_name(full_name: Any) -> tuple[str | None, str | None]:
++    text_value = _clean_text(full_name)
++    if not text_value:
++        return None, None
++
++    parts = [part for part in re.split(r"\s+", text_value) if part]
++    if not parts:
++        return None, None
++    if len(parts) == 1:
++        return parts[0], None
++    return parts[0], " ".join(parts[1:])
++
++
++def _find_country_by_iso2(db: Session, iso2: str | None) -> dict[str, Any] | None:
++    if not iso2:
++        return None
++    row = _fetch_one(
++        db,
++        """
++        SELECT
++            id::text AS id,
++            iso2::text AS iso2,
++            iso3::text AS iso3,
++            COALESCE(name_fr, name_en, iso2) AS label
++        FROM geo.country
++        WHERE upper(iso2) = upper(:iso2)
++        LIMIT 1;
++        """,
++        {"iso2": iso2},
++    )
++    return dict(row) if row else {"id": None, "iso2": iso2.upper(), "iso3": None, "label": iso2.upper()}
++
++
++def _lightweight_normalize_location(db: Session, raw_location: Any) -> dict[str, Any]:
++    """Fallback API-side normalizer used only when the parsing snapshot has no normalized location.
++
++    The authoritative normalizer remains parsing-service. This fallback prevents dry-run/apply
++    from losing an obvious foreign country such as US/FR/CA on older snapshots.
++    """
++    raw = _clean_text(raw_location)
++    if not raw:
++        return {}
++
++    normalized = _normalize_token(raw.replace("–", ",").replace("|", ",").replace("/", ","))
++    parts_raw = [part.strip() for part in re.split(r",|;", raw) if part.strip()]
++    parts_norm = [_normalize_token(part) for part in parts_raw]
++
++    matched_iso2: str | None = None
++    for part in parts_norm:
++        if part in _COUNTRY_ALIASES:
++            matched_iso2 = _COUNTRY_ALIASES[part]
++            break
++
++    # Very common international CV format: "Los Angeles, CA 90001".
++    state_match = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", raw)
++    if not matched_iso2 and state_match and state_match.group(1).upper() in _US_STATE_CODES:
++        matched_iso2 = "US"
++
++    country = _find_country_by_iso2(db, matched_iso2) if matched_iso2 else None
++    country_tokens = {token for token, iso2 in _COUNTRY_ALIASES.items() if iso2 == matched_iso2}
++
++    non_country_parts: list[str] = []
++    for original, part in zip(parts_raw, parts_norm, strict=False):
++        if part in country_tokens:
++            continue
++        non_country_parts.append(original)
++
++    city_raw = None
++    region_raw = None
++    if matched_iso2 == "US":
++        # Prefer the part before "CA 90001" as city, and extract state code as region.
++        for idx, part in enumerate(non_country_parts):
++            state_zip = re.search(r"\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b", part)
++            if state_zip:
++                region_raw = state_zip.group(1).upper()
++                if idx > 0:
++                    city_raw = non_country_parts[idx - 1]
++                break
++        if not city_raw and len(non_country_parts) >= 2:
++            city_raw = non_country_parts[-2]
++    else:
++        city_raw = non_country_parts[0] if non_country_parts else None
++        region_raw = non_country_parts[1] if len(non_country_parts) > 1 else None
++
++    status = "MATCHED_FOREIGN_COUNTRY" if matched_iso2 and matched_iso2 != "TN" else "MATCHED_COUNTRY" if matched_iso2 else "NOT_NORMALIZED"
++
++    return {
++        "raw_location": raw,
++        "normalized_location": normalized,
++        "location_parts": parts_norm,
++        "display_location": ", ".join(part for part in [city_raw, region_raw, country.get("label") if country else None] if part),
++        "status": status,
++        "country": country.get("label") if country else None,
++        "country_ref": country,
++        "country_id": country.get("id") if country else None,
++        "country_iso2": country.get("iso2") if country else matched_iso2,
++        "governorate": None,
++        "delegation": None,
++        "city_raw": city_raw,
++        "region_raw": region_raw,
++        "is_foreign": bool(matched_iso2 and matched_iso2 != "TN"),
++        "confidence": 0.82 if matched_iso2 else 0.0,
++        "source": "api_gateway_lightweight_location_normalizer",
++    }
++
++
++def _is_probable_profile_skill_label(label: Any) -> bool:
++    text_value = _clean_text(label)
++    if not text_value:
++        return False
++    if len(text_value) < 2 or len(text_value) > 80:
++        return False
++    # Reject fragments produced by PDF/statistical text extraction, e.g. "totaling nearly 300".
++    if any(pattern.search(text_value) for pattern in _NOISE_SKILL_PATTERNS):
++        return False
++    digit_count = sum(ch.isdigit() for ch in text_value)
++    if digit_count and digit_count / max(len(text_value), 1) > 0.15:
++        return False
++    return True
++
++
++def _looks_like_wrong_bachelor_to_bac_mapping(raw_degree: Any, diploma_label: Any, diploma_code: Any) -> bool:
++    raw = _normalize_token(raw_degree)
++    label = _normalize_token(diploma_label)
++    code = _normalize_token(diploma_code)
++    if not raw:
++        return False
++    if "bachelor" not in raw and "licence" not in raw and "master" not in raw:
++        return False
++    return label == "bac" or code == "5"
++
++
++def _extract_cv_data_from_snapshot(snapshot: Mapping[str, Any]) -> dict[str, Any]:
++    parsed_payload = _extract_parsed_payload(snapshot)
++    return _as_dict(
++        parsed_payload.get("cv_data")
++        or parsed_payload.get("raw_json")
++        or parsed_payload.get("parsed_cv")
++        or parsed_payload
++    )
++
++
++def _extract_mapping_quality_summary(mapped_payload: Mapping[str, Any]) -> dict[str, Any]:
++    rtmc_mapping = _as_dict(mapped_payload.get("rtmc_mapping"))
++    if rtmc_mapping.get("mapping_quality"):
++        return _as_dict(rtmc_mapping.get("mapping_quality"))
++    if mapped_payload.get("mapping_quality"):
++        return _as_dict(mapped_payload.get("mapping_quality"))
++    return {}
++
++
+ def _maybe_apply_value(current_value: Any, new_value: Any, *, replace: bool) -> dict[str, Any]:
+     current_clean = _clean_text(current_value)
+     new_clean = _clean_text(new_value)
+@@ -493,17 +705,21 @@ def _extract_personal_info(parsed_payload: Mapping[str, Any]) -> dict[str, Any]:
+     return _as_dict(cv_data.get("personal_info") or raw_json.get("personal_info"))
+ 
+ 
+-def _extract_candidate_location(snapshot: Mapping[str, Any]) -> dict[str, Any]:
++def _extract_candidate_location(db: Session, snapshot: Mapping[str, Any]) -> dict[str, Any]:
+     parsed_payload = _extract_parsed_payload(snapshot)
+     enrichment = _as_dict(parsed_payload.get("enrichment"))
+     location = _as_dict(enrichment.get("candidate_location"))
+ 
+-    if location:
++    if location and location.get("status") not in {None, "NOT_NORMALIZED"}:
+         return location
+ 
+     personal = _extract_personal_info(parsed_payload)
+-    raw_location = personal.get("location") or personal.get("address")
+-    return {"raw_location": raw_location, "status": "NOT_NORMALIZED"} if raw_location else {}
++    raw_location = _first_present(
++        location.get("raw_location"),
++        personal.get("location"),
++        personal.get("address"),
++    )
++    return _lightweight_normalize_location(db, raw_location)
+ 
+ 
+ def _extract_language_label(entry: Any) -> str | None:
+@@ -725,12 +941,16 @@ def build_apply_parsed_profile_plan(
+     current = _get_current_profile_state(db, job_seeker_id)
+ 
+     personal = _extract_personal_info(parsed_payload)
++    cv_data = _extract_cv_data_from_snapshot(snapshot)
+     identity_patch = _as_dict(patch.get("identity"))
+-    location = _extract_candidate_location(snapshot)
++    location = _extract_candidate_location(db, snapshot)
+ 
++    split_first_name, split_last_name = _split_full_name(
++        _first_present(identity_patch.get("full_name"), personal.get("full_name"))
++    )
+     proposed_identity = {
+-        "first_name": _first_present(identity_patch.get("first_name"), personal.get("first_name"), personal.get("firstname")),
+-        "last_name": _first_present(identity_patch.get("last_name"), personal.get("last_name"), personal.get("lastname")),
++        "first_name": _first_present(identity_patch.get("first_name"), personal.get("first_name"), personal.get("firstname"), split_first_name),
++        "last_name": _first_present(identity_patch.get("last_name"), personal.get("last_name"), personal.get("lastname"), split_last_name),
+         "birth_date": _first_present(identity_patch.get("birth_date"), personal.get("birth_date")),
+         "nationality": _first_present(identity_patch.get("nationality"), personal.get("nationality")),
+     }
+@@ -765,7 +985,7 @@ def build_apply_parsed_profile_plan(
+     skill_items: list[dict[str, Any]] = []
+     for item in _as_list(patch.get("skills")):
+         label = _extract_skill_label(item)
+-        if not label:
++        if not _is_probable_profile_skill_label(label):
+             continue
+         skill_items.append({
+             "label": label,
+@@ -813,16 +1033,22 @@ def build_apply_parsed_profile_plan(
+         if not isinstance(item, dict):
+             continue
+         diploma_label = _extract_education_label(item)
++        raw_degree = _clean_text(_first_present(item.get("raw_degree"), item.get("degree"), item.get("diploma")))
++        diploma_code = _clean_text(item.get("level_code") or item.get("diploma_code"))
+         specialty = _clean_text(_first_present(item.get("specialty"), item.get("field"), item.get("field_of_study")))
+         if not diploma_label and not specialty:
+             continue
++        suspicious_mapping = _looks_like_wrong_bachelor_to_bac_mapping(raw_degree, diploma_label, diploma_code)
+         education_items.append({
++            "raw_degree": raw_degree,
+             "diploma_label": diploma_label,
+-            "diploma_code": _clean_text(item.get("level_code") or item.get("diploma_code")),
++            "diploma_code": diploma_code,
+             "specialty": specialty,
+             "specialty_code": _clean_text(item.get("specialty_code")),
+             "institution": _clean_text(item.get("institution")),
+             "graduation_year": _clean_text(item.get("graduation_year")),
++            "normalization_warning": "Bachelor/Licence/Master mapped to BAC; requires review before insert." if suspicious_mapping else None,
++            "requires_review": suspicious_mapping,
+         })
+ 
+     current_education_keys = {
+@@ -840,13 +1066,16 @@ def build_apply_parsed_profile_plan(
+             str(item.get("specialty") or item.get("specialty_code") or "").strip().lower(),
+             str(item.get("graduation_year") or "").strip().lower(),
+         ])
++        requires_review = bool(item.get("requires_review"))
+         education_plan.append({
+             **item,
+-            "action": "KEEP_EXISTING" if key in current_education_keys else "ADD_IF_REFERENCE_RESOLVED",
+-            "will_insert": key not in current_education_keys,
++            "action": "KEEP_EXISTING" if key in current_education_keys else "REVIEW_NORMALIZATION" if requires_review else "ADD_IF_REFERENCE_RESOLVED",
++            "will_insert": (key not in current_education_keys) and not requires_review,
+         })
+ 
+     experience_entries = _as_list(patch.get("experience")) + _as_list(patch.get("stages"))
++    if not experience_entries:
++        experience_entries = _as_list(cv_data.get("experience")) + _as_list(cv_data.get("stages"))
+     current_experience_keys = {
+         "|".join([
+             str(row.get("job_title_raw") or "").strip().lower(),
+@@ -881,7 +1110,7 @@ def build_apply_parsed_profile_plan(
+             "will_insert": key not in current_experience_keys,
+         })
+ 
+-    mapped_quality = _as_dict(mapped_payload.get("rtmc_mapping") or mapped_payload.get("mapping_quality"))
++    mapped_quality = _extract_mapping_quality_summary(mapped_payload)
+ 
+     return {
+         "mode": "replace" if replace else "fill_empty_and_add_missing",

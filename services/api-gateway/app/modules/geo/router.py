@@ -5,7 +5,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import require_roles
 
 from . import repository
-from .schemas import GeoAdminUnitResponse, GeoCountryResponse
+from .schemas import GeoAdminUnitResponse, GeoCountryResponse, GeoPostalCodeResponse
 
 ALL_ROLES = ("JOB_SEEKER", "EMPLOYER", "ANETI_ADVISOR", "FUNCTIONAL_ADMIN", "TECH_ADMIN")
 
@@ -19,6 +19,30 @@ def list_countries_endpoint(
     _: object = Depends(require_roles(*ALL_ROLES)),
 ):
     return repository.list_countries(db, active_only=active_only)
+
+
+@router.get("/postal-codes", response_model=list[GeoPostalCodeResponse])
+def list_postal_codes_endpoint(
+    country_id: str | None = Query(default=None),
+    country_iso2: str | None = Query(default=None),
+    admin_unit_id: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    active_only: bool = Query(default=True),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: object = Depends(require_roles(*ALL_ROLES)),
+):
+    return repository.list_postal_codes(
+        db,
+        country_id=country_id,
+        country_iso2=country_iso2,
+        admin_unit_id=admin_unit_id,
+        q=q,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/admin-units", response_model=list[GeoAdminUnitResponse])

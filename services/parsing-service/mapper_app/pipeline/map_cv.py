@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -32,6 +33,7 @@ from mapper_app.pipeline.hybrid_signals import (
     extract_named_value as _signal_extract_named_value,
     signal_from_mapped_entity,
     signal_terms,
+    normalize_term_key as _signal_normalize_term_key,
     signal_unmapped_terms,
 )
 
@@ -48,6 +50,59 @@ TECHNICAL_SKILL_FIELDS = (
     "web_technologies",
     "api_backend",
     "other_technical_tools",
+)
+
+SKILL_LIKE_ENTRY_FIELDS = (
+    "technologies",
+    "technology",
+    "tools",
+    "tooling",
+    "stack",
+    "technical_stack",
+    "technical_environment",
+    "environment",
+    "methodologies",
+)
+
+SKILL_NAME_FIELDS = (
+    "name",
+    "label",
+    "skill",
+    "technology",
+    "tool",
+    "value",
+    "text",
+    "title",
+)
+
+CERTIFICATION_NAME_FIELDS = (
+    "name",
+    "title",
+    "certification",
+    "label",
+)
+
+EDUCATION_DEGREE_FIELDS = (
+    "degree",
+    "diploma",
+    "title",
+    "level",
+)
+
+EDUCATION_FIELD_FIELDS = (
+    "field",
+    "field_of_study",
+    "specialty",
+    "speciality",
+    "major",
+    "domain",
+)
+
+LANGUAGE_NAME_FIELDS = (
+    "name",
+    "language",
+    "label",
+    "value",
 )
 
 DEGREE_RANK_KEYWORDS = (
@@ -131,6 +186,155 @@ def _append_entity(
     )
 
 
+def _first_named_value(value: Any, field_names: tuple[str, ...]) -> str:
+    if isinstance(value, str):
+        return _clean_text(value)
+    if not isinstance(value, dict):
+        return ""
+    for field_name in field_names:
+        text = _clean_text(value.get(field_name))
+        if text:
+            return text
+    return ""
+
+
+def _split_skill_like_text(value: Any) -> list[str]:
+    text = _clean_text(value)
+    if not text:
+        return []
+
+    # On coupe uniquement les séparateurs sûrs. On évite de couper sur "/"
+    # pour préserver des termes comme CI/CD, Node.js/Express, TCP/IP.
+    parts = [part.strip() for part in re.split(r"[,;\n•]+", text) if part.strip()]
+    return parts or [text]
+
+
+def _append_skill_like_entities(
+    bucket: list[dict],
+    *,
+    source_path: str,
+    original_value: Any,
+    context: str = "cv",
+    entity_kind: str = "skill",
+) -> None:
+    if original_value is None:
+        return
+
+    if isinstance(original_value, list):
+        for idx, item in enumerate(original_value):
+            _append_skill_like_entities(
+                bucket,
+                source_path=f"{source_path}[{idx}]",
+                original_value=item,
+                context=context,
+                entity_kind=entity_kind,
+            )
+        return
+
+    if isinstance(original_value, dict):
+        if isinstance(original_value.get("items"), list):
+            nested_context = _clean_text(original_value.get("category")) or context
+            for idx, item in enumerate(original_value.get("items") or []):
+                _append_skill_like_entities(
+                    bucket,
+                    source_path=f"{source_path}.items[{idx}]",
+                    original_value=item,
+                    context=nested_context,
+                    entity_kind=entity_kind,
+                )
+            return
+
+        text = _first_named_value(original_value, SKILL_NAME_FIELDS)
+        level = _clean_text(original_value.get("level")) or None
+        for part in _split_skill_like_text(text):
+            _append_entity(
+                bucket,
+                source_path=source_path,
+                entity_kind=entity_kind,
+                original_text=part,
+                preferred_types=["skill"],
+                context=context,
+            )
+            if level and bucket:
+                bucket[-1]["level"] = level
+        return
+
+    for part in _split_skill_like_text(original_value):
+        _append_entity(
+            bucket,
+            source_path=source_path,
+            entity_kind=entity_kind,
+            original_text=part,
+            preferred_types=["skill"],
+            context=context,
+        )
+
+
+def _append_entry_skill_fields(
+    bucket: list[dict],
+    *,
+    section_name: str,
+    entry_idx: int,
+    entry: dict[str, Any],
+) -> None:
+    title_context = _clean_text(entry.get("title") or entry.get("job_title")) or section_name
+    for field_name in SKILL_LIKE_ENTRY_FIELDS:
+        if field_name not in entry:
+            continue
+        _append_skill_like_entities(
+            bucket,
+            source_path=f"{section_name}[{entry_idx}].{field_name}",
+            original_value=entry.get(field_name),
+            context=title_context,
+        )
+
+
+def _append_certification_entity(bucket: list[dict], *, source_path: str, entry: Any) -> None:
+    text = _first_named_value(entry, CERTIFICATION_NAME_FIELDS)
+    _append_entity(
+        bucket,
+        source_path=source_path,
+        entity_kind="certification",
+        original_text=text,
+        preferred_types=["skill"],
+    )
+
+
+def _append_language_entity(bucket: list[dict], *, source_path: str, entry: Any) -> None:
+    name = _first_named_value(entry, LANGUAGE_NAME_FIELDS)
+    if not name:
+        return
+
+    level = None
+    if isinstance(entry, dict):
+        level = _clean_text(entry.get("level") or entry.get("proficiency")) or None
+
+    bucket.append(
+        {
+            "source_path": source_path,
+            "original_text": name,
+            "level": level,
+            "context": "cv",
+        }
+    )
+
+
+def _dedupe_entity_bucket(bucket: list[dict]) -> list[dict]:
+    deduped: list[dict] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in bucket:
+        text = _normalize_for_match(item.get("original_text"))
+        kind = _clean_text(item.get("entity_kind"))
+        if not text:
+            continue
+        key = (kind, text)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
 def _project_description_is_short_enough(value: Any) -> bool:
     text = _clean_text(value)
     return bool(text) and len(text) <= 120 and len(text.split()) <= 18
@@ -164,10 +368,12 @@ def extract_cv_entities(parsed_cv: dict) -> dict:
         "languages": [],
     }
 
+    # 1. Métiers / occupations depuis les expériences et les stages.
     for section_name in ("experience", "stages"):
         for idx, entry in enumerate(_as_list(parsed_cv.get(section_name))):
             if not isinstance(entry, dict):
                 continue
+
             title_field = "title" if _clean_text(entry.get("title")) else "job_title"
             _append_entity(
                 entities["occupations"],
@@ -177,35 +383,98 @@ def extract_cv_entities(parsed_cv: dict) -> dict:
                 preferred_types=["occupation"],
             )
 
-    for group_idx, group in enumerate(_as_list(parsed_cv.get("skills"))):
-        if not isinstance(group, dict):
-            continue
-        for item_idx, item in enumerate(_as_list(group.get("items"))):
-            if isinstance(item, dict):
-                text = item.get("name")
-            else:
-                text = item
-            _append_entity(
+            # Idée reprise du mapper du collègue : les technologies utilisées dans
+            # les expériences/stages sont des signaux de compétence très utiles.
+            _append_entry_skill_fields(
                 entities["skills"],
-                source_path=f"skills[{group_idx}].items[{item_idx}].name",
-                entity_kind="skill",
-                original_text=text,
-                preferred_types=["skill"],
+                section_name=section_name,
+                entry_idx=idx,
+                entry=entry,
             )
 
-    entities["skills"].extend(flatten_technical_skills(parsed_cv))
+    # 2. Skills explicites : accepte les groupes {category, items}, les listes,
+    # les strings simples, et les dicts {name/label/skill/...}.
+    for group_idx, group in enumerate(_as_list(parsed_cv.get("skills"))):
+        if isinstance(group, dict):
+            category = _clean_text(group.get("category")) or "skills"
+            if isinstance(group.get("items"), list):
+                for item_idx, item in enumerate(_as_list(group.get("items"))):
+                    _append_skill_like_entities(
+                        entities["skills"],
+                        source_path=f"skills[{group_idx}].items[{item_idx}]",
+                        original_value=item,
+                        context=category,
+                    )
+            else:
+                _append_skill_like_entities(
+                    entities["skills"],
+                    source_path=f"skills[{group_idx}]",
+                    original_value=group,
+                    context=category,
+                )
+        else:
+            _append_skill_like_entities(
+                entities["skills"],
+                source_path=f"skills[{group_idx}]",
+                original_value=group,
+                context="skills",
+            )
 
+    # 3. Compétences techniques : on garde les champs connus, mais on accepte
+    # aussi les catégories arbitraires retournées par un parser différent.
+    technical_skills = parsed_cv.get("technical_skills") or {}
+    if isinstance(technical_skills, dict):
+        ordered_categories = list(TECHNICAL_SKILL_FIELDS) + [
+            key for key in technical_skills.keys() if key not in TECHNICAL_SKILL_FIELDS
+        ]
+        for category in ordered_categories:
+            if category not in technical_skills:
+                continue
+            _append_skill_like_entities(
+                entities["skills"],
+                source_path=f"technical_skills.{category}",
+                original_value=technical_skills.get(category),
+                context=category,
+            )
+    else:
+        _append_skill_like_entities(
+            entities["skills"],
+            source_path="technical_skills",
+            original_value=technical_skills,
+            context="technical_skills",
+        )
+
+    # 4. Diplômes + spécialités/domaines d'études.
     for idx, entry in enumerate(_as_list(parsed_cv.get("education"))):
         if not isinstance(entry, dict):
             continue
-        _append_entity(
-            entities["education"],
-            source_path=f"education[{idx}].degree",
-            entity_kind="education",
-            original_text=entry.get("degree"),
-            preferred_types=["occupation", "skill"],
-        )
 
+        for field_name in EDUCATION_DEGREE_FIELDS:
+            if not _clean_text(entry.get(field_name)):
+                continue
+            _append_entity(
+                entities["education"],
+                source_path=f"education[{idx}].{field_name}",
+                entity_kind="education",
+                original_text=entry.get(field_name),
+                preferred_types=["occupation", "skill"],
+            )
+            break
+
+        for field_name in EDUCATION_FIELD_FIELDS:
+            field_value = _clean_text(entry.get(field_name))
+            if not field_value:
+                continue
+            _append_entity(
+                entities["education"],
+                source_path=f"education[{idx}].{field_name}",
+                entity_kind="education_field",
+                original_text=field_value,
+                preferred_types=["skill", "occupation"],
+            )
+
+    # 5. Projets : on mappe le nom/domaine du projet, et on ajoute les stacks
+    # techniques du projet comme skills séparés.
     for idx, entry in enumerate(_as_list(parsed_cv.get("projects"))):
         if not isinstance(entry, dict):
             continue
@@ -213,7 +482,7 @@ def extract_cv_entities(parsed_cv: dict) -> dict:
             entities["projects"],
             source_path=f"projects[{idx}].name",
             entity_kind="project",
-            original_text=entry.get("name"),
+            original_text=entry.get("name") or entry.get("title"),
             preferred_types=["occupation", "skill"],
         )
         if _project_description_is_short_enough(entry.get("description")):
@@ -225,45 +494,57 @@ def extract_cv_entities(parsed_cv: dict) -> dict:
                 preferred_types=["skill"],
             )
 
-    for idx, entry in enumerate(_as_list(parsed_cv.get("certifications"))):
-        if not isinstance(entry, dict):
-            continue
-        _append_entity(
-            entities["certifications"],
-            source_path=f"certifications[{idx}].name",
-            entity_kind="certification",
-            original_text=entry.get("name"),
-            preferred_types=["skill"],
+        _append_entry_skill_fields(
+            entities["skills"],
+            section_name="projects",
+            entry_idx=idx,
+            entry=entry,
         )
 
+    # 6. Certifications : support dicts et strings simples.
+    for idx, entry in enumerate(_as_list(parsed_cv.get("certifications"))):
+        _append_certification_entity(
+            entities["certifications"],
+            source_path=f"certifications[{idx}]",
+            entry=entry,
+        )
+
+    # 7. Langues : support name/language/label/value + niveau/proficiency.
     for idx, entry in enumerate(_as_list(parsed_cv.get("languages"))):
-        if isinstance(entry, dict):
-            name = _clean_text(entry.get("name"))
-            if not name:
-                continue
-            entities["languages"].append(
-                {
-                    "source_path": f"languages[{idx}].name",
-                    "original_text": name,
-                    "level": _clean_text(entry.get("level")) or None,
-                    "context": "cv",
-                }
+        _append_language_entity(
+            entities["languages"],
+            source_path=f"languages[{idx}]",
+            entry=entry,
+        )
+
+    # 8. Additional info : utile pour soft skills / savoir-être, sans créer une
+    # nouvelle table ni casser le pipeline. On les envoie au mapper comme skills.
+    for section_idx, section in enumerate(_as_list(parsed_cv.get("additional_info"))):
+        if not isinstance(section, dict):
+            continue
+        context = _clean_text(section.get("title")) or "additional_info"
+        for bullet_idx, bullet in enumerate(_as_list(section.get("bullets"))):
+            _append_skill_like_entities(
+                entities["skills"],
+                source_path=f"additional_info[{section_idx}].bullets[{bullet_idx}]",
+                original_value=bullet,
+                context=context,
+                entity_kind="soft_skill",
             )
-        else:
-            name = _clean_text(entry)
-            if not name:
-                continue
-            entities["languages"].append(
-                {
-                    "source_path": f"languages[{idx}]",
-                    "original_text": name,
-                    "level": None,
-                    "context": "cv",
-                }
+        description = _clean_text(section.get("description"))
+        if description and len(description.split()) <= 12:
+            _append_skill_like_entities(
+                entities["skills"],
+                source_path=f"additional_info[{section_idx}].description",
+                original_value=description,
+                context=context,
+                entity_kind="soft_skill",
             )
+
+    for key, bucket in entities.items():
+        entities[key] = _dedupe_entity_bucket(bucket)
 
     return entities
-
 
 def map_entity(
     entity: dict,
@@ -330,6 +611,36 @@ def _unique_preserve_order(values: list[Any]) -> list[Any]:
     return out
 
 
+def _append_signal_if_new(
+    bucket: list[dict[str, Any]],
+    signal: dict[str, Any] | None,
+    seen_terms: set[str],
+) -> None:
+    if not signal:
+        return
+
+    raw_key = _signal_normalize_term_key(signal.get("raw_term"))
+    normalized_key = _signal_clean_text(signal.get("normalized_term"))
+    key = raw_key or normalized_key
+
+    if not key or key in seen_terms:
+        return
+
+    seen_terms.add(key)
+    bucket.append(signal)
+
+
+def _existing_signal_term_keys(items: list[dict[str, Any]]) -> set[str]:
+    keys: set[str] = set()
+    for item in items:
+        raw_key = _signal_normalize_term_key(item.get("raw_term"))
+        normalized_key = _signal_clean_text(item.get("normalized_term"))
+        key = raw_key or normalized_key
+        if key:
+            keys.add(key)
+    return keys
+
+
 def build_cv_matching_signals(
     parsed_cv: dict,
     mapped_entities: dict,
@@ -350,6 +661,7 @@ def build_cv_matching_signals(
             if signal:
                 role_signals.append(signal)
 
+    role_seen_terms = _existing_signal_term_keys(role_signals)
     for section_name in ("experience", "stages"):
         for idx, entry in enumerate(_signals_as_list(parsed_cv.get(section_name))):
             if not isinstance(entry, dict):
@@ -362,8 +674,7 @@ def build_cv_matching_signals(
                 entity_kind="occupation",
                 signal_origin="parsed_only",
             )
-            if signal:
-                role_signals.append(signal)
+            _append_signal_if_new(role_signals, signal, role_seen_terms)
 
     for item in mapped_entities.get("skills", []):
         if isinstance(item, dict):
@@ -371,48 +682,84 @@ def build_cv_matching_signals(
             if signal:
                 skill_signals.append(signal)
 
+    skill_seen_terms = _existing_signal_term_keys(skill_signals)
+
     for group_idx, group in enumerate(_signals_as_list(parsed_cv.get("skills"))):
         if not isinstance(group, dict):
+            for part_idx, part in enumerate(_split_skill_like_text(group)):
+                signal = build_signal(
+                    raw_term=part,
+                    source_path=f"skills[{group_idx}]",
+                    group="skills",
+                    entity_kind="skill",
+                    signal_origin="parsed_only",
+                )
+                _append_signal_if_new(skill_signals, signal, skill_seen_terms)
             continue
-        for item_idx, item in enumerate(_signals_as_list(group.get("items"))):
-            signal = build_signal(
-                raw_term=_signal_extract_named_value(item),
-                source_path=f"skills[{group_idx}].items[{item_idx}]",
-                group="skills",
-                entity_kind="skill",
-                signal_origin="parsed_only",
-            )
-            if signal:
-                skill_signals.append(signal)
+
+        if isinstance(group.get("items"), list):
+            for item_idx, item in enumerate(_signals_as_list(group.get("items"))):
+                for part_idx, part in enumerate(_split_skill_like_text(_signal_extract_named_value(item))):
+                    signal = build_signal(
+                        raw_term=part,
+                        source_path=f"skills[{group_idx}].items[{item_idx}]",
+                        group="skills",
+                        entity_kind="skill",
+                        signal_origin="parsed_only",
+                    )
+                    _append_signal_if_new(skill_signals, signal, skill_seen_terms)
+        else:
+            for part_idx, part in enumerate(_split_skill_like_text(_signal_extract_named_value(group))):
+                signal = build_signal(
+                    raw_term=part,
+                    source_path=f"skills[{group_idx}]",
+                    group="skills",
+                    entity_kind="skill",
+                    signal_origin="parsed_only",
+                )
+                _append_signal_if_new(skill_signals, signal, skill_seen_terms)
 
     technical_skills = parsed_cv.get("technical_skills") or {}
     if isinstance(technical_skills, dict):
         for category, values in technical_skills.items():
             for idx, item in enumerate(_signals_as_list(values)):
-                signal = build_signal(
-                    raw_term=_signal_extract_named_value(item),
-                    source_path=f"technical_skills.{category}[{idx}]",
-                    group="skills",
-                    entity_kind="skill",
-                    signal_origin="parsed_only",
-                )
-                if signal:
-                    skill_signals.append(signal)
+                for part_idx, part in enumerate(_split_skill_like_text(_signal_extract_named_value(item))):
+                    signal = build_signal(
+                        raw_term=part,
+                        source_path=f"technical_skills.{category}[{idx}]",
+                        group="skills",
+                        entity_kind="skill",
+                        signal_origin="parsed_only",
+                    )
+                    _append_signal_if_new(skill_signals, signal, skill_seen_terms)
+    else:
+        for part_idx, part in enumerate(_split_skill_like_text(technical_skills)):
+            signal = build_signal(
+                raw_term=part,
+                source_path="technical_skills",
+                group="skills",
+                entity_kind="skill",
+                signal_origin="parsed_only",
+            )
+            _append_signal_if_new(skill_signals, signal, skill_seen_terms)
 
     for section_name in ("experience", "stages"):
         for entry_idx, entry in enumerate(_signals_as_list(parsed_cv.get(section_name))):
             if not isinstance(entry, dict):
                 continue
-            for tech_idx, item in enumerate(_signals_as_list(entry.get("technologies"))):
-                signal = build_signal(
-                    raw_term=_signal_extract_named_value(item),
-                    source_path=f"{section_name}[{entry_idx}].technologies[{tech_idx}]",
-                    group="skills",
-                    entity_kind="skill",
-                    signal_origin="parsed_only",
-                )
-                if signal:
-                    skill_signals.append(signal)
+            for field_name in SKILL_LIKE_ENTRY_FIELDS:
+                if field_name not in entry:
+                    continue
+                for tech_idx, item in enumerate(_signals_as_list(entry.get(field_name))):
+                    for part_idx, part in enumerate(_split_skill_like_text(_signal_extract_named_value(item))):
+                        signal = build_signal(
+                            raw_term=part,
+                            source_path=f"{section_name}[{entry_idx}].{field_name}[{tech_idx}]",
+                            group="skills",
+                            entity_kind="skill",
+                            signal_origin="parsed_only",
+                        )
+                        _append_signal_if_new(skill_signals, signal, skill_seen_terms)
 
     for idx, item in enumerate(mapped_entities.get("projects", [])):
         if not isinstance(item, dict):

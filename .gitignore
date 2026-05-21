@@ -72,3 +72,5 @@ services/search-service/sync_state.json
 *_mapped.json
 
 infra/db/data/
+
+.claude

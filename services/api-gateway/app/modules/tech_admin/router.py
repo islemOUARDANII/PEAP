@@ -62,7 +62,7 @@ def tech_admin_health(
     }
 
 
-@router.get("/tech-admin/services")
+@router.get("/tech-admin/services", response_model=dict[str, ServiceHealthResponse])
 def tech_admin_services(
     _current_user=Depends(require_roles("TECH_ADMIN")),
 ):

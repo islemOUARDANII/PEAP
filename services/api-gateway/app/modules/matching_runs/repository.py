@@ -110,7 +110,7 @@ def list_matching_results_by_run(db: Session, run_id: str) -> list[dict]:
             NULLIF(TRIM(COALESCE(jsi.first_name, '') || ' ' || COALESCE(jsi.last_name, '')), '') AS candidate_label,
             mr.offer_id::text AS offer_id,
             jo.title AS offer_title,
-            mr.occupation_id,
+            jo.occupation_node_id::text AS occupation_id,
             mr.score_global::float8 AS score_global,
             mr.score_rule_based::float8 AS score_rule_based,
             mr.score_semantic::float8 AS score_semantic,
@@ -126,7 +126,7 @@ def list_matching_results_by_run(db: Session, run_id: str) -> list[dict]:
                 SELECT 1
                 FROM matching.matching_result_detail mrd
                 WHERE mrd.result_id = mr.id
-                  AND COALESCE(mrd.is_gap, FALSE) = TRUE
+                AND COALESCE(mrd.is_gap, FALSE) = TRUE
             ) AS has_gaps,
             mr.created_at
         FROM matching.matching_result mr
@@ -152,7 +152,7 @@ def get_matching_result_by_id(db: Session, result_id: str) -> dict | None:
             NULLIF(TRIM(COALESCE(jsi.first_name, '') || ' ' || COALESCE(jsi.last_name, '')), '') AS candidate_label,
             mr.offer_id::text AS offer_id,
             jo.title AS offer_title,
-            mr.occupation_id,
+            jo.occupation_node_id::text AS occupation_id,
             mr.score_global::float8 AS score_global,
             mr.score_rule_based::float8 AS score_rule_based,
             mr.score_semantic::float8 AS score_semantic,
@@ -249,3 +249,4 @@ def _to_json(value: dict) -> str:
     import json
 
     return json.dumps(value, ensure_ascii=False, default=str)
+

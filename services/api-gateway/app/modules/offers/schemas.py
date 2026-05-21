@@ -35,10 +35,11 @@ class JobOfferRequirementWriteRequest(OfferBaseModel):
         "AVAILABILITY",
         "OTHER",
     ]
-    node_id: UUID | None = None          # taxonomy_node.id
-    ref_value_id: UUID | None = None     # reference.ref_value.id
-    raw_value: str | None = None
-    min_level: str | None = None
+    criterion_type_ref_id: UUID | None = None  # FK → reference.ref_value (CRITERION_TYPE)
+    taxonomy_node_id: UUID | None = None        # FK → taxonomy.taxonomy_node
+    ref_value_id: UUID | None = None            # FK → reference.ref_value
+    min_level_ref_id: UUID | None = None        # FK → reference.ref_value (level)
+    min_level_code: str | None = None           # fallback code for min_level lookup
     min_years: Decimal | None = Field(default=None, ge=0)
     is_must: bool = False
     weight: int | None = Field(default=None, ge=0, le=100)
@@ -46,13 +47,17 @@ class JobOfferRequirementWriteRequest(OfferBaseModel):
 
 class JobOfferRequirementResponse(BaseModel):
     id: str
-    criterion_type: str
-    node_id: str | None = None
+    criterion_type: str | None = None           # code from criterion_type_ref_id join
+    criterion_type_ref_id: str | None = None
+    criterion_type_label: str | None = None
+    taxonomy_node_id: str | None = None
     node_label: str | None = None
     node_type: str | None = None
     ref_value_id: str | None = None
-    raw_value: str | None = None
-    min_level: str | None = None
+    ref_value_label: str | None = None
+    min_level: str | None = None                # code from min_level_ref_id join
+    min_level_ref_id: str | None = None
+    min_level_label: str | None = None
     min_years: Decimal | None = None
     is_must: bool
     weight: int | None = None
@@ -63,15 +68,21 @@ class JobOfferRequirementResponse(BaseModel):
 # ─── Language requirement ─────────────────────────────────────────────────────
 
 class JobOfferLanguageRequirementWriteRequest(OfferBaseModel):
-    language_code: str = Field(min_length=1)
-    level_code: str | None = None
+    language_ref_id: UUID | None = None         # FK → reference.ref_value (LANGUAGE)
+    language_code: str | None = None            # code fallback for lookup
+    level_ref_id: UUID | None = None            # FK → reference.ref_value (LANGUAGE_LEVEL)
+    level_code: str | None = None               # code fallback for lookup
     is_mandatory: bool = False
 
 
 class JobOfferLanguageRequirementResponse(BaseModel):
     id: str
-    language_code: str | None = None
-    level_code: str | None = None
+    language_ref_id: str | None = None
+    language_code: str | None = None            # code from join
+    language_label: str | None = None
+    level_ref_id: str | None = None
+    level_code: str | None = None               # code from join
+    level_label: str | None = None
     is_mandatory: bool
     created_at: datetime
     updated_at: datetime
@@ -87,18 +98,21 @@ class JobOfferWriteRequest(OfferBaseModel):
     # Occupation (canonical)
     occupation_node_id: UUID | None = None
 
-    # Geo (canonical)
+    # Geo — canonical FKs
     country_id: UUID | None = None
-    location_unit_id: UUID | None = None
-    governorate_unit_id: UUID | None = None
-    delegation_unit_id: UUID | None = None
+    governorate_unit_id: UUID | None = None     # gouvernorat (niveau 1)
+    delegation_unit_id: UUID | None = None      # délégation (niveau 2)
+    imada_unit_id: UUID | None = None           # imada (niveau 3)
+    location_unit_id: UUID | None = None        # plus précis disponible (imada > délégation > gouvernorat)
+    postal_code_id: UUID | None = None          # FK → geo.postal_code
+    postal_code: str | None = None              # valeur texte du code postal
 
-    # Geo (legacy fallback — kept for backward compat)
+    # Geo — code fallbacks accepted from frontend for lookup
     country: str = Field(default="TN")
     governorate_code: str | None = None
     delegation_code: str | None = None
 
-    # Contract / work mode
+    # Contract / work mode — string codes resolved to ref_value FKs server-side
     contract_type: str | None = None
     work_mode: str | None = None
 
@@ -119,10 +133,8 @@ class JobOfferWriteRequest(OfferBaseModel):
     number_of_positions: int = Field(default=1, ge=1)
     deadline_at: datetime | None = None
 
-    # Structured requirements (SKILL / SOFT_SKILL / OCCUPATION / etc.)
+    # Structured requirements
     requirements: list[JobOfferRequirementWriteRequest] = Field(default_factory=list)
-
-    # Structured language requirements
     language_requirements: list[JobOfferLanguageRequirementWriteRequest] = Field(default_factory=list)
 
 
@@ -143,9 +155,8 @@ class JobOfferDraftParseRequest(OfferBaseModel):
 
 class JobOfferDraftRequirementResponse(BaseModel):
     criterion_type: str
-    node_id: str | None = None
-    raw_value: str | None = None
-    min_level: str | None = None
+    taxonomy_node_id: str | None = None
+    min_level_code: str | None = None
     min_years: Decimal | None = None
     is_must: bool
     weight: int | None = None
@@ -162,28 +173,28 @@ class JobOfferListItemResponse(BaseModel):
     description: str | None = None
     number_of_positions: int
     status: str
-    contract_type: str | None = None
-    work_mode: str | None = None
+    contract_type: str | None = None            # code from contract_type_ref_id join
+    work_mode: str | None = None                # code from work_mode_ref_id join
     salary_min: Decimal | None = None
     salary_max: Decimal | None = None
     salary_currency_code: str = "TND"
-    country: str = "TN"
+    country: str = "TN"                         # iso2 from country_id join
     governorate_code: str | None = None
     governorate_label: str | None = None
     delegation_code: str | None = None
     delegation_label: str | None = None
-    # Canonical geo ids surfaced for front display
+    # Canonical geo ids
     country_id: str | None = None
     governorate_unit_id: str | None = None
     delegation_unit_id: str | None = None
     occupation_node_id: str | None = None
     occupation_node_label: str | None = None
-    # New fields
     min_experience_months: int | None = None
     diploma_ref_id: str | None = None
     specialty_ref_id: str | None = None
     is_accessible_to_disabled: bool = False
     accessibility_notes: str | None = None
+    submitted_at: datetime | None = None
     published_at: datetime | None = None
     deadline_at: datetime | None = None
     created_by_user_id: str | None = None

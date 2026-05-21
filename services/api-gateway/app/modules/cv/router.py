@@ -11,7 +11,7 @@ from app.modules.auth.dependencies import require_roles, get_current_user
 from app.modules.auth.schemas import CurrentUserResponse
 from app.modules.job_seekers.service import resolve_current_job_seeker
 from app.clients.parsing_client import ParsingServiceError, parse_cv
-from .schemas import CvParseResponse, CvRecordResponse
+from .schemas import CvParseResponse, CvRecordResponse, ParsedResumeSnapshotResponse
 from .service import (
     archive_my_cv,
     get_current_cv_file,
@@ -132,32 +132,98 @@ def archive_my_cv_endpoint(
     return {"status": "archived"}
 
 
+def _normalize_snapshot_status(value: str | None) -> str:
+    value = (value or "FAILED").upper()
+
+    if value in {"PARSED", "FAILED", "PARTIAL"}:
+        return value
+
+    if value in {"SUCCESS", "OK", "DONE"}:
+        return "PARSED"
+
+    return "FAILED"
+
+
 def _run_parse_in_background(cv_data: dict, cv_record_id: str) -> None:
-    from app.db.session import SessionLocal
     db = SessionLocal()
+
+    result: dict = {}
     parsing_status = "FAILED"
+    snapshot_id: str | None = None
+
     try:
-        result = parse_cv(cv_data)
-        parsing_status = result.get("parsing_status", "FAILED")
-    except Exception:
-        logger.exception("Background CV parsing failed for cv_record_id=%s", cv_record_id)
-    finally:
         try:
-            db.execute(
-                text("""
-                    UPDATE aneti.job_seeker_cv
-                    SET parsing_status = :parsing_status,
-                        updated_at = now()
-                    WHERE id = CAST(:cv_record_id AS uuid)
-                """),
-                {"cv_record_id": cv_record_id, "parsing_status": parsing_status},
+            result = parse_cv(cv_data) or {}
+            parsing_status = _normalize_snapshot_status(result.get("parsing_status"))
+        except Exception as exc:
+            logger.exception("Background CV parsing failed for cv_record_id=%s", cv_record_id)
+            result = {
+                "parsing_status": "FAILED",
+                "parsed_payload": {},
+                "mapped_payload": {},
+                "extracted_profile_patch": {},
+                "warnings": [],
+                "errors": [
+                    {
+                        "type": exc.__class__.__name__,
+                        "message": str(exc),
+                    }
+                ],
+                "parser_version": None,
+            }
+            parsing_status = "FAILED"
+
+        snapshot = repository.create_parsed_resume_snapshot(
+            db,
+            job_seeker_id=str(cv_data["job_seeker_id"]),
+            cv_record_id=str(cv_record_id),
+            parsing_status=parsing_status,
+            parser_name=result.get("parser_name") or "parsing-service",
+            parser_version=result.get("parser_version"),
+            parsed_payload=result.get("parsed_payload") or {},
+            mapped_payload=result.get("mapped_payload") or {},
+            extracted_profile_patch=result.get("extracted_profile_patch") or {},
+            warnings=result.get("warnings") or [],
+            errors=result.get("errors") or [],
+            created_by_user_id=cv_data.get("created_by_user_id"),
+        )
+
+        snapshot_id = snapshot["id"] if snapshot else None
+
+        repository.attach_parsed_resume_snapshot(
+            db,
+            cv_record_id=str(cv_record_id),
+            parsed_resume_id=snapshot_id,
+            parsing_status=parsing_status,
+        )
+
+        db.commit()
+
+        logger.info(
+            "CV parsing snapshot persisted cv_record_id=%s snapshot_id=%s parsing_status=%s",
+            cv_record_id,
+            snapshot_id,
+            parsing_status,
+        )
+
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to persist parsing snapshot for cv_record_id=%s", cv_record_id)
+
+        try:
+            repository.attach_parsed_resume_snapshot(
+                db,
+                cv_record_id=str(cv_record_id),
+                parsed_resume_id=None,
+                parsing_status="FAILED",
             )
             db.commit()
         except Exception:
             db.rollback()
-            logger.exception("Failed to persist parsing status for cv_record_id=%s", cv_record_id)
-        finally:
-            db.close()
+            logger.exception("Failed to mark CV parsing as FAILED for cv_record_id=%s", cv_record_id)
+
+    finally:
+        db.close()
 
 
 @router.post("/candidates/me/cv/{cv_record_id}/parse", status_code=202)
@@ -177,15 +243,24 @@ def parse_my_cv_endpoint(
     cv = db.execute(
         text("""
             SELECT
-                id,
-                job_seeker_id,
-                storage_provider,
-                container_name,
-                blob_name
-            FROM aneti.job_seeker_cv
-            WHERE id = :cv_record_id
-              AND job_seeker_id = :job_seeker_id
-              AND status <> 'ARCHIVED'
+                cv.id::text AS id,
+                cv.job_seeker_id::text AS job_seeker_id,
+
+                df.storage_provider,
+                df.container_name,
+                df.blob_name,
+                df.storage_key,
+                df.original_filename,
+                df.mime_type,
+                df.file_size_bytes
+
+            FROM aneti.job_seeker_cv cv
+            LEFT JOIN aneti.document_file df
+                ON df.id = cv.document_file_id
+
+            WHERE cv.id = CAST(:cv_record_id AS uuid)
+            AND cv.job_seeker_id = CAST(:job_seeker_id AS uuid)
+            AND cv.status <> 'ARCHIVED'
         """),
         {
             "cv_record_id": str(cv_record_id),
@@ -197,6 +272,12 @@ def parse_my_cv_endpoint(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="CV record not found",
+        )
+
+    if not cv["storage_provider"] or not cv["blob_name"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CV file storage metadata is missing. document_file_id is null or document_file is incomplete.",
         )
 
     db.execute(
@@ -217,6 +298,7 @@ def parse_my_cv_endpoint(
         "container_name": cv["container_name"],
         "blob_name": cv["blob_name"],
         "trace_id": f"parse-cv-{cv_record_id}",
+        "created_by_user_id": str(current_user.id),
     }
     background_tasks.add_task(_run_parse_in_background, cv_data, str(cv_record_id))
 
@@ -234,6 +316,102 @@ def parse_my_cv_endpoint(
     )
 
     return {"parsing_status": "PARSING", "message": "Parsing en cours, veuillez patienter..."}
+
+@router.get(
+    "/candidates/me/cv/{cv_record_id}/parse-result",
+    response_model=ParsedResumeSnapshotResponse,
+)
+@router.get(
+    "/job-seekers/me/cv/{cv_record_id}/parse-result",
+    response_model=ParsedResumeSnapshotResponse,
+    include_in_schema=False,
+)
+def get_my_cv_parse_result_endpoint(
+    cv_record_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    row = repository.get_parsed_resume_snapshot_by_cv(
+        db,
+        job_seeker_id=str(job_seeker["id"]),
+        cv_record_id=str(cv_record_id),
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="CV parse result not found",
+        )
+
+    return row
+
+
+@router.post("/candidates/me/cv/{cv_record_id}/apply-parsed-profile")
+@router.post("/job-seekers/me/cv/{cv_record_id}/apply-parsed-profile", include_in_schema=False)
+def apply_my_cv_parsed_profile_endpoint(
+    cv_record_id: UUID,
+    request: Request,
+    dry_run: bool = True,
+    replace: bool = False,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("JOB_SEEKER")),
+):
+    """
+    Prépare l'application du dernier snapshot de parsing sur le profil candidat.
+
+    Étape volontairement sûre : par défaut, dry_run=true ne modifie aucune table.
+    L'écriture réelle sera activée après validation du plan généré.
+    """
+    job_seeker = resolve_current_job_seeker(db, current_user)
+
+    snapshot = repository.get_parsed_resume_snapshot_by_cv(
+        db,
+        job_seeker_id=str(job_seeker["id"]),
+        cv_record_id=str(cv_record_id),
+    )
+
+    if not snapshot:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="CV parse result not found",
+        )
+
+    parsing_status = str(snapshot.get("parsing_status") or "").upper()
+    if parsing_status not in {"PARSED", "PARTIAL"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"CV parse result is not applicable because parsing_status={parsing_status or 'UNKNOWN'}",
+        )
+
+    plan = repository.build_apply_parsed_profile_plan(
+        db,
+        job_seeker_id=str(job_seeker["id"]),
+        snapshot=snapshot,
+        replace=replace,
+    )
+
+    if dry_run:
+        return {
+            "status": "DRY_RUN",
+            "dry_run": True,
+            "replace": replace,
+            "cv_record_id": str(cv_record_id),
+            "job_seeker_id": str(job_seeker["id"]),
+            "snapshot_id": snapshot.get("id"),
+            "plan": plan,
+        }
+
+    raise HTTPException(
+        status_code=status.HTTP_501_NOT_IMPLEMENTED,
+        detail=(
+            "Real profile write is not enabled in this safe step yet. "
+            "Call with dry_run=true, validate the plan, then enable the write step."
+        ),
+    )
+
+
 
 
 @router.post("/advisor/candidates/{candidate_id}/cv", status_code=201)
@@ -270,19 +448,41 @@ def advisor_parse_candidate_cv(
 ):
     cv = db.execute(
         text("""
-            SELECT id::text AS id, job_seeker_id::text AS job_seeker_id,
-                   storage_provider, container_name, blob_name
-            FROM aneti.job_seeker_cv
-            WHERE id = CAST(:cv_record_id AS uuid)
-              AND job_seeker_id = CAST(:job_seeker_id AS uuid)
-              AND status <> 'ARCHIVED'
+            SELECT
+                cv.id::text AS id,
+                cv.job_seeker_id::text AS job_seeker_id,
+
+                df.storage_provider,
+                df.container_name,
+                df.blob_name,
+                df.storage_key,
+                df.original_filename,
+                df.mime_type,
+                df.file_size_bytes
+
+            FROM aneti.job_seeker_cv cv
+            LEFT JOIN aneti.document_file df
+                ON df.id = cv.document_file_id
+
+            WHERE cv.id = CAST(:cv_record_id AS uuid)
+            AND cv.job_seeker_id = CAST(:job_seeker_id AS uuid)
+            AND cv.status <> 'ARCHIVED'
         """),
-        {"cv_record_id": str(cv_record_id), "job_seeker_id": str(candidate_id)},
+        {
+            "cv_record_id": str(cv_record_id),
+            "job_seeker_id": str(candidate_id),
+        },
     ).mappings().first()
 
     if not cv:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="CV record not found")
 
+    if not cv["storage_provider"] or not cv["blob_name"]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CV file storage metadata is missing. document_file_id is null or document_file is incomplete.",
+        )
+    
     db.execute(
         text("UPDATE aneti.job_seeker_cv SET parsing_status = 'PARSING', updated_at = now() WHERE id = CAST(:id AS uuid)"),
         {"id": str(cv_record_id)},
@@ -296,10 +496,34 @@ def advisor_parse_candidate_cv(
         "container_name": cv["container_name"],
         "blob_name": cv["blob_name"],
         "trace_id": f"advisor-parse-cv-{cv_record_id}",
+        "created_by_user_id": str(current_user.id),
     }
     background_tasks.add_task(_run_parse_in_background, cv_data, str(cv_record_id))
     return {"parsing_status": "PARSING", "message": "Parsing en cours, veuillez patienter..."}
 
+@router.get(
+    "/advisor/candidates/{candidate_id}/cv/{cv_record_id}/parse-result",
+    response_model=ParsedResumeSnapshotResponse,
+)
+def advisor_get_candidate_cv_parse_result_endpoint(
+    candidate_id: UUID,
+    cv_record_id: UUID,
+    db: Session = Depends(get_db),
+    _current_user=Depends(require_roles("ANETI_ADVISOR", "FUNCTIONAL_ADMIN", "TECH_ADMIN")),
+):
+    row = repository.get_parsed_resume_snapshot_by_cv(
+        db,
+        job_seeker_id=str(candidate_id),
+        cv_record_id=str(cv_record_id),
+    )
+
+    if not row:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="CV parse result not found",
+        )
+
+    return row
 
 @router.get("/advisor/candidates/{candidate_id}/cv/current", response_model=CvRecordResponse)
 @router.get("/advisor/job-seekers/{candidate_id}/cv/current", response_model=CvRecordResponse, include_in_schema=False)
@@ -329,3 +553,4 @@ def _extract_trace_id(request: Request) -> str | None:
         or request.headers.get("traceparent")
         or str(uuid4())
     )
+

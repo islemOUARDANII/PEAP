@@ -107,3 +107,46 @@ class RefDropdownItem(BaseModel):
     label_en: str | None = None
     label_ar: str | None = None
     sort_order: int
+
+class ImadaDropdownItem(BaseModel):
+    id: str
+    code: str
+    label: str
+    label_fr: str | None = None
+    label_en: str | None = None
+    label_ar: str | None = None
+
+    delegation_id: str | None = None
+    delegation_code: str | None = None
+    delegation_label: str | None = None
+
+    governorate_id: str | None = None
+    governorate_code: str | None = None
+    governorate_label: str | None = None
+
+    country_id: str | None = None
+    active: bool
+
+
+class PostalCodeDropdownItem(BaseModel):
+    id: str
+    country_id: str | None = None
+
+    postal_code: str
+    label: str | None = None
+    locality_label: str | None = None
+    locality_label_ar: str | None = None
+
+    admin_unit_id: str | None = None
+    admin_unit_code: str | None = None
+    admin_unit_label: str | None = None
+    admin_level: int | None = None
+    unit_type: str | None = None
+
+    delegation_code: str | None = None
+    delegation_label: str | None = None
+
+    governorate_code: str | None = None
+    governorate_label: str | None = None
+
+    active: bool

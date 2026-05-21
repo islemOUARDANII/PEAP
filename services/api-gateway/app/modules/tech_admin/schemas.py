@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
@@ -23,7 +23,7 @@ class ServiceHealthResponse(BaseModel):
     service: str
     url: str | None = None
     status: str
-    detail: str | None = None
+    detail: Any | None = None
 
 
 class TechAdminUserCreateRequest(TechAdminBaseModel):

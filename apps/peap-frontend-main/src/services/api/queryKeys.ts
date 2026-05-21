@@ -146,5 +146,7 @@ export const queryKeys = {
     countries: () => ["geo", "countries"] as const,
     adminUnits: (countryId?: string, adminLevel?: number, parentId?: string) =>
       ["geo", "admin-units", countryId ?? "", adminLevel ?? 0, parentId ?? ""] as const,
+    postalCodes: (adminUnitId?: string, countryIso2?: string) =>
+      ["geo", "postal-codes", adminUnitId ?? "", countryIso2 ?? ""] as const,
   },
 };

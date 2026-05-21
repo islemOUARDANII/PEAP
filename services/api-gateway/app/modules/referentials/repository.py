@@ -120,3 +120,140 @@ def list_languages(db: Session) -> list[dict]:
 
 def list_language_levels(db: Session) -> list[dict]:
     return _list_ref_values(db, ["LANGUAGE_LEVEL"])
+
+
+def list_imadas(
+    db: Session,
+    delegation_code: str | None = None,
+    governorate_code: str | None = None,
+    q: str | None = None,
+) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            im.id::text AS id,
+            im.code::text AS code,
+            COALESCE(im.label_fr, im.label_en, im.label, im.code)::text AS label,
+
+            d.code::text AS delegation_code,
+            COALESCE(d.label_fr, d.label_en, d.label, d.code)::text AS delegation_label,
+
+            g.code::text AS governorate_code,
+            COALESCE(g.label_fr, g.label_en, g.label, g.code)::text AS governorate_label
+
+        FROM geo.admin_unit im
+        JOIN geo.country c ON c.id = im.country_id
+        LEFT JOIN geo.admin_unit d ON d.id = im.parent_id
+        LEFT JOIN geo.admin_unit g ON g.id = d.parent_id
+
+        WHERE c.iso2 = 'TN'
+          AND im.admin_level = 3
+          AND im.unit_type = 'IMADA'
+          AND COALESCE(im.active, true) = true
+          AND (
+                :delegation_code IS NULL
+                OR d.code = :delegation_code
+          )
+          AND (
+                :governorate_code IS NULL
+                OR g.code = :governorate_code
+          )
+          AND (
+                :q IS NULL
+                OR im.code ILIKE :q_like
+                OR im.label ILIKE :q_like
+                OR im.label_fr ILIKE :q_like
+                OR im.label_en ILIKE :q_like
+                OR im.label_ar ILIKE :q_like
+          )
+
+        ORDER BY COALESCE(im.label_fr, im.label_en, im.label, im.code) ASC;
+        """,
+        {
+            "delegation_code": delegation_code,
+            "governorate_code": governorate_code,
+            "q": q,
+            "q_like": f"%{q}%" if q else None,
+        },
+    )
+
+
+def list_postal_codes(
+    db: Session,
+    imada_code: str | None = None,
+    delegation_code: str | None = None,
+    governorate_code: str | None = None,
+    q: str | None = None,
+) -> list[dict]:
+    return _fetch_all(
+        db,
+        """
+        SELECT
+            pc.id::text AS id,
+            pc.postal_code::text AS postal_code,
+            COALESCE(pc.label, pc.postal_code)::text AS label,
+
+            COALESCE(
+                NULLIF(au.label_fr, ''),
+                NULLIF(au.label_en, ''),
+                NULLIF(au.label, ''),
+                au.code
+            )::text AS locality_label,
+
+            NULL::text AS locality_label_ar,
+
+            au.id::text AS admin_unit_id,
+            au.code::text AS admin_unit_code,
+            COALESCE(au.label_fr, au.label_en, au.label, au.code)::text AS admin_unit_label,
+            au.admin_level,
+            au.unit_type,
+
+            d.code::text AS delegation_code,
+            COALESCE(d.label_fr, d.label_en, d.label, d.code)::text AS delegation_label,
+
+            g.code::text AS governorate_code,
+            COALESCE(g.label_fr, g.label_en, g.label, g.code)::text AS governorate_label
+
+        FROM geo.postal_code pc
+        JOIN geo.country c ON c.id = pc.country_id
+        LEFT JOIN geo.admin_unit au ON au.id = pc.admin_unit_id
+        LEFT JOIN geo.admin_unit d ON d.id = au.parent_id
+        LEFT JOIN geo.admin_unit g ON g.id = d.parent_id
+
+        WHERE c.iso2 = 'TN'
+          AND COALESCE(pc.active, true) = true
+          AND (
+                :imada_code IS NULL
+                OR au.code = :imada_code
+          )
+          AND (
+                :delegation_code IS NULL
+                OR d.code = :delegation_code
+          )
+          AND (
+                :governorate_code IS NULL
+                OR g.code = :governorate_code
+          )
+          AND (
+                :q IS NULL
+                OR pc.postal_code ILIKE :q_like
+                OR pc.label ILIKE :q_like
+                OR au.code ILIKE :q_like
+                OR au.label_fr ILIKE :q_like
+                OR au.label_en ILIKE :q_like
+                OR au.label ILIKE :q_like
+          )
+
+        ORDER BY
+            pc.postal_code ASC,
+            COALESCE(au.label_fr, au.label_en, au.label, au.code) ASC NULLS LAST;
+        """,
+        {
+            "imada_code": imada_code,
+            "delegation_code": delegation_code,
+            "governorate_code": governorate_code,
+            "q": q,
+            "q_like": f"%{q}%" if q else None,
+        },
+    )

@@ -1,5 +1,5 @@
 export type { ActivityTimelineItem, DistributionPoint, MatchingActivityPoint, PipelineStatusPoint, ScoreDistributionPoint } from "./analytics";
-export type { AuthMessageResponse, AuthSession, AuthUser, CandidateSignupInput, LoginInput, LoginResponse, ProviderRegistrationInput, ProviderRegistrationResponse } from "./auth";
+export type { AuthMessageResponse, AuthSession, AuthUser, CandidateSignupInput, CandidateRegisterInput, CandidateRegisterStartResponse, CandidateVerifyEmailInput, CandidateResendCodeInput, CandidateResendCodeResponse, LoginInput, LoginResponse, ProviderRegistrationInput, ProviderRegistrationResponse } from "./auth";
 export type { AuditLog } from "./audit";
 export type { Candidate, CandidateCvUploadResult, CandidateDocument, CandidateEducation, CandidateExperience, CandidateLanguage, CandidateProfile, CandidateProfileUpdate, CandidateStatus } from "./candidate";
 export type { CatalogOptions } from "./catalog";

@@ -65,26 +65,40 @@ async def upload_my_cv(
         mime_type=file.content_type,
     )
 
-    payload = {
-        "job_seeker_id": job_seeker["id"],
-        "cv_id": cv_id,
+    document_payload = {
+        "owner_type": "JOB_SEEKER",
+        "owner_id": job_seeker["id"],
         "storage_provider": storage.storage_provider(),
         "container_name": storage.container_name(),
         "blob_name": saved["blob_name"],
         "storage_key": saved["storage_key"],
-        "blob_url": saved["blob_url"],
         "original_filename": file.filename,
         "mime_type": file.content_type or "application/octet-stream",
         "file_size_bytes": len(content),
-        "status": "AVAILABLE",
-        "is_current": True,
-        "parsing_status": "NOT_PARSED",
-        "uploaded_by_user_id": current_user.id,
+        "status": "ACTIVE",
+        "uploaded_by_user_id": str(current_user.id),
+        "metadata_json": repository._json_param({
+            "cv_id": cv_id,
+            "blob_url": saved.get("blob_url"),
+        }),
     }
 
     try:
         repository.clear_current_flag(db, job_seeker["id"])
-        created = repository.create_cv_record(db, payload)
+
+        document_file = repository.create_document_file(db, document_payload)
+
+        created = repository.create_cv_record(
+            db,
+            {
+                "job_seeker_id": job_seeker["id"],
+                "document_file_id": document_file["id"],
+                "status": "AVAILABLE",
+                "is_current": True,
+                "parsing_status": "NOT_PARSED",
+            },
+        )
+
         db.commit()
     except IntegrityError as exc:
         db.rollback()
@@ -218,26 +232,40 @@ async def upload_cv_for_job_seeker(
         mime_type=file.content_type,
     )
 
-    payload = {
-        "job_seeker_id": job_seeker_id,
-        "cv_id": cv_id,
+    document_payload = {
+        "owner_type": "JOB_SEEKER",
+        "owner_id": job_seeker_id,
         "storage_provider": storage.storage_provider(),
         "container_name": storage.container_name(),
         "blob_name": saved["blob_name"],
         "storage_key": saved["storage_key"],
-        "blob_url": saved["blob_url"],
         "original_filename": file.filename,
         "mime_type": file.content_type or "application/octet-stream",
         "file_size_bytes": len(content),
-        "status": "AVAILABLE",
-        "is_current": True,
-        "parsing_status": "NOT_PARSED",
-        "uploaded_by_user_id": uploader_user_id,
+        "status": "ACTIVE",
+        "uploaded_by_user_id": str(uploader_user_id),
+        "metadata_json": repository._json_param({
+            "cv_id": cv_id,
+            "blob_url": saved.get("blob_url"),
+        }),
     }
 
     try:
         repository.clear_current_flag(db, job_seeker_id)
-        created = repository.create_cv_record(db, payload)
+
+        document_file = repository.create_document_file(db, document_payload)
+
+        created = repository.create_cv_record(
+            db,
+            {
+                "job_seeker_id": job_seeker_id,
+                "document_file_id": document_file["id"],
+                "status": "AVAILABLE",
+                "is_current": True,
+                "parsing_status": "NOT_PARSED",
+            },
+        )
+
         db.commit()
     except IntegrityError as exc:
         db.rollback()

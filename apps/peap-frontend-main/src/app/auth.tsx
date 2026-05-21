@@ -13,6 +13,8 @@ interface AuthContextValue {
     session: AuthSession | null;
     isAuthenticated: boolean;
     login: (input: LoginInput) => Promise<AuthSession>;
+    /** Connecte directement avec une session déjà construite (ex: après vérification OTP). */
+    loginWithSession: (session: AuthSession) => void;
     logout: () => void;
 }
 
@@ -140,6 +142,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return nextSession;
     }, [queryClient]);
 
+    const loginWithSession = useCallback((nextSession: AuthSession) => {
+        queryClient.clear();
+        setSession(nextSession);
+        writeStoredSession(nextSession);
+        setStatus("authenticated");
+    }, [queryClient]);
+
     const logout = useCallback(() => {
         clearStoredSession();
         setSession(null);
@@ -153,9 +162,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             session,
             isAuthenticated: status === "authenticated" && !!session,
             login,
+            loginWithSession,
             logout,
         }),
-        [status, session, login, logout],
+        [status, session, login, loginWithSession, logout],
     );
 
     return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

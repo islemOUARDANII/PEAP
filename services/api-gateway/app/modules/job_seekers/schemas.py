@@ -12,7 +12,7 @@ class JobSeekerBaseModel(BaseModel):
 
 
 class JobSeekerUpdateRequest(JobSeekerBaseModel):
-    primary_language: str | None = None
+    pass  # primary_language removed — no updatable top-level fields remain
 
 
 class JobSeekerIdentityUpsertRequest(JobSeekerBaseModel):
@@ -32,23 +32,29 @@ class JobSeekerContactUpsertRequest(JobSeekerBaseModel):
     email: EmailStr | None = None
     phone: str | None = None
     address: str | None = None
-    country: str = Field(min_length=1, default="TN")
-    governorate_code: str | None = None
-    delegation_code: str | None = None
+    # Champs canoniques (IDs)
+    country_id: UUID | None = None              # FK → geo.country.id
+    governorate_unit_id: UUID | None = None     # FK → geo.admin_unit (niveau 1)
+    delegation_unit_id: UUID | None = None      # FK → geo.admin_unit (niveau 2)
+    imada_unit_id: UUID | None = None           # FK → geo.admin_unit (niveau 3)
+    location_unit_id: UUID | None = None        # FK → geo.admin_unit (plus précis dispo)
+    postal_code_id: UUID | None = None          # FK → geo.postal_code.id
+    postal_code: str | None = None              # valeur texte du code postal
+    # Champs codes (fallback rétrocompatibilité)
+    country: str = Field(min_length=1, default="TN")  # ISO2 code — used for country_id lookup
+    governorate_code: str | None = None  # lookup param pour governorate_unit_id
+    delegation_code: str | None = None   # lookup param pour delegation_unit_id
 
 
 class JobSeekerEducationWriteRequest(JobSeekerBaseModel):
     level_code: str | None = None
     level_ref_id: UUID | None = None        # FK → reference.ref_value (EDUCATION_LEVEL)
-    diploma_label: str | None = None
     diploma_code: str | None = None         # code in DIPLOMA group
     diploma_ref_id: UUID | None = None      # FK → reference.ref_value (DIPLOMA)
-    specialty: str | None = None
     specialty_code: str | None = None       # code in SPECIALTY group
     specialty_ref_id: UUID | None = None    # FK → reference.ref_value (SPECIALTY)
     institution: str | None = None
     graduation_year: int | None = Field(default=None, ge=1950, le=2100)
-    rtmc_education_node_id: UUID | None = None
 
 
 class JobSeekerEducationCreateRequest(JobSeekerEducationWriteRequest):
@@ -60,12 +66,13 @@ class JobSeekerEducationUpdateRequest(JobSeekerEducationWriteRequest):
 
 
 class JobSeekerExperienceWriteRequest(JobSeekerBaseModel):
-    occupation_id: UUID | None = None
-    occupation_node_id: UUID | None = None  # FK → taxonomy.taxonomy_node (RTMC OCCUPATION)
+    occupation_node_id: UUID | None = None  # FK → taxonomy.taxonomy_node (OCCUPATION)
     job_title_raw: str | None = None
     company_name: str | None = None
-    sector: str | None = None
+    sector_code: str | None = None          # code in ACTIVITY_SECTOR group
     sector_ref_id: UUID | None = None       # FK → reference.ref_value (ACTIVITY_SECTOR)
+    country_id: UUID | None = None          # FK → geo.country
+    location_unit_id: UUID | None = None    # FK → geo.admin_unit
     start_date: date | None = None
     end_date: date | None = None
     is_current: bool = False
@@ -82,10 +89,9 @@ class JobSeekerExperienceUpdateRequest(JobSeekerExperienceWriteRequest):
 
 
 class JobSeekerSkillWriteRequest(JobSeekerBaseModel):
-    skill_id: UUID | None = None
-    skill_node_id: UUID | None = None  # FK → taxonomy.taxonomy_node (RTMC SKILL)
-    skill_label_raw: str | None = None
-    level: str | None = None
+    skill_node_id: UUID | None = None   # FK → taxonomy.taxonomy_node (SKILL)
+    level_ref_id: UUID | None = None    # FK → reference.ref_value (SKILL_LEVEL)
+    level_code: str | None = None       # code in SKILL_LEVEL group (fallback)
     years: Decimal | None = Field(default=None, ge=0)
     evidence: str | None = None
     source: Literal["CV", "MANUAL", "ADVISOR", "IMPORT", "PARSING"] | None = None
@@ -117,7 +123,7 @@ class JobSeekerPreferenceUpsertRequest(JobSeekerBaseModel):
     preferred_contract_type: str | None = None
     preferred_governorate: str | None = None
     mobility_radius_km: Decimal | None = Field(default=None, ge=0)
-    accepts_relocation: bool = False
+    accepts_relocation: bool | None = None
     desired_salary_min: Decimal | None = None
     desired_salary_max: Decimal | None = None
 
@@ -165,11 +171,30 @@ class JobSeekerContactResponse(BaseModel):
     email: str | None = None
     phone: str | None = None
     address: str | None = None
-    country: str
+
+    country: str | None = None
+    country_id: str | None = None
+    country_label: str | None = None
+
+    governorate_unit_id: str | None = None
     governorate_code: str | None = None
     governorate_label: str | None = None
+
+    delegation_unit_id: str | None = None
     delegation_code: str | None = None
     delegation_label: str | None = None
+
+    imada_unit_id: str | None = None
+    imada_code: str | None = None
+    imada_label: str | None = None
+
+    location_unit_id: str | None = None
+    location_code: str | None = None
+    location_label: str | None = None
+
+    postal_code_id: str | None = None
+    postal_code: str | None = None
+    postal_code_value: str | None = None
 
 
 class JobSeekerEducationResponse(BaseModel):
@@ -177,29 +202,33 @@ class JobSeekerEducationResponse(BaseModel):
     level_code: str | None = None
     level_ref_id: str | None = None
     level_label: str | None = None
-    diploma_label: str | None = None
+    diploma_label: str | None = None   # join-derived label, kept for frontend compat
     diploma_code: str | None = None
     diploma_ref_id: str | None = None
-    specialty: str | None = None
+    specialty: str | None = None       # join-derived label
     specialty_code: str | None = None
     specialty_ref_id: str | None = None
     institution: str | None = None
     graduation_year: int | None = None
-    rtmc_education_node_id: str | None = None
     created_at: datetime
     updated_at: datetime
 
 
 class JobSeekerExperienceResponse(BaseModel):
     id: str
-    occupation_id: str | None = None
     occupation_node_id: str | None = None
     occupation_label: str | None = None
     job_title_raw: str | None = None
     company_name: str | None = None
-    sector: str | None = None
     sector_ref_id: str | None = None
+    sector_code: str | None = None
     sector_label: str | None = None
+    country_id: str | None = None
+    country_code: str | None = None
+    country_label: str | None = None
+    location_unit_id: str | None = None
+    location_code: str | None = None
+    location_label: str | None = None
     start_date: date | None = None
     end_date: date | None = None
     is_current: bool = False
@@ -211,12 +240,12 @@ class JobSeekerExperienceResponse(BaseModel):
 
 class JobSeekerSkillResponse(BaseModel):
     id: str
-    skill_id: str | None = None
     skill_node_id: str | None = None
-    skill_label_raw: str | None = None
     skill_node_label: str | None = None
     skill_node_type: str | None = None
-    level: str | None = None
+    level_ref_id: str | None = None
+    level_code: str | None = None
+    level_label: str | None = None
     years: Decimal | None = None
     evidence: str | None = None
     source: str | None = None
@@ -254,7 +283,6 @@ class JobSeekerProfileResponse(BaseModel):
     aneti_identifier: str | None = None
     status: str
     registration_date: date | None = None
-    primary_language: str | None = None
     identity: JobSeekerIdentityResponse | None = None
     contact: JobSeekerContactResponse | None = None
     education: list[JobSeekerEducationResponse] = Field(default_factory=list)
@@ -300,9 +328,9 @@ class CandidateMatchedOfferItemResponse(BaseModel):
     employer_name: str | None = None
     description: str | None = None
     status: str | None = None
-    contract_type: str | None = None
-    work_mode: str | None = None
-    country: str | None = None
+    contract_type: str | None = None   # code from contract_type_ref_id join
+    work_mode: str | None = None       # code from work_mode_ref_id join
+    country: str | None = None         # iso2 from country_id join
     governorate_code: str | None = None
     governorate_label: str | None = None
     delegation_code: str | None = None
@@ -320,7 +348,7 @@ class CandidateMatchedOfferItemResponse(BaseModel):
     already_applied: bool = False
     application_id: str | None = None
     application_status: str | None = None
-    
+
 class CandidateMatchingCacheInfoResponse(BaseModel):
     reused: bool
     candidate_last_updated: str | None = None
@@ -338,18 +366,31 @@ class CandidateMatchedOffersResponse(BaseModel):
     offers: list[CandidateMatchedOfferItemResponse]
     cache: CandidateMatchingCacheInfoResponse | None = None
 
-class JobSeekerKeywordResponse(BaseModel):
+
+# ─── Interest schemas (replaces legacy keyword schemas) ───────────────────────
+
+class JobSeekerInterestWriteRequest(BaseModel):
+    taxonomy_node_id: UUID
+    interest_type_code: str | None = None  # code in INTEREST_TYPE group
+    source: str | None = None
+    weight: float = Field(default=1.0, ge=0, le=10)
+
+
+class JobSeekerInterestBulkRequest(BaseModel):
+    interests: list[JobSeekerInterestWriteRequest]
+
+
+class JobSeekerInterestResponse(BaseModel):
     id: str
-    keyword: str
-    keyword_type: str
-    source: str
+    taxonomy_node_id: str | None = None
+    taxonomy_node_label: str | None = None
+    taxonomy_node_type: str | None = None
+    interest_type_code: str | None = None
+    interest_type_label: str | None = None
+    source: str | None = None
     weight: float
     created_at: datetime
     updated_at: datetime
-
-
-class JobSeekerKeywordUpsertRequest(BaseModel):
-    keywords: list[str]
 
 
 class JobApplicationCreateRequest(BaseModel):
@@ -385,7 +426,6 @@ class CandidateBaseInfoResponse(BaseModel):
     aneti_identifier: str | None = None
     status: str
     registration_date: date | None = None
-    primary_language: str | None = None
 
 
 class CandidateAggregateProfileResponse(BaseModel):
@@ -399,7 +439,8 @@ class CandidateAggregateProfileResponse(BaseModel):
     skills: list[JobSeekerSkillResponse] = Field(default_factory=list)
     languages: list[JobSeekerLanguageResponse] = Field(default_factory=list)
     cv: CvMetadataResponse | None = None
-    keywords: list[str] = Field(default_factory=list)
+    interests: list[JobSeekerInterestResponse] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)  # preferred_labels from interests
     offer_threshold: float = 50.0
 
 
@@ -442,7 +483,7 @@ class LanguageChangeset(BaseModel):
 
 
 class CandidateProfilePatchRequest(BaseModel):
-    """Single-roundtrip profile update.  Only include sections that changed."""
+    """Single-roundtrip profile update. Only include sections that changed."""
 
     profile_version: int | None = None  # optimistic lock — omit to skip check
     candidate: JobSeekerUpdateRequest | None = None
@@ -453,5 +494,5 @@ class CandidateProfilePatchRequest(BaseModel):
     experience: ExperienceChangeset | None = None
     skills: SkillChangeset | None = None
     languages: LanguageChangeset | None = None
-    keywords: list[str] | None = None
+    interests: list[JobSeekerInterestWriteRequest] | None = None
     offer_threshold: float | None = None

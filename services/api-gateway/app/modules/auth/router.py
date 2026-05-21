@@ -1,15 +1,28 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.modules.audit.service import log_auth_event
 
+from .candidate_register import register_start, resend_code, verify_email
 from .dependencies import get_current_user
-from .schemas import CurrentUserResponse, LoginRequest, TokenResponse
+from .schemas import (
+    CandidateRegisterStartRequest,
+    CandidateRegisterStartResponse,
+    CandidateResendCodeRequest,
+    CandidateResendCodeResponse,
+    CandidateVerifyEmailRequest,
+    CurrentUserResponse,
+    LoginRequest,
+    TokenResponse,
+)
 from .security import create_access_token
 from .service import authenticate_user, build_current_user_response
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
+
+
+# ─── Login ────────────────────────────────────────────────────────────────────
 
 
 @router.post("/login", response_model=TokenResponse)
@@ -18,6 +31,7 @@ def login(
     request: Request,
     db: Session = Depends(get_db),
 ):
+    from fastapi import HTTPException
     try:
         user = authenticate_user(db, payload.email, payload.password)
     except HTTPException as exc:
@@ -57,9 +71,7 @@ def login(
         entity_type="AUTH_USER",
         entity_id=user["id"],
         message="User login succeeded",
-        metadata={
-            "roles": user["roles"],
-        },
+        metadata={"roles": user["roles"]},
     )
 
     return TokenResponse(
@@ -74,3 +86,42 @@ def me(
     current_user: CurrentUserResponse = Depends(get_current_user),
 ):
     return current_user
+
+
+# ─── Inscription candidat avec vérification email OTP ────────────────────────
+
+
+@router.post(
+    "/candidate/register/start",
+    response_model=CandidateRegisterStartResponse,
+    summary="Étape 1 — Créer un compte candidat et envoyer un code OTP par email",
+)
+def candidate_register_start(
+    payload: CandidateRegisterStartRequest,
+    db: Session = Depends(get_db),
+):
+    return register_start(db, payload)
+
+
+@router.post(
+    "/candidate/register/verify-email",
+    response_model=TokenResponse,
+    summary="Étape 2 — Vérifier le code OTP et activer le compte",
+)
+def candidate_register_verify_email(
+    payload: CandidateVerifyEmailRequest,
+    db: Session = Depends(get_db),
+):
+    return verify_email(db, payload)
+
+
+@router.post(
+    "/candidate/register/resend-code",
+    response_model=CandidateResendCodeResponse,
+    summary="Renvoyer un nouveau code OTP par email",
+)
+def candidate_register_resend_code(
+    payload: CandidateResendCodeRequest,
+    db: Session = Depends(get_db),
+):
+    return resend_code(db, payload)

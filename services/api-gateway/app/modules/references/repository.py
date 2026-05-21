@@ -470,3 +470,173 @@ def list_dropdown_values(db: Session, group_code: str) -> list[dict]:
         """,
         {"group_code": group_code},
     )
+
+
+def list_imadas(
+    db: Session,
+    *,
+    delegation_code: str | None = None,
+    governorate_code: str | None = None,
+    q: str | None = None,
+    limit: int = 300,
+    offset: int = 0,
+) -> list[dict]:
+    filters = [
+        "im.active = true",
+        "im.unit_type = 'IMADA'",
+    ]
+    params: dict[str, object] = {
+        "limit": limit,
+        "offset": offset,
+    }
+
+    if delegation_code:
+        filters.append("deleg.code = :delegation_code")
+        params["delegation_code"] = delegation_code
+
+    if governorate_code:
+        filters.append("gov.code = :governorate_code")
+        params["governorate_code"] = governorate_code
+
+    if q:
+        filters.append(
+            "("
+            "im.code ILIKE :q OR "
+            "im.label ILIKE :q OR "
+            "im.label_fr ILIKE :q OR "
+            "im.label_en ILIKE :q OR "
+            "im.label_ar ILIKE :q"
+            ")"
+        )
+        params["q"] = f"%{q}%"
+
+    where_clause = " AND ".join(filters)
+
+    return _fetch_all(
+        db,
+        f"""
+        SELECT
+            im.id::text AS id,
+            im.code,
+            COALESCE(im.label_fr, im.label_en, im.label, im.code) AS label,
+            im.label_fr,
+            im.label_en,
+            im.label_ar,
+
+            deleg.id::text AS delegation_id,
+            deleg.code AS delegation_code,
+            COALESCE(deleg.label_fr, deleg.label_en, deleg.label, deleg.code) AS delegation_label,
+
+            gov.id::text AS governorate_id,
+            gov.code AS governorate_code,
+            COALESCE(gov.label_fr, gov.label_en, gov.label, gov.code) AS governorate_label,
+
+            im.country_id::text AS country_id,
+            im.active
+
+        FROM geo.admin_unit im
+        LEFT JOIN geo.admin_unit deleg
+            ON deleg.id = im.parent_id
+        LEFT JOIN geo.admin_unit gov
+            ON gov.id = deleg.parent_id
+
+        WHERE {where_clause}
+
+        ORDER BY
+            COALESCE(im.label_fr, im.label_en, im.label, im.code) ASC
+
+        LIMIT :limit OFFSET :offset;
+        """,
+        params,
+    )
+
+
+def list_postal_codes(
+    db: Session,
+    *,
+    imada_code: str | None = None,
+    delegation_code: str | None = None,
+    governorate_code: str | None = None,
+    q: str | None = None,
+    limit: int = 300,
+    offset: int = 0,
+) -> list[dict]:
+    filters = [
+        "pc.active = true",
+    ]
+    params: dict[str, object] = {
+        "limit": limit,
+        "offset": offset,
+    }
+
+    if imada_code:
+        filters.append("unit.code = :imada_code")
+        params["imada_code"] = imada_code
+
+    if delegation_code:
+        filters.append("deleg.code = :delegation_code")
+        params["delegation_code"] = delegation_code
+
+    if governorate_code:
+        filters.append("gov.code = :governorate_code")
+        params["governorate_code"] = governorate_code
+
+    if q:
+        filters.append(
+            "("
+            "pc.postal_code ILIKE :q OR "
+            "pc.label ILIKE :q OR "
+            "pc.locality_label ILIKE :q OR "
+            "unit.code ILIKE :q OR "
+            "unit.label_fr ILIKE :q OR "
+            "unit.label ILIKE :q"
+            ")"
+        )
+        params["q"] = f"%{q}%"
+
+    where_clause = " AND ".join(filters)
+
+    return _fetch_all(
+        db,
+        f"""
+        SELECT
+            pc.id::text AS id,
+            pc.country_id::text AS country_id,
+
+            pc.postal_code,
+            COALESCE(pc.label, pc.postal_code) AS label,
+            pc.locality_label,
+            pc.locality_label_ar,
+
+            unit.id::text AS admin_unit_id,
+            unit.code AS admin_unit_code,
+            COALESCE(unit.label_fr, unit.label_en, unit.label, unit.code) AS admin_unit_label,
+            unit.admin_level,
+            unit.unit_type,
+
+            deleg.code AS delegation_code,
+            COALESCE(deleg.label_fr, deleg.label_en, deleg.label, deleg.code) AS delegation_label,
+
+            gov.code AS governorate_code,
+            COALESCE(gov.label_fr, gov.label_en, gov.label, gov.code) AS governorate_label,
+
+            pc.active
+
+        FROM geo.postal_code pc
+        LEFT JOIN geo.admin_unit unit
+            ON unit.id = pc.admin_unit_id
+        LEFT JOIN geo.admin_unit deleg
+            ON deleg.id = unit.parent_id
+        LEFT JOIN geo.admin_unit gov
+            ON gov.id = deleg.parent_id
+
+        WHERE {where_clause}
+
+        ORDER BY
+            pc.postal_code ASC,
+            pc.locality_label ASC NULLS LAST
+
+        LIMIT :limit OFFSET :offset;
+        """,
+        params,
+    )

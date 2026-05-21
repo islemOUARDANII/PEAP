@@ -312,29 +312,55 @@ def get_matching_result(db: Session, result_id: str) -> dict:
 def update_matching_result_decision(
     db: Session,
     result_id: str,
-    payload: MatchingResultDecisionRequest,
+    payload,
     *,
-    current_user: CurrentUserResponse,
+    current_user,
 ) -> dict:
-    if not repository.get_matching_result_by_id(db, result_id):
-        _raise_not_found("Matching result")
+    previous_result = repository.get_matching_result_by_id(db, result_id)
 
-    internal_status = _DECISION_TO_INTERNAL[payload.decision_status.value]
+    if not previous_result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Matching result not found",
+        )
 
-    updated = repository.update_matching_result_decision(
+    updated_result = repository.update_matching_result_decision(
         db,
         result_id=result_id,
-        decision_status=internal_status,
-        decision_reason=_normalize_optional_string(payload.decision_reason),
+        decision_status=payload.decision_status,
+        decision_reason=payload.decision_reason,
         decision_by_user_id=current_user.id,
     )
-    if not updated:
-        db.rollback()
-        _raise_not_found("Matching result")
 
     db.commit()
-    refreshed = repository.get_matching_result_by_id(db, result_id)
-    if not refreshed:
-        _raise_not_found("Matching result")
 
-    return _serialize_result(refreshed)
+    result = repository.get_matching_result_by_id(db, result_id)
+
+    log_advisor_activity(
+        db,
+        current_user,
+        activity_type="MATCHING",
+        target_type="CANDIDATE",
+        direction=None,
+        action_label=f"Décision résultat matching : {result.get('decision_status')}",
+        source_entity_type="MATCHING_RESULT",
+        source_entity_id=result_id,
+        run_id=result.get("run_id"),
+        result_count=1,
+        status="SUCCESS",
+        metadata_json={
+            "endpoint": f"/matching/results/{result_id}/decision",
+            "previous_decision_status": previous_result.get("decision_status"),
+            "previous_decision_reason": previous_result.get("decision_reason"),
+            "new_decision_status": result.get("decision_status"),
+            "new_decision_reason": result.get("decision_reason"),
+            "candidate_id": result.get("candidate_id"),
+            "candidate_label": result.get("candidate_label"),
+            "offer_id": result.get("offer_id"),
+            "offer_title": result.get("offer_title"),
+            "score_global": result.get("score_global"),
+            "rank": result.get("rank"),
+        },
+    )
+
+    return _serialize_result(result)

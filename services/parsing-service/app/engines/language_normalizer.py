@@ -92,23 +92,41 @@ def split_language_segments(value: str) -> list[str]:
 def load_language_refs() -> list[dict[str, Any]]:
     engine = get_engine()
 
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT
-                    code,
-                    label_fr,
-                    label_en,
-                    aliases
-                FROM taxonomy.ref_language
-                WHERE is_active = true
-            """)
-        ).mappings().all()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT
+                        rv.code,
+                        rv.label_fr,
+                        rv.label_en,
+                        COALESCE(rv.metadata_json->'aliases', '[]'::jsonb) AS aliases
+                    FROM reference.ref_value rv
+                    JOIN reference.ref_group rg
+                        ON rg.id = rv.group_id
+                    WHERE rg.code = 'LANGUAGE'
+                      AND rv.active = true
+                    ORDER BY rv.sort_order ASC, rv.label_fr ASC;
+                """)
+            ).mappings().all()
+    except Exception:
+        # Fallback minimal pour ne pas faire planter tout le parsing
+        rows = [
+            {"code": "fr", "label_fr": "Français", "label_en": "French", "aliases": ["francais", "français", "french"]},
+            {"code": "en", "label_fr": "Anglais", "label_en": "English", "aliases": ["anglais", "english"]},
+            {"code": "ar", "label_fr": "Arabe", "label_en": "Arabic", "aliases": ["arabe", "arabic"]},
+            {"code": "de", "label_fr": "Allemand", "label_en": "German", "aliases": ["allemand", "german"]},
+            {"code": "es", "label_fr": "Espagnol", "label_en": "Spanish", "aliases": ["espagnol", "spanish", "español"]},
+            {"code": "it", "label_fr": "Italien", "label_en": "Italian", "aliases": ["italien", "italian"]},
+        ]
 
     refs: list[dict[str, Any]] = []
 
     for row in rows:
         aliases = row.get("aliases") or []
+
+        if isinstance(aliases, str):
+            aliases = [aliases]
 
         terms = [
             row.get("code"),
@@ -132,25 +150,41 @@ def load_language_refs() -> list[dict[str, Any]]:
 def load_level_refs() -> list[dict[str, Any]]:
     engine = get_engine()
 
-    with engine.connect() as conn:
-        rows = conn.execute(
-            text("""
-                SELECT
-                    code,
-                    label_fr,
-                    label_en,
-                    aliases,
-                    rank_order
-                FROM taxonomy.ref_language_level
-                WHERE is_active = true
-                ORDER BY rank_order DESC
-            """)
-        ).mappings().all()
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(
+                text("""
+                    SELECT
+                        rv.code,
+                        rv.label_fr,
+                        rv.label_en,
+                        COALESCE(rv.metadata_json->'aliases', '[]'::jsonb) AS aliases,
+                        rv.sort_order AS rank_order
+                    FROM reference.ref_value rv
+                    JOIN reference.ref_group rg
+                        ON rg.id = rv.group_id
+                    WHERE rg.code = 'LANGUAGE_LEVEL'
+                      AND rv.active = true
+                    ORDER BY rv.sort_order DESC, rv.code DESC;
+                """)
+            ).mappings().all()
+    except Exception:
+        rows = [
+            {"code": "C2", "label_fr": "Maîtrise", "label_en": "Proficient", "aliases": ["courant", "bilingue", "native", "proficient"], "rank_order": 6},
+            {"code": "C1", "label_fr": "Avancé", "label_en": "Advanced", "aliases": ["avance", "avancé", "advanced"], "rank_order": 5},
+            {"code": "B2", "label_fr": "Intermédiaire supérieur", "label_en": "Upper intermediate", "aliases": ["intermediaire superieur", "upper intermediate"], "rank_order": 4},
+            {"code": "B1", "label_fr": "Intermédiaire", "label_en": "Intermediate", "aliases": ["intermediaire", "intermediate"], "rank_order": 3},
+            {"code": "A2", "label_fr": "Élémentaire", "label_en": "Elementary", "aliases": ["elementaire", "élémentaire", "elementary"], "rank_order": 2},
+            {"code": "A1", "label_fr": "Débutant", "label_en": "Beginner", "aliases": ["debutant", "débutant", "beginner"], "rank_order": 1},
+        ]
 
     refs: list[dict[str, Any]] = []
 
     for row in rows:
         aliases = row.get("aliases") or []
+
+        if isinstance(aliases, str):
+            aliases = [aliases]
 
         terms = [
             row.get("code"),

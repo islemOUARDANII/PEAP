@@ -84,6 +84,7 @@ def _criterion_to_attribute_path(code: str) -> str:
         "OFFER_STATUS": "offer.status",
         "CONTRACT_TYPE": "offer.contract_type",
         "GOVERNORATE": "offer.location.governorate_code",
+        "JOB_SEEKER_STATUS": "candidate.status",
 
         # Hard filters basés sur les sous-scores
         "SKILLS": "hard_filters.must_have_skill_rate",

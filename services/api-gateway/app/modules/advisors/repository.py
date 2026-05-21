@@ -56,11 +56,11 @@ def create_job_seeker(db: Session, payload: Mapping[str, object]) -> dict:
     return _fetch_one(
         db,
         """
-        INSERT INTO aneti.job_seeker (user_id, primary_language, status, registration_date)
-        VALUES (CAST(:user_id AS uuid), :primary_language, 'ACTIVE', now())
-        RETURNING id::text AS id, user_id::text AS user_id, status, primary_language;
+        INSERT INTO aneti.job_seeker (user_id, status, registration_date)
+        VALUES (CAST(:user_id AS uuid), 'ACTIVE', now())
+        RETURNING id::text AS id, user_id::text AS user_id, status;
         """,
-        dict(payload),
+        {"user_id": dict(payload).get("user_id")},
     )
 
 
@@ -83,14 +83,38 @@ def upsert_candidate_contact(db: Session, candidate_id: str, payload: Mapping[st
     params["candidate_id"] = candidate_id
     db.execute(
         text("""
-        INSERT INTO aneti.job_seeker_contact (job_seeker_id, governorate_code, delegation_code)
-        VALUES (CAST(:candidate_id AS uuid), :governorate_code, :delegation_code)
+        INSERT INTO aneti.job_seeker_contact (
+            job_seeker_id,
+            governorate_unit_id,
+            delegation_unit_id
+        )
+        VALUES (
+            CAST(:candidate_id AS uuid),
+            (
+                SELECT au.id FROM geo.admin_unit au
+                JOIN geo.country cn ON cn.id = au.country_id
+                WHERE cn.iso2 = 'TN' AND au.admin_level = 1
+                  AND au.code = :governorate_code
+                LIMIT 1
+            ),
+            (
+                SELECT au.id FROM geo.admin_unit au
+                JOIN geo.country cn ON cn.id = au.country_id
+                WHERE cn.iso2 = 'TN' AND au.admin_level = 2
+                  AND au.code = :delegation_code
+                LIMIT 1
+            )
+        )
         ON CONFLICT (job_seeker_id)
         DO UPDATE SET
-            governorate_code = EXCLUDED.governorate_code,
-            delegation_code = EXCLUDED.delegation_code;
+            governorate_unit_id = EXCLUDED.governorate_unit_id,
+            delegation_unit_id  = EXCLUDED.delegation_unit_id;
         """),
-        params,
+        {
+            "candidate_id":    candidate_id,
+            "governorate_code": params.get("governorate_code"),
+            "delegation_code":  params.get("delegation_code"),
+        },
     )
 
 
@@ -122,14 +146,16 @@ def create_offer_for_advisor(db: Session, payload: Mapping[str, object], _db: Se
             description,
             number_of_positions,
             status,
-            contract_type,
-            work_mode,
+            contract_type_ref_id,
+            work_mode_ref_id,
             salary_min,
             salary_max,
-            country,
-            governorate_code,
-            delegation_code,
+            country_id,
+            governorate_unit_id,
+            delegation_unit_id,
             deadline_at,
+            submitted_at,
+            published_at,
             created_by_user_id
         )
         VALUES (
@@ -139,19 +165,46 @@ def create_offer_for_advisor(db: Session, payload: Mapping[str, object], _db: Se
             :description,
             :number_of_positions,
             'DRAFT',
-            :contract_type,
-            :work_mode,
+            (SELECT rv.id FROM reference.ref_value rv
+             JOIN reference.ref_group rg ON rg.id = rv.group_id
+             WHERE rg.code = 'CONTRACT_TYPE' AND rv.code = :contract_type LIMIT 1),
+            (SELECT rv.id FROM reference.ref_value rv
+             JOIN reference.ref_group rg ON rg.id = rv.group_id
+             WHERE rg.code = 'WORK_MODE' AND rv.code = :work_mode LIMIT 1),
             :salary_min,
             :salary_max,
-            :country,
-            :governorate_code,
-            :delegation_code,
+            (SELECT c.id FROM geo.country c WHERE c.iso2 = COALESCE(NULLIF(:country,''),'TN') LIMIT 1),
+            (SELECT au.id FROM geo.admin_unit au
+             JOIN geo.country cn ON cn.id = au.country_id
+             WHERE cn.iso2 = COALESCE(NULLIF(:country,''),'TN')
+               AND au.admin_level = 1 AND au.code = :governorate_code LIMIT 1),
+            (SELECT au.id FROM geo.admin_unit au
+             JOIN geo.country cn ON cn.id = au.country_id
+             WHERE cn.iso2 = COALESCE(NULLIF(:country,''),'TN')
+               AND au.admin_level = 2 AND au.code = :delegation_code LIMIT 1),
             CAST(:deadline_at AS timestamptz),
+            now(),
+            now(),
             CAST(:created_by_user_id AS uuid)
         )
         RETURNING id::text AS id, aneti_identifier;
         """,
-        params,
+        {
+            "employer_id":       params.get("employer_id"),
+            "company_name":      params.get("company_name"),
+            "title":             params.get("title"),
+            "description":       params.get("description"),
+            "number_of_positions": params.get("number_of_positions") or 1,
+            "contract_type":     params.get("contract_type"),
+            "work_mode":         params.get("work_mode"),
+            "salary_min":        params.get("salary_min"),
+            "salary_max":        params.get("salary_max"),
+            "country":           params.get("country") or "TN",
+            "governorate_code":  params.get("governorate_code"),
+            "delegation_code":   params.get("delegation_code"),
+            "deadline_at":       params.get("deadline_at"),
+            "created_by_user_id": params.get("created_by_user_id"),
+        },
     )
     db.commit()
     return row

@@ -27,8 +27,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { gatewayApi } from '@/services/api/gateway';
 import {
-  useGeoCountriesQuery,
-  useGeoAdminUnitsQuery,
   useRefDropdownQuery,
 } from '@/services/api/queries';
 import { OccupationAutocomplete } from '@/pages/candidate/profile/OccupationAutocomplete';
@@ -89,11 +87,15 @@ interface OfferForm {
 type ParsedDraft = Record<string, unknown>;
 
 const EMPTY_LOCATION: GeoAddressValue = {
-  countryIso2: 'TN',
-  adminUnit1Code: '',
-  adminUnit1Label: '',
-  adminUnit2Code: '',
-  adminUnit2Label: '',
+  countryId: null,
+  governorateUnitId: null,
+  delegationUnitId: null,
+  imadaUnitId: null,
+  locationUnitId: null,
+  postalCodeId: null,
+  postalCode: '',
+  postalLocalityLabel: '',
+  addressLine: '',
 };
 
 const EMPTY_FORM: OfferForm = {
@@ -344,9 +346,13 @@ export default function CreateOffer() {
       salary_min: salaryMin,
       salary_max: salaryMax,
       salary_currency_code: form.salaryCurrency || 'TND',
-      country: form.location.countryIso2 || 'TN',
-      governorate_code: toNullable(form.location.adminUnit1Code),
-      delegation_code: toNullable(form.location.adminUnit2Code),
+      country_id: form.location.countryId || null,
+      governorate_unit_id: form.location.governorateUnitId || null,
+      delegation_unit_id: form.location.delegationUnitId || null,
+      imada_unit_id: form.location.imadaUnitId || null,
+      location_unit_id: form.location.locationUnitId || null,
+      postal_code_id: form.location.postalCodeId || null,
+      postal_code: form.location.postalCode || null,
       deadline_at: toNullable(form.deadlineAt),
       min_experience_months: toNullableNumber(form.minExperienceMonths),
       diploma_ref_id: toNullable(form.diplomaRefId),

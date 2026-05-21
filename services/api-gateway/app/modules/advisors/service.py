@@ -104,7 +104,6 @@ def create_candidate(db: Session, payload: AdvisorCreateCandidateRequest) -> dic
 
         candidate = repository.create_job_seeker(db, {
             "user_id": user["id"],
-            "primary_language": payload.primary_language,
         })
 
         repository.upsert_candidate_identity(db, candidate["id"], {

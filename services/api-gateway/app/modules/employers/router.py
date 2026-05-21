@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -11,6 +11,7 @@ from .schemas import (
     EmployerProfileResponse,
     EmployerUpdateRequest,
     EmployerApplicationResponse,
+    EmployerMatchedCandidatesResponse,
 )
 from .service import (
     get_my_profile,
@@ -18,6 +19,7 @@ from .service import (
     update_my_profile,
     upsert_contact,
     upsert_location,
+    get_my_offer_matched_candidates,
 )
 
 router = APIRouter(prefix="/employers", tags=["Employers"])
@@ -63,3 +65,34 @@ def list_my_applications_endpoint(
     current_user: CurrentUserResponse = Depends(require_roles("EMPLOYER")),
 ):
     return list_my_applications(db, current_user)
+
+@router.get("/me/offers/{offer_id}/applications", response_model=list[EmployerApplicationResponse])
+def list_my_offer_applications_endpoint(
+    offer_id: str,
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("EMPLOYER")),
+):
+    return list_my_applications(
+        db,
+        current_user,
+        offer_id=offer_id,
+    )
+
+@router.get(
+    "/me/offers/{offer_id}/matched-candidates",
+    response_model=EmployerMatchedCandidatesResponse,
+)
+def get_my_offer_matched_candidates_endpoint(
+    offer_id: str,
+    min_score: float | None = Query(default=None, ge=0, le=100),
+    force_refresh: bool = Query(default=False),
+    db: Session = Depends(get_db),
+    current_user: CurrentUserResponse = Depends(require_roles("EMPLOYER")),
+):
+    return get_my_offer_matched_candidates(
+        db,
+        current_user,
+        offer_id=offer_id,
+        min_score=min_score,
+        force_refresh=force_refresh,
+    )

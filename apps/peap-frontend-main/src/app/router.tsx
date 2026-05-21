@@ -5,6 +5,23 @@ import Login from '@/pages/Login';
 import NotFound from '@/pages/NotFound';
 import { AuthIndexRedirect, RequireAuth } from '@/app/routeGuards';
 
+// Candidate auth pages
+import CandidateAuthLayout from '@/pages/candidate/auth/CandidateAuthLayout';
+import CandidateLogin from '@/pages/candidate/auth/CandidateLogin';
+import CandidateRegister from '@/pages/candidate/auth/CandidateRegister';
+import CandidateVerifyCode from '@/pages/candidate/auth/CandidateVerifyCode';
+
+// Candidate onboarding
+import CandidateOnboardingLayout from '@/pages/candidate/onboarding/CandidateOnboardingLayout';
+import RegistrationReasonsStep from '@/pages/candidate/onboarding/RegistrationReasonsStep';
+import CvChoiceStep from '@/pages/candidate/onboarding/CvChoiceStep';
+import PersonalInfoStep from '@/pages/candidate/onboarding/PersonalInfoStep';
+import AdditionalInfoStep from '@/pages/candidate/onboarding/AdditionalInfoStep';
+import EducationStep from '@/pages/candidate/onboarding/EducationStep';
+import ExperienceStep from '@/pages/candidate/onboarding/ExperienceStep';
+import SkillsStep from '@/pages/candidate/onboarding/SkillsStep';
+import ReviewStep from '@/pages/candidate/onboarding/ReviewStep';
+
 import CandidateDashboard from '@/pages/candidate/Dashboard';
 import Profile from '@/pages/candidate/Profile';
 import CandidateOffers from '@/pages/candidate/Offers';
@@ -56,6 +73,31 @@ export function AppRouter() {
         <Route path="/landing" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/login/:roleId" element={<Login />} />
+
+        {/* Candidate auth routes (public, no sidebar) */}
+        <Route element={<CandidateAuthLayout />}>
+          <Route path="/candidate/login" element={<CandidateLogin />} />
+          <Route path="/candidate/register" element={<CandidateRegister />} />
+          <Route path="/candidate/verify-code" element={<CandidateVerifyCode />} />
+        </Route>
+
+        {/* Candidate onboarding routes (protected, full-page layout) */}
+        <Route
+          element={
+            <RequireAuth allowedRoles={['candidate']}>
+              <CandidateOnboardingLayout />
+            </RequireAuth>
+          }
+        >
+          <Route path="/candidate/onboarding/reasons" element={<RegistrationReasonsStep />} />
+          <Route path="/candidate/onboarding/cv-choice" element={<CvChoiceStep />} />
+          <Route path="/candidate/onboarding/personal-info" element={<PersonalInfoStep />} />
+          <Route path="/candidate/onboarding/additional-info" element={<AdditionalInfoStep />} />
+          <Route path="/candidate/onboarding/education" element={<EducationStep />} />
+          <Route path="/candidate/onboarding/experience" element={<ExperienceStep />} />
+          <Route path="/candidate/onboarding/skills" element={<SkillsStep />} />
+          <Route path="/candidate/onboarding/review" element={<ReviewStep />} />
+        </Route>
 
         <Route
           element={

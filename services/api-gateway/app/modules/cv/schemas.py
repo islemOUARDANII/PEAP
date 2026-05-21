@@ -42,3 +42,23 @@ class CvParseResponse(BaseModel):
     extracted_profile_patch: ParsedProfilePatchResponse = Field(default_factory=ParsedProfilePatchResponse)
     warnings: list[str] = Field(default_factory=list)
     parser_version: str
+
+class ParsedResumeSnapshotResponse(BaseModel):
+    id: str
+    job_seeker_id: str
+    cv_record_id: str
+
+    parsing_status: str
+    parser_name: str | None = None
+    parser_version: str | None = None
+    source: str | None = None
+
+    parsed_payload: dict[str, Any] = Field(default_factory=dict)
+    mapped_payload: dict[str, Any] = Field(default_factory=dict)
+    extracted_profile_patch: dict[str, Any] = Field(default_factory=dict)
+
+    warnings: list[Any] = Field(default_factory=list)
+    errors: list[Any] = Field(default_factory=list)
+
+    created_by_user_id: str | None = None
+    created_at: datetime

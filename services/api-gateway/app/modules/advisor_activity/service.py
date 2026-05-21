@@ -4,8 +4,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.advisor_activity.repository import insert_advisor_activity
+from app.modules.advisor_activity.repository import (
+    insert_advisor_activity,
+    list_advisor_activities,
+)
 
+from app.modules.advisor_activity.schemas import AdvisorActivityResponse
 
 def _get_user_id(current_user: Any) -> str | None:
     return (
@@ -90,3 +94,24 @@ def log_advisor_activity(
         error_message=error_message,
         metadata_json=metadata_json,
     )
+
+def list_my_advisor_activities(
+    db: Session,
+    current_user: Any,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    actor_user_id = _get_user_id(current_user)
+
+    rows = list_advisor_activities(
+        db,
+        actor_user_id=str(actor_user_id),
+        limit=limit,
+        offset=offset,
+    )
+
+    return [
+        AdvisorActivityResponse(**row).model_dump(mode="json")
+        for row in rows
+    ]

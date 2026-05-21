@@ -110,3 +110,62 @@ def insert_advisor_activity(
         },
     )
     db.commit()
+
+
+def list_advisor_activities(
+    db: Session,
+    *,
+    actor_user_id: str,
+    limit: int = 50,
+    offset: int = 0,
+) -> list[dict]:
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                id::text AS id,
+                activity_time,
+
+                actor_user_id::text AS actor_user_id,
+                actor_email,
+                actor_role,
+
+                activity_type,
+                target_type,
+                direction,
+                action_label,
+
+                query_text,
+                COALESCE(filters_json, '{}'::jsonb) AS filters_json,
+
+                model_id::text AS model_id,
+                model_version_id::text AS model_version_id,
+                model_code,
+                model_label,
+
+                source_entity_type,
+                source_entity_id::text AS source_entity_id,
+                run_id::text AS run_id,
+
+                result_count,
+                duration_ms,
+
+                status,
+                error_message,
+                COALESCE(metadata_json, '{}'::jsonb) AS metadata_json
+
+            FROM audit.advisor_activity
+            WHERE actor_user_id = CAST(:actor_user_id AS uuid)
+            ORDER BY activity_time DESC
+            LIMIT :limit
+            OFFSET :offset;
+            """
+        ),
+        {
+            "actor_user_id": actor_user_id,
+            "limit": limit,
+            "offset": offset,
+        },
+    ).mappings().all()
+
+    return [dict(row) for row in rows]    

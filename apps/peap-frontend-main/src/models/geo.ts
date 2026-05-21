@@ -23,3 +23,18 @@ export interface GeoAdminUnit {
   unit_type: string;
   active: boolean;
 }
+
+export interface GeoPostalCode {
+  id: string;
+  country_id: string;
+  postal_code: string;
+  label: string | null;
+  locality_label: string | null;
+  locality_label_ar: string | null;
+  admin_unit_id: string | null;
+  admin_level: number | null;
+  unit_type: string | null;
+  admin_unit_label_fr: string | null;
+  confidence: number | null;
+  active: boolean;
+}

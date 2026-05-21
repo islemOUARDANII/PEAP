@@ -5,7 +5,12 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import require_roles
 
 from . import repository
-from .schemas import DelegationItemResponse, ReferentialItemResponse
+from .schemas import (
+    DelegationItemResponse,
+    ReferentialItemResponse,
+    ImadaItemResponse,
+    PostalCodeItemResponse,
+)
 
 ALL_ROLES = ("JOB_SEEKER", "EMPLOYER", "ANETI_ADVISOR", "FUNCTIONAL_ADMIN", "TECH_ADMIN")
 
@@ -107,3 +112,36 @@ def languages(db: Session = Depends(get_db), _current_user=_secured()):
 @router.get("/language-levels", response_model=list[ReferentialItemResponse])
 def language_levels(db: Session = Depends(get_db), _current_user=_secured()):
     return repository.list_language_levels(db)
+
+@router.get("/imadas", response_model=list[ImadaItemResponse])
+def imadas(
+    delegation_code: str | None = Query(default=None),
+    governorate_code: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _current_user=_secured(),
+):
+    return repository.list_imadas(
+        db,
+        delegation_code=delegation_code,
+        governorate_code=governorate_code,
+        q=q,
+    )
+
+
+@router.get("/postal-codes", response_model=list[PostalCodeItemResponse])
+def postal_codes(
+    imada_code: str | None = Query(default=None),
+    delegation_code: str | None = Query(default=None),
+    governorate_code: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+    _current_user=_secured(),
+):
+    return repository.list_postal_codes(
+        db,
+        imada_code=imada_code,
+        delegation_code=delegation_code,
+        governorate_code=governorate_code,
+        q=q,
+    )

@@ -31,10 +31,19 @@ def authenticate_user(db: Session, email: str, password: str) -> dict:
             detail="Invalid email or password",
         )
 
+    if row["status"] == "PENDING_VERIFICATION":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "Votre adresse email n'est pas encore vérifiée. "
+                "Veuillez saisir le code reçu par email."
+            ),
+        )
+
     if row["status"] != "ACTIVE":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Account is not active: {row['status']}",
+            detail=f"Compte non actif : {row['status']}",
         )
 
     roles = get_user_roles(db, row["id"])

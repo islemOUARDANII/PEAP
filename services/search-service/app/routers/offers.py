@@ -186,34 +186,127 @@ def search_offers(
 
 
 _OFFER_DETAIL_QUERY = """
-SELECT
-    o.id            AS offer_id,
-    o.employer_id   AS company_id,
-    o.status,
-    o.title,
-    o.description,
-    COALESCE(
-        NULLIF(TRIM(
-            COALESCE(o.governorate_code, '')
-            || CASE WHEN o.delegation_code IS NOT NULL THEN ', ' || o.delegation_code ELSE '' END
-        ), ', '),
-        o.governorate_code,
-        o.delegation_code,
-        ''
-    )               AS location,
-    o.contract_type,
-    o.created_at,
-    o.updated_at,
-    COALESCE(
-        array_agg(DISTINCT r.raw_value) FILTER (
-            WHERE r.criterion_type = 'SKILL' AND r.raw_value IS NOT NULL
-        ),
-        '{}'
-    )               AS skills
-FROM aneti.job_offer o
-LEFT JOIN aneti.job_offer_requirement r ON r.offer_id = o.id
-WHERE o.id = %(offer_id)s
-GROUP BY o.id, o.employer_id, o.governorate_code, o.delegation_code
+    SELECT
+        o.id::text AS offer_id,
+        o.employer_id::text AS company_id,
+        o.status,
+        o.title,
+        o.description,
+
+        country.iso2 AS country,
+        COALESCE(country.name_fr, country.name_en, country.iso2) AS country_label,
+
+        gov.code AS governorate_code,
+        COALESCE(gov.label_fr, gov.label_en, gov.label, gov.code) AS governorate,
+
+        del_unit.code AS delegation_code,
+        COALESCE(del_unit.label_fr, del_unit.label_en, del_unit.label, del_unit.code) AS delegation,
+
+        COALESCE(
+            NULLIF(TRIM(CONCAT_WS(
+                ', ',
+                NULLIF(COALESCE(del_unit.label_fr, del_unit.label_en, del_unit.label, del_unit.code), ''),
+                NULLIF(COALESCE(gov.label_fr, gov.label_en, gov.label, gov.code), ''),
+                NULLIF(COALESCE(country.name_fr, country.name_en, country.iso2), '')
+            )), ''),
+            ''
+        ) AS location,
+
+        COALESCE(contract_ref.code, '') AS contract_type,
+        COALESCE(contract_ref.label_fr, contract_ref.label_en, contract_ref.label, contract_ref.code, '') AS contract_type_label,
+
+        COALESCE(work_ref.code, '') AS work_mode,
+        COALESCE(work_ref.label_fr, work_ref.label_en, work_ref.label, work_ref.code, '') AS work_mode_label,
+
+        o.salary_min,
+        o.salary_max,
+        o.salary_currency_code,
+
+        o.occupation_node_id::text AS occupation_node_id,
+        occupation.preferred_label AS occupation_label,
+
+        o.min_experience_months,
+        o.diploma_ref_id::text AS diploma_ref_id,
+        COALESCE(diploma_ref.label_fr, diploma_ref.label_en, diploma_ref.label, diploma_ref.code) AS diploma_label,
+
+        o.specialty_ref_id::text AS specialty_ref_id,
+        COALESCE(specialty_ref.label_fr, specialty_ref.label_en, specialty_ref.label, specialty_ref.code) AS specialty_label,
+
+        o.created_at,
+        o.updated_at,
+        o.published_at,
+        o.deadline_at,
+
+        COALESCE(
+            (
+                SELECT array_agg(DISTINCT term)
+                FROM (
+                    SELECT COALESCE(
+                        n.preferred_label,
+                        rv.label_fr,
+                        rv.label_en,
+                        rv.label,
+                        rv.code
+                    ) AS term
+                    FROM aneti.job_offer_requirement r
+                    LEFT JOIN reference.ref_value rv_ct
+                        ON rv_ct.id = r.criterion_type_ref_id
+                    LEFT JOIN taxonomy.taxonomy_node n
+                        ON n.id = r.taxonomy_node_id
+                    LEFT JOIN reference.ref_value rv
+                        ON rv.id = r.ref_value_id
+                    WHERE r.offer_id = o.id
+                    AND (
+                            rv_ct.code IN ('SKILL', 'SOFT_SKILL')
+                            OR n.node_type IN ('SKILL', 'SOFT_SKILL')
+                    )
+                    AND COALESCE(
+                            n.preferred_label,
+                            rv.label_fr,
+                            rv.label_en,
+                            rv.label,
+                            rv.code
+                        ) IS NOT NULL
+                    AND TRIM(COALESCE(
+                            n.preferred_label,
+                            rv.label_fr,
+                            rv.label_en,
+                            rv.label,
+                            rv.code
+                        )) <> ''
+                ) q
+            ),
+            ARRAY[]::text[]
+        ) AS skills
+
+        FROM aneti.job_offer o
+
+    LEFT JOIN geo.country country
+        ON country.id = o.country_id
+
+    LEFT JOIN geo.admin_unit gov
+        ON gov.id = o.governorate_unit_id
+
+    LEFT JOIN geo.admin_unit del_unit
+        ON del_unit.id = o.delegation_unit_id
+
+    LEFT JOIN taxonomy.taxonomy_node occupation
+        ON occupation.id = o.occupation_node_id
+
+    LEFT JOIN reference.ref_value contract_ref
+        ON contract_ref.id = o.contract_type_ref_id
+
+    LEFT JOIN reference.ref_value work_ref
+        ON work_ref.id = o.work_mode_ref_id
+
+    LEFT JOIN reference.ref_value diploma_ref
+        ON diploma_ref.id = o.diploma_ref_id
+
+    LEFT JOIN reference.ref_value specialty_ref
+        ON specialty_ref.id = o.specialty_ref_id
+
+    WHERE o.id = %(offer_id)s::uuid
+    LIMIT 1;
 """
 
 
@@ -244,7 +337,7 @@ def get_offer(offer_id: str) -> OfferDetail:
         description=row["description"] or "",
         location=row["location"] or "",
         contract_type=row["contract_type"] or "",
-        skills=list(row["skills"] or []),
+        skills=list(row.get("skills") or []),
         created_at=row["created_at"].isoformat() if row["created_at"] else None,
         updated_at=row["updated_at"].isoformat() if row["updated_at"] else None,
     )

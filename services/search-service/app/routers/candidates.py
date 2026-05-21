@@ -49,6 +49,14 @@ class CandidateFilters(BaseModel):
         default=None,
         description="Ville / région (fuzzy)",
     )
+    governorate: Optional[str] = Field(
+        default=None,
+        description="Gouvernorat ex: Sousse, Tunis, Sfax",
+    )
+    governorate_code: Optional[str] = Field(
+        default=None,
+        description="Code gouvernorat ex: 23",
+    )
     size: int = Field(default=20, ge=1, le=100)
     from_: int = Field(default=0, ge=0, description="Offset pour la pagination")
 
@@ -102,6 +110,8 @@ def search_candidates(
         education=f.education,
         skills=f.skills,
         location=f.location,
+        governorate=f.governorate,
+        governorate_code=f.governorate_code,
         size=f.size,
         from_=f.from_,
     )
@@ -136,6 +146,8 @@ def search_candidates(
             "education": f.education,
             "skills": f.skills,
             "location": f.location,
+            "governorate": f.governorate,
+            "governorate_code": f.governorate_code,
         }.items()
         if v is not None
     }

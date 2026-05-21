@@ -78,15 +78,14 @@ def _build_offer_response(
 
 def _write_requirements(db: Session, offer_id: str, requirements: list[dict]) -> None:
     for req in requirements:
-        # Skip completely empty requirements
-        if not any([req.get("node_id"), req.get("raw_value"), req.get("ref_value_id")]):
+        if not any([req.get("taxonomy_node_id"), req.get("ref_value_id"), req.get("criterion_type"), req.get("criterion_type_ref_id")]):
             continue
         repository.create_offer_requirement(db, offer_id, req)
 
 
 def _write_language_requirements(db: Session, offer_id: str, lang_reqs: list[dict]) -> None:
     for req in lang_reqs:
-        if not req.get("language_code"):
+        if not req.get("language_code") and not req.get("language_ref_id"):
             continue
         repository.create_offer_language_requirement(db, offer_id, req)
 
@@ -136,8 +135,8 @@ def _build_parse_response(parsed: dict, raw_text: str, title: str) -> dict:
         "salary_max": parsed_payload.get("salary_max"),
         "salary_currency_code": "TND",
         "country": "TN",
-        "governorate_code": mapped_payload.get("governorate_code"),
-        "delegation_code": mapped_payload.get("delegation_code"),
+        "governorate_unit_id": mapped_payload.get("governorate_unit_id"),
+        "delegation_unit_id": mapped_payload.get("delegation_unit_id"),
         "requirements": extracted_requirements,
     }
 

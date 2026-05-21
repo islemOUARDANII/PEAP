@@ -1,5 +1,5 @@
 import { ApiServiceError, apiJsonRequest, apiRequest } from "./client";
-import type { GeoCountry, GeoAdminUnit } from "@/models/geo";
+import type { GeoCountry, GeoAdminUnit, GeoPostalCode } from "@/models/geo";
 import type {
   RefGroup,
   RefGroupCreatePayload,
@@ -2082,6 +2082,32 @@ export const gatewayApi = {
             q:            params.q,
             active_only:  params.active_only ?? true,
             limit:        params.limit ?? 500,
+          },
+        },
+      );
+    },
+
+    listPostalCodes(params: {
+      country_id?: string;
+      country_iso2?: string;
+      admin_unit_id?: string;
+      q?: string;
+      active_only?: boolean;
+      limit?: number;
+      offset?: number;
+    } = {}): Promise<GeoPostalCode[]> {
+      return apiRequest<GeoPostalCode[]>(
+        "/geo/postal-codes",
+        { method: "GET" },
+        {
+          query: {
+            country_id:    params.country_id,
+            country_iso2:  params.country_iso2,
+            admin_unit_id: params.admin_unit_id,
+            q:             params.q,
+            active_only:   params.active_only ?? true,
+            limit:         params.limit ?? 100,
+            offset:        params.offset ?? 0,
           },
         },
       );

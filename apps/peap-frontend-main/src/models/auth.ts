@@ -47,6 +47,35 @@ export interface CandidateSignupInput {
     password: string;
 }
 
+/** Inscription candidat OTP — champs envoyés au backend */
+export interface CandidateRegisterInput {
+    email: string;
+    password: string;
+    password_confirm: string;
+    first_name?: string;
+    last_name?: string;
+    national_id?: string;
+    phone?: string;
+}
+
+export interface CandidateRegisterStartResponse {
+    message: string;
+    email: string;
+}
+
+export interface CandidateVerifyEmailInput {
+    email: string;
+    code: string;
+}
+
+export interface CandidateResendCodeInput {
+    email: string;
+}
+
+export interface CandidateResendCodeResponse {
+    message: string;
+}
+
 export interface ProviderRegistrationInput {
     contactName: string;
     jobTitle: string;

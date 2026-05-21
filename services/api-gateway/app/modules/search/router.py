@@ -64,6 +64,44 @@ def search_offers_endpoint(
 
     return response
 
+def normalize_candidate_search_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    filters = payload.get("filters") or {}
+
+    size = (
+        payload.get("limit")
+        or payload.get("size")
+        or filters.get("limit")
+        or filters.get("size")
+        or 20
+    )
+
+    from_ = (
+        payload.get("offset")
+        or payload.get("from_")
+        or filters.get("offset")
+        or filters.get("from_")
+        or 0
+    )
+
+    normalized_filters = {
+        "query": payload.get("query") or filters.get("query"),
+        "years_experience": filters.get("years_experience"),
+        "education": filters.get("education"),
+        "skills": filters.get("skills"),
+        "location": filters.get("location"),
+        "governorate": filters.get("governorate"),
+        "governorate_code": filters.get("governorate_code"),
+        "size": size,
+        "from_": from_,
+    }
+
+    return {
+        "filters": {
+            key: value
+            for key, value in normalized_filters.items()
+            if value is not None
+        }
+    }
 
 @router.post("/search/candidates")
 def search_candidates_endpoint(
@@ -73,7 +111,8 @@ def search_candidates_endpoint(
 ):
     started_at = time.perf_counter()
 
-    response = search_candidates(payload)
+    search_payload = normalize_candidate_search_payload(payload)
+    response = search_candidates(search_payload)
 
     duration_ms = int((time.perf_counter() - started_at) * 1000)
 
@@ -83,8 +122,8 @@ def search_candidates_endpoint(
         activity_type="SEARCH",
         target_type="CANDIDATE",
         action_label="Recherche candidats",
-        query_text=payload.get("query"),
-        filters_json=payload.get("filters") or {},
+        query_text=search_payload["filters"].get("query"),
+        filters_json=search_payload["filters"],
         result_count=response.get("total") or len(response.get("results", [])),
         duration_ms=duration_ms,
         metadata_json={

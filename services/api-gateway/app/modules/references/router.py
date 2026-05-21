@@ -17,6 +17,8 @@ from .schemas import (
     RefValueListResponse,
     RefValueResponse,
     RefValueUpdateRequest,
+    ImadaDropdownItem,
+    PostalCodeDropdownItem,
 )
 
 ALL_ROLES   = ("JOB_SEEKER", "EMPLOYER", "ANETI_ADVISOR", "FUNCTIONAL_ADMIN", "TECH_ADMIN")
@@ -199,3 +201,44 @@ def get_dropdown(
     _:  object  = Depends(require_roles(*ALL_ROLES)),
 ):
     return repository.list_dropdown_values(db, group_code)
+
+@router.get("/imadas", response_model=list[ImadaDropdownItem])
+def get_imadas(
+    delegation_code: str | None = Query(default=None),
+    governorate_code: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=300, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: object = Depends(require_roles(*ALL_ROLES)),
+):
+    return repository.list_imadas(
+        db,
+        delegation_code=delegation_code,
+        governorate_code=governorate_code,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/postal-codes", response_model=list[PostalCodeDropdownItem])
+def get_postal_codes(
+    imada_code: str | None = Query(default=None),
+    delegation_code: str | None = Query(default=None),
+    governorate_code: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    limit: int = Query(default=300, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+    _: object = Depends(require_roles(*ALL_ROLES)),
+):
+    return repository.list_postal_codes(
+        db,
+        imada_code=imada_code,
+        delegation_code=delegation_code,
+        governorate_code=governorate_code,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )

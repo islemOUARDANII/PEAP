@@ -9,6 +9,8 @@ def build_candidates_filter_query(
     education: Optional[str] = None,
     skills: Optional[List[str]] = None,
     location: Optional[str] = None,
+    governorate: Optional[str] = None,
+    governorate_code: Optional[str] = None,
     size: int = 20,
     from_: int = 0,
 ) -> Dict[str, Any]:
@@ -58,6 +60,31 @@ def build_candidates_filter_query(
                 "match": {"skills": {"query": skill, "fuzziness": "AUTO"}}
             })
 
+    if governorate:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"match": {"governorate": {"query": governorate, "fuzziness": "AUTO"}}},
+                    {"match": {"location": {"query": governorate, "fuzziness": "AUTO"}}},
+                    {"term": {"governorate.keyword": governorate}},
+                    {"term": {"governorate": governorate}},
+                    {"term": {"governorate": governorate.upper()}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+
+    if governorate_code:
+        filters.append({
+            "bool": {
+                "should": [
+                    {"term": {"governorate_code": governorate_code}},
+                    {"term": {"governorate_code.keyword": governorate_code}},
+                ],
+                "minimum_should_match": 1,
+            }
+        })
+        
     query: Dict[str, Any] = {"bool": {"filter": filters}}
     if should:
         query["bool"]["should"] = should

@@ -140,11 +140,20 @@ interface ExperienceDraft {
   sector: string;
   sectorRefId: string;      // FK to ACTIVITY_SECTOR ref_value
   location: string;         // free-text fallback
-  locationCountry: string;  // ISO2 country code for structured geo
-  locationGovCode: string;  // admin level-1 code
-  locationGovLabel: string; // admin level-1 label (for compose)
-  locationDelegCode: string;  // admin level-2 code
-  locationDelegLabel: string; // admin level-2 label (for compose)
+  locationCountry: string;  // ISO2 country code (affiché)
+  locationGovCode: string;  // admin level-1 code (affiché)
+  locationGovLabel: string; // admin level-1 label (affiché)
+  locationDelegCode: string;  // admin level-2 code (affiché)
+  locationDelegLabel: string; // admin level-2 label (affiché)
+  // Champs geo canoniques (IDs)
+  locationCountryId: string | null;
+  locationGovUnitId: string | null;
+  locationDelegUnitId: string | null;
+  locationImadaUnitId: string | null;
+  locationUnitId: string | null;
+  locationPostalCodeId: string | null;
+  locationPostalCode: string;
+  locationPostalLocalityLabel: string;
   startDate: string;
   endDate: string;
   isCurrent: boolean;
@@ -191,6 +200,12 @@ interface ProfileDraft {
   country: string;
   governorateCode: string;
   delegationCode: string;
+  // Champs geo canoniques contact (IDs)
+  contactCountryId: string | null;
+  contactGovernorateUnitId: string | null;
+  contactDelegationUnitId: string | null;
+  contactPostalCodeId: string | null;
+  contactPostalCode: string;
   primaryLanguage: string;
   preferredContractType: string;
   preferredGovernorate: string;
@@ -265,6 +280,14 @@ const emptyExperience = (): ExperienceDraft => ({
   locationGovLabel: '',
   locationDelegCode: '',
   locationDelegLabel: '',
+  locationCountryId: null,
+  locationGovUnitId: null,
+  locationDelegUnitId: null,
+  locationImadaUnitId: null,
+  locationUnitId: null,
+  locationPostalCodeId: null,
+  locationPostalCode: '',
+  locationPostalLocalityLabel: '',
   startDate: '',
   endDate: '',
   isCurrent: false,
@@ -309,6 +332,11 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
   country: bundle.contact?.country ?? 'TN',
   governorateCode: bundle.contact?.governorate_code ?? '',
   delegationCode: bundle.contact?.delegation_code ?? '',
+  contactCountryId: (bundle.contact as Record<string, unknown>)?.country_id as string | null ?? null,
+  contactGovernorateUnitId: (bundle.contact as Record<string, unknown>)?.governorate_unit_id as string | null ?? null,
+  contactDelegationUnitId: (bundle.contact as Record<string, unknown>)?.delegation_unit_id as string | null ?? null,
+  contactPostalCodeId: (bundle.contact as Record<string, unknown>)?.postal_code_id as string | null ?? null,
+  contactPostalCode: (bundle.contact as Record<string, unknown>)?.postal_code as string ?? '',
   primaryLanguage: bundle.primaryLanguage ?? '',
   preferredContractType: bundle.preference?.preferredContractType ?? '',
   preferredGovernorate: bundle.preference?.preferredGovernorate ?? '',
@@ -360,6 +388,14 @@ const toDraft = (bundle: CandidateProfileBundle): ProfileDraft => ({
       locationGovLabel: '',
       locationDelegCode: '',
       locationDelegLabel: '',
+      locationCountryId: raw.country_id as string | null ?? null,
+      locationGovUnitId: raw.governorate_unit_id as string | null ?? null,
+      locationDelegUnitId: raw.delegation_unit_id as string | null ?? null,
+      locationImadaUnitId: raw.imada_unit_id as string | null ?? null,
+      locationUnitId: raw.location_unit_id as string | null ?? null,
+      locationPostalCodeId: raw.postal_code_id as string | null ?? null,
+      locationPostalCode: raw.postal_code as string ?? '',
+      locationPostalLocalityLabel: '',
       startDate: item.startDate ?? '',
       endDate: item.endDate ?? '',
       isCurrent: (raw.is_current as boolean) ?? item.isCurrent ?? false,
@@ -1688,41 +1724,46 @@ export default function Profile() {
   };
 
   const buildExperiencePayload = (item: ExperienceDraft) => {
-    // Compose structured geo parts + free text into a single location string
-    const geoParts = [item.locationDelegLabel, item.locationGovLabel]
-      .filter(Boolean);
+    const geoParts = [item.locationDelegLabel, item.locationGovLabel].filter(Boolean);
     if (item.locationCountry && item.locationCountry !== 'TN' && geoParts.length === 0) {
       geoParts.push(item.locationCountry);
     }
     const composedLocation = [...geoParts, item.location].filter(Boolean).join(', ') || null;
     return ({
-    occupation_node_id: item.occupationNodeId || null,
-    job_title_raw:
-      item.entryType === 'internship'
-        ? item.jobTitleRaw
-          ? /stage|internship|intern/i.test(item.jobTitleRaw)
-            ? item.jobTitleRaw
-            : `Stage - ${item.jobTitleRaw}`
-          : 'Stage'
-        : item.jobTitleRaw || null,
-    company_name: item.companyName || null,
-    sector: item.sector || null,
-    sector_ref_id: item.sectorRefId || null,
-    location: composedLocation,
-    start_date: item.startDate || null,
-    end_date: item.isCurrent ? null : (item.endDate || null),
-    is_current: item.isCurrent,
-    duration_months: toNullableNumber(item.durationMonths),
-    duration_years: toNullableNumber(item.durationYears),
-    description: item.description || null,
-    responsibilities:
-      item.responsibilities.length > 0 ? item.responsibilities : null,
-    technologies: item.technologies.length > 0 ? item.technologies : null,
-    projects: item.projects.length > 0 ? item.projects : null,
-    entry_type:
-      item.entryType ||
-      (isInternshipExperience(item) ? 'internship' : 'experience'),
-  });
+      occupation_node_id: item.occupationNodeId || null,
+      job_title_raw:
+        item.entryType === 'internship'
+          ? item.jobTitleRaw
+            ? /stage|internship|intern/i.test(item.jobTitleRaw)
+              ? item.jobTitleRaw
+              : `Stage - ${item.jobTitleRaw}`
+            : 'Stage'
+          : item.jobTitleRaw || null,
+      company_name: item.companyName || null,
+      sector: item.sector || null,
+      sector_ref_id: item.sectorRefId || null,
+      location: composedLocation,
+      country_id: item.locationCountryId || null,
+      governorate_unit_id: item.locationGovUnitId || null,
+      delegation_unit_id: item.locationDelegUnitId || null,
+      imada_unit_id: item.locationImadaUnitId || null,
+      location_unit_id: item.locationUnitId || null,
+      postal_code_id: item.locationPostalCodeId || null,
+      postal_code: item.locationPostalCode || null,
+      start_date: item.startDate || null,
+      end_date: item.isCurrent ? null : (item.endDate || null),
+      is_current: item.isCurrent,
+      duration_months: toNullableNumber(item.durationMonths),
+      duration_years: toNullableNumber(item.durationYears),
+      description: item.description || null,
+      responsibilities:
+        item.responsibilities.length > 0 ? item.responsibilities : null,
+      technologies: item.technologies.length > 0 ? item.technologies : null,
+      projects: item.projects.length > 0 ? item.projects : null,
+      entry_type:
+        item.entryType ||
+        (isInternshipExperience(item) ? 'internship' : 'experience'),
+    });
   };
 
   // ── aggregate PATCH helper ──────────────────────────────────────────────────
@@ -1785,6 +1826,11 @@ export default function Profile() {
           country: currentDraft.country || 'TN',
           governorate_code: currentDraft.governorateCode || null,
           delegation_code: currentDraft.delegationCode || null,
+          country_id: currentDraft.contactCountryId || null,
+          governorate_unit_id: currentDraft.contactGovernorateUnitId || null,
+          delegation_unit_id: currentDraft.contactDelegationUnitId || null,
+          postal_code_id: currentDraft.contactPostalCodeId || null,
+          postal_code: currentDraft.contactPostalCode || null,
         },
         preference: {
           preferred_contract_type: currentDraft.preferredContractType || null,
@@ -1881,6 +1927,11 @@ export default function Profile() {
         country: currentDraft.country || 'TN',
         governorate_code: currentDraft.governorateCode || null,
         delegation_code: currentDraft.delegationCode || null,
+        country_id: currentDraft.contactCountryId || null,
+        governorate_unit_id: currentDraft.contactGovernorateUnitId || null,
+        delegation_unit_id: currentDraft.contactDelegationUnitId || null,
+        postal_code_id: currentDraft.contactPostalCodeId || null,
+        postal_code: currentDraft.contactPostalCode || null,
       });
 
       await gatewayApi.candidate.updatePreference({
@@ -2419,22 +2470,26 @@ export default function Profile() {
                   <div className="grid gap-4 md:grid-cols-2">
                     <GeoAddressFields
                       value={{
-                        countryIso2: currentDraft.country,
-                        adminUnit1Code: currentDraft.governorateCode,
-                        adminUnit1Label: selectedGovernorateLabel,
-                        adminUnit2Code: currentDraft.delegationCode,
-                        adminUnit2Label: selectedDelegationLabel,
+                        countryId: currentDraft.contactCountryId ?? null,
+                        governorateUnitId: currentDraft.contactGovernorateUnitId ?? null,
+                        delegationUnitId: currentDraft.contactDelegationUnitId ?? null,
+                        imadaUnitId: null,
+                        locationUnitId: null,
+                        postalCodeId: currentDraft.contactPostalCodeId ?? null,
+                        postalCode: currentDraft.contactPostalCode ?? '',
+                        postalLocalityLabel: '',
+                        addressLine: '',
                       }}
                       onChange={(geo) =>
                         setDraft((current) =>
                           current
                             ? {
                               ...current,
-                              country: geo.countryIso2 || 'TN',
-                              governorateCode: geo.adminUnit1Code,
-                              delegationCode: geo.adminUnit2Code,
-                              preferredGovernorate:
-                                current.preferredGovernorate || geo.adminUnit1Code,
+                              contactCountryId: geo.countryId,
+                              contactGovernorateUnitId: geo.governorateUnitId,
+                              contactDelegationUnitId: geo.delegationUnitId,
+                              contactPostalCodeId: geo.postalCodeId,
+                              contactPostalCode: geo.postalCode,
                             }
                             : current,
                         )
@@ -4896,23 +4951,30 @@ function ExperienceDraftFields({
           }
         />
       )}
-      {/* Geo location: country + admin units + optional free text */}
+      {/* Géo de l'expérience — pays + unités admin + code postal */}
       <GeoAddressFields
         value={{
-          countryIso2: item.locationCountry,
-          adminUnit1Code: item.locationGovCode,
-          adminUnit1Label: item.locationGovLabel,
-          adminUnit2Code: item.locationDelegCode,
-          adminUnit2Label: item.locationDelegLabel,
+          countryId: item.locationCountryId ?? null,
+          governorateUnitId: item.locationGovUnitId ?? null,
+          delegationUnitId: item.locationDelegUnitId ?? null,
+          imadaUnitId: item.locationImadaUnitId ?? null,
+          locationUnitId: item.locationUnitId ?? null,
+          postalCodeId: item.locationPostalCodeId ?? null,
+          postalCode: item.locationPostalCode ?? '',
+          postalLocalityLabel: item.locationPostalLocalityLabel ?? '',
+          addressLine: '',
         }}
         onChange={(geo) =>
           update({
             ...item,
-            locationCountry: geo.countryIso2,
-            locationGovCode: geo.adminUnit1Code,
-            locationGovLabel: geo.adminUnit1Label,
-            locationDelegCode: geo.adminUnit2Code,
-            locationDelegLabel: geo.adminUnit2Label,
+            locationCountryId: geo.countryId,
+            locationGovUnitId: geo.governorateUnitId,
+            locationDelegUnitId: geo.delegationUnitId,
+            locationImadaUnitId: geo.imadaUnitId,
+            locationUnitId: geo.locationUnitId,
+            locationPostalCodeId: geo.postalCodeId,
+            locationPostalCode: geo.postalCode,
+            locationPostalLocalityLabel: geo.postalLocalityLabel,
             entryType: type,
           })
         }

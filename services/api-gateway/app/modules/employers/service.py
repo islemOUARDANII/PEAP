@@ -3,6 +3,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.auth.schemas import CurrentUserResponse
+from app.clients.matching_client import execute_run as execute_matching_service_run
+from app.modules.matching_runs import repository as matching_run_repository
 
 from . import repository
 from .schemas import (
@@ -14,6 +16,8 @@ from .schemas import (
     EmployerProfileResponse,
     EmployerUpdateRequest,
     EmployerApplicationResponse,
+    EmployerMatchedCandidateResponse,
+    EmployerMatchedCandidatesResponse,
 )
 
 
@@ -71,6 +75,7 @@ def _build_profile_response(db: Session, employer: dict) -> dict:
         tax_identifier=employer["tax_identifier"],
         sector_code=employer["sector_code"],
         size_category=employer["size_category"],
+        website_url=employer.get("website_url"),
         status=employer["status"],
         created_at=employer["created_at"],
         updated_at=employer["updated_at"],
@@ -151,10 +156,141 @@ def list_employers(db: Session) -> list[dict]:
 def employer_counts(db: Session) -> dict:
     return repository.count_employers(db)
 
-def list_my_applications(db: Session, current_user: CurrentUserResponse) -> list[dict]:
+def list_my_applications(
+    db: Session,
+    current_user: CurrentUserResponse,
+    offer_id: str | None = None,
+) -> list[dict]:
     employer = resolve_current_employer(db, current_user)
-    rows = repository.list_employer_applications(db, employer["id"])
+
+    rows = repository.list_employer_applications(
+        db,
+        employer["id"],
+        offer_id=offer_id,
+    )
+
     return [
         EmployerApplicationResponse(**row).model_dump(mode="json")
         for row in rows
     ]
+
+def get_my_offer_matched_candidates(
+    db: Session,
+    current_user: CurrentUserResponse,
+    *,
+    offer_id: str,
+    min_score: float | None = None,
+    force_refresh: bool = False,
+) -> dict:
+    employer = resolve_current_employer(db, current_user)
+
+    offer = repository.get_offer_for_employer(
+        db,
+        employer_id=employer["id"],
+        offer_id=offer_id,
+    )
+
+    if not offer:
+        _raise_not_found("Offer")
+
+    effective_min_score = float(min_score) if min_score is not None else 0.0
+
+    model_version = repository.get_default_offer_to_candidate_model_version(db)
+
+    if not model_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Aucun modèle actif STANDARD_OFFER_TO_CANDIDATE n'est configuré.",
+        )
+
+    active_candidates_count = repository.count_active_candidates(db)
+
+    offer_last_updated = repository.get_offer_matching_source_last_updated(db, offer_id)
+    candidates_last_updated = repository.get_candidates_last_updated(db)
+
+    timestamps = [
+        value
+        for value in [offer_last_updated, candidates_last_updated]
+        if value is not None
+    ]
+
+    min_valid_created_at = max(timestamps) if timestamps else None
+
+    reusable_run = None
+
+    if not force_refresh:
+        reusable_run = repository.find_reusable_offer_to_candidate_run(
+            db,
+            offer_id=offer_id,
+            model_version_id=model_version["id"],
+            min_created_at=min_valid_created_at,
+        )
+
+    if reusable_run:
+        run_id = reusable_run["id"]
+    else:
+        try:
+            run = matching_run_repository.create_matching_run(
+                db,
+                run_type="AUTOMATIC",
+                direction="OFFER_TO_CANDIDATE",
+                model_version_id=model_version["id"],
+                launched_by_user_id=current_user.id,
+                source_entity_type="JOB_OFFER",
+                source_entity_id=offer_id,
+                parameters_json={
+                    "source": "employer_portal",
+                    "min_score": float(effective_min_score),
+                    "cache_strategy": "offer_and_candidates_timestamp",
+                },
+            )
+            db.commit()
+        except IntegrityError as exc:
+            db.rollback()
+            _handle_integrity_error(exc)
+
+        run_id = run["id"]
+
+        execute_matching_service_run(
+            run_id,
+            {
+                "run_id": run_id,
+                "trace_id": f"employer-matched-candidates-{run_id}",
+                "dry_run": False,
+                "admin_override": False,
+            },
+        )
+
+    rows = repository.list_offer_matching_results_with_candidates(
+        db,
+        run_id=run_id,
+        offer_id=offer_id,
+        min_score=effective_min_score,
+    )
+
+    return EmployerMatchedCandidatesResponse(
+        model_code=model_version["model_code"],
+        model_version_id=model_version["id"],
+        run_id=run_id,
+        offer_id=offer_id,
+        min_score=float(effective_min_score),
+        active_candidates_count=active_candidates_count,
+        total_results=active_candidates_count,
+        matched_count=len(rows),
+        candidates=[
+            EmployerMatchedCandidateResponse(**row)
+            for row in rows
+        ],
+        cache={
+            "reused": bool(reusable_run),
+            "offer_last_updated": offer_last_updated.isoformat()
+            if offer_last_updated
+            else None,
+            "candidates_last_updated": candidates_last_updated.isoformat()
+            if candidates_last_updated
+            else None,
+            "min_valid_created_at": min_valid_created_at.isoformat()
+            if min_valid_created_at
+            else None,
+        },
+    ).model_dump(mode="json")

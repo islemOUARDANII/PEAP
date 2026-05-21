@@ -18,9 +18,8 @@ class AdvisorCreateCandidateRequest(BaseModel):
     first_name: str
     last_name: str
     phone: str | None = None
-    governorate_code: str | None = None
-    delegation_code: str | None = None
-    primary_language: str = "fr"
+    governorate_code: str | None = None  # lookup param → governorate_unit_id
+    delegation_code: str | None = None   # lookup param → delegation_unit_id
 
 
 class AdvisorCreateCandidateResponse(BaseModel):
